@@ -1,0 +1,48 @@
+/**
+ * Material 3 design tokens for Mail Orbyt.
+ * Semantic CSS custom properties — components reference these, never raw
+ * hex values, so the palette can be retuned in one place.
+ *
+ * Colors are stored as "R G B" channel triples (not hex, not rgb()) so that
+ * Tailwind's opacity modifiers (e.g. `bg-outline/30`) can compose them via
+ * `rgb(var(--md-x-rgb) / <alpha-value>)` in tailwind-preset.ts — hex/rgb()
+ * CSS variables can't have an Tailwind-generated alpha channel applied to
+ * them at all, which silently drops every `/NN` opacity utility.
+ */
+:root {
+  /* Color (R G B channel triples) */
+  --md-primary-rgb: 30 100 240; /* #1e64f0 */
+  --md-on-primary-rgb: 255 255 255; /* #ffffff */
+  --md-primary-container-rgb: 220 230 255; /* #dce6ff */
+  --md-on-primary-container-rgb: 0 26 66; /* #001a42 */
+
+  --md-surface-rgb: 250 248 255; /* #faf8ff */
+  --md-surface-container-rgb: 241 242 248; /* #f1f2f8 */
+  --md-surface-container-high-rgb: 233 234 240; /* #e9eaf0 */
+  --md-on-surface-rgb: 26 27 32; /* #1a1b20 */
+  --md-on-surface-variant-rgb: 68 71 79; /* #44474f */
+
+  --md-outline-rgb: 116 119 127; /* #74777f */
+  --md-error-rgb: 186 26 26; /* #ba1a1a */
+  --md-on-error-rgb: 255 255 255; /* #ffffff */
+
+  /* Success / warning are not in the spec's palette but are needed for
+     status indicators (bounce/health/etc.) — chosen to sit tonally next to
+     the given Material Blue + error pair without introducing gradients. */
+  --md-success-rgb: 20 108 46; /* #146c2e */
+  --md-success-container-rgb: 215 242 223; /* #d7f2df */
+  --md-warning-rgb: 122 75 0; /* #7a4b00 */
+  --md-warning-container-rgb: 255 230 189; /* #ffe6bd */
+
+  /* Elevation (soft, per "minimal shadows" direction) */
+  --md-shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.06), 0 1px 3px 1px rgb(0 0 0 / 0.04);
+  --md-shadow-2: 0 1px 2px 0 rgb(0 0 0 / 0.08), 0 2px 6px 2px rgb(0 0 0 / 0.06);
+
+  /* Shape */
+  --md-radius-sm: 8px;
+  --md-radius-md: 12px;
+  --md-radius-lg: 16px;
+
+  /* Typography */
+  --md-font-family: "Roboto Flex", ui-sans-serif, system-ui, sans-serif;
+}

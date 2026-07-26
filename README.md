@@ -14,7 +14,7 @@ next begins.
 | Phase | Scope                                                           | Status |
 | ----- | --------------------------------------------------------------- | ------ |
 | 0     | Repo scaffold, tooling, Docker, CI, architecture boundary tests | ✅     |
-| 1     | Material 3 design system + application shell                    | ⬜     |
+| 1     | Material 3 design system + application shell                    | ✅     |
 | 2     | Authentication, organisations, roles, invitations               | ⬜     |
 | 3     | CSV import, leads, companies, suppression foundation            | ⬜     |
 | 4     | Deterministic research and enrichment                           | ⬜     |
@@ -43,6 +43,7 @@ pnpm dev
 
 - [Architecture](docs/architecture.md)
 - [AI usage boundaries](docs/ai-boundaries.md)
+- [Design system](docs/design-system.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 

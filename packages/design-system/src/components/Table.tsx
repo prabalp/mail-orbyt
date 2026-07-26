@@ -1,0 +1,99 @@
+import type { ReactNode } from "react";
+import { cn } from "../cn";
+
+export interface TableColumn<T> {
+  key: string;
+  header: string;
+  render: (row: T) => ReactNode;
+  align?: "left" | "right" | "center";
+}
+
+export interface TableProps<T> {
+  columns: TableColumn<T>[];
+  rows: T[];
+  getRowKey: (row: T) => string;
+  emptyState?: ReactNode;
+  onRowClick?: (row: T) => void;
+  selectedKeys?: Set<string>;
+  onSelectRow?: (key: string, selected: boolean) => void;
+}
+
+export function Table<T>({
+  columns,
+  rows,
+  getRowKey,
+  emptyState,
+  onRowClick,
+  selectedKeys,
+  onSelectRow,
+}: TableProps<T>): React.ReactElement {
+  const selectable = Boolean(onSelectRow);
+
+  if (rows.length === 0 && emptyState) {
+    return <>{emptyState}</>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-md-md border border-outline/30">
+      <table className="w-full border-collapse text-left text-sm">
+        <thead className="bg-surface-container">
+          <tr>
+            {selectable ? <th className="w-10 px-4 py-3" /> : null}
+            {columns.map((column) => (
+              <th
+                key={column.key}
+                className={cn(
+                  "px-4 py-3 font-medium text-on-surface-variant",
+                  column.align === "right" && "text-right",
+                  column.align === "center" && "text-center",
+                )}
+              >
+                {column.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const key = getRowKey(row);
+            return (
+              <tr
+                key={key}
+                onClick={() => onRowClick?.(row)}
+                className={cn(
+                  "border-t border-outline/15",
+                  onRowClick && "cursor-pointer hover:bg-primary-container/20",
+                  selectedKeys?.has(key) && "bg-primary-container/30",
+                )}
+              >
+                {selectable ? (
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select row"
+                      checked={selectedKeys?.has(key) ?? false}
+                      onChange={(event) => onSelectRow?.(key, event.target.checked)}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                  </td>
+                ) : null}
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className={cn(
+                      "px-4 py-3 text-on-surface",
+                      column.align === "right" && "text-right",
+                      column.align === "center" && "text-center",
+                    )}
+                  >
+                    {column.render(row)}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
