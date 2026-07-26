@@ -95,5 +95,10 @@ jobs:
         env:
           NODE_ENV: test
 
+      - name: Integration tests
+        run: pnpm test:integration
+        env:
+          NODE_ENV: test
+
       - name: Build
         run: pnpm build

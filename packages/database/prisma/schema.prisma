@@ -1,19 +1,23 @@
 // Mail Orbyt database schema.
 //
 // This file grows one phase at a time. Phase 0 established the toolchain;
-// Phase 2 adds authentication, multi-tenancy, invitations, and audit
-// logging.
+// Phase 2 added authentication, multi-tenancy, invitations, and audit
+// logging; Phase 3 adds lead import, companies, lead lists, and the
+// suppression foundation.
 //
-// Full model list target (see docs/architecture.md): User, Account, Session,
-// VerificationToken, Organisation, OrganisationMembership, Invitation,
-// AuditEvent, Lead, Company, LeadCompany, LeadList, LeadListMembership,
-// ImportBatch, ImportRow, DataSource, ResearchJob, ResearchProviderRun,
-// ResearchSource, ResearchDocument, ResearchFact, ResearchFactEvidence,
-// ResearchSnapshot, Campaign, CampaignLead, SequenceStep, EmailDraft,
-// EmailGeneration, InboxConnection, OAuthCredential, InboxSettings,
-// SendingDomain, DomainAuthenticationCheck, ScheduledEmail, OutboxMessage,
-// SentEmail, EmailEvent, Conversation, Reply, Meeting, MeetingOutcome,
-// AttributionRecord, SuppressionEntry, RetargetTask, JobFailure, FeatureFlag.
+// Implemented so far (Phases 0-3): FeatureFlag, User, Account, Session,
+// VerificationToken, PasswordResetToken, EmailVerificationToken,
+// Organisation, OrganisationMembership, Invitation, AuditEvent, DataSource,
+// Company, Lead, LeadCompany, LeadList, LeadListMembership, ImportBatch,
+// ImportRow, SuppressionEntry.
+//
+// Remaining model list target (see docs/architecture.md): ResearchJob,
+// ResearchProviderRun, ResearchSource, ResearchDocument, ResearchFact,
+// ResearchFactEvidence, ResearchSnapshot, Campaign, CampaignLead,
+// SequenceStep, EmailDraft, EmailGeneration, InboxConnection,
+// OAuthCredential, InboxSettings, SendingDomain, DomainAuthenticationCheck,
+// ScheduledEmail, OutboxMessage, SentEmail, EmailEvent, Conversation, Reply,
+// Meeting, MeetingOutcome, AttributionRecord, RetargetTask, JobFailure.
 
 generator client {
   provider = "prisma-client-js"
@@ -43,13 +47,13 @@ model FeatureFlag {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
+  id                String    @id @default(cuid())
+  name              String?
+  email             String    @unique
+  emailVerified     DateTime?
+  image             String?
   /// Null for users who only ever sign in via Google login (no local password).
-  passwordHash  String?
+  passwordHash      String?
   /// Bumped whenever the password changes. Sessions use JWT (required
   /// because the Credentials provider cannot use adapter-persisted database
   /// sessions), so this is how a password reset forces existing sessions to
@@ -57,12 +61,12 @@ model User {
   /// against this column on every request.
   passwordChangedAt DateTime?
 
-  accounts               Account[]
-  sessions               Session[]
-  memberships            OrganisationMembership[]
-  sentInvitations        Invitation[]              @relation("InvitedBy")
-  auditEvents            AuditEvent[]
-  passwordResetTokens    PasswordResetToken[]
+  accounts                Account[]
+  sessions                Session[]
+  memberships             OrganisationMembership[]
+  sentInvitations         Invitation[]             @relation("InvitedBy")
+  auditEvents             AuditEvent[]
+  passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
 
   createdAt DateTime @default(now())
@@ -157,9 +161,14 @@ model Organisation {
   name String
   slug String @unique
 
-  memberships OrganisationMembership[]
-  invitations Invitation[]
-  auditEvents AuditEvent[]
+  memberships        OrganisationMembership[]
+  invitations        Invitation[]
+  auditEvents        AuditEvent[]
+  leads              Lead[]
+  companies          Company[]
+  leadLists          LeadList[]
+  importBatches      ImportBatch[]
+  suppressionEntries SuppressionEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -236,7 +245,7 @@ enum AuditEventType {
 }
 
 model AuditEvent {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   organisationId String?
   userId         String?
   type           AuditEventType
@@ -253,4 +262,253 @@ model AuditEvent {
   @@index([userId])
   @@index([type])
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Leads, companies, and import (Phase 3)
+// ---------------------------------------------------------------------------
+
+enum LeadStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// Registry of where a field's value came from. Referenced by key (not a
+/// hard FK) from Lead.fieldSources / Company.fieldSources so provenance can
+/// be recorded without a join for every field on every write. Expanded in
+/// Phase 4 when research providers become real DataSource rows.
+enum DataSourceKind {
+  MANUAL
+  CSV_IMPORT
+  RESEARCH_PROVIDER
+}
+
+model DataSource {
+  id    String         @id @default(cuid())
+  key   String         @unique
+  label String
+  kind  DataSourceKind
+
+  createdAt DateTime @default(now())
+
+  @@index([kind])
+}
+
+model Company {
+  id             String  @id @default(cuid())
+  organisationId String
+  name           String
+  domain         String?
+  industry       String?
+  websiteUrl     String?
+  city           String?
+  state          String?
+  country        String?
+  /// Per-field provenance: { [fieldName]: { source: DataSourceKind, updatedAt: ISO string } }
+  fieldSources   Json?
+
+  organisation  Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  leads         Lead[]
+  leadCompanies LeadCompany[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organisationId, domain])
+  @@index([organisationId])
+  @@index([organisationId, name])
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  organisationId String
+  firstName      String?
+  lastName       String?
+  email          String?
+  title          String?
+  linkedinUrl    String?
+  websiteUrl     String?
+  industry       String?
+  city           String?
+  state          String?
+  country        String?
+  status         LeadStatus @default(ACTIVE)
+  companyId      String?
+  /// Per-field provenance, same shape as Company.fieldSources.
+  fieldSources   Json?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  leadCompanies       LeadCompany[]
+  leadListMemberships LeadListMembership[]
+  importRows          ImportRow[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Partial-unique-like behavior: Postgres treats NULLs as distinct, so
+  // multiple leads with a NULL email are allowed — only non-null emails are
+  // deduplicated within an organisation, which is the intended behavior
+  // (duplicate detection only applies when there's an email to compare).
+  @@unique([organisationId, email])
+  @@index([organisationId])
+  @@index([organisationId, status])
+  @@index([organisationId, companyId])
+}
+
+/// Many-to-many lead/company association beyond the lead's single "current
+/// company" FK — e.g. a previous employer surfaced during research (Phase
+/// 4). isCurrent mirrors Lead.companyId for the one row where they match.
+model LeadCompany {
+  id        String  @id @default(cuid())
+  leadId    String
+  companyId String
+  title     String?
+  isCurrent Boolean @default(false)
+
+  lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([leadId, companyId])
+  @@index([leadId])
+  @@index([companyId])
+}
+
+model LeadList {
+  id             String @id @default(cuid())
+  organisationId String
+  name           String
+
+  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  memberships  LeadListMembership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+}
+
+model LeadListMembership {
+  id         String @id @default(cuid())
+  leadListId String
+  leadId     String
+
+  leadList LeadList @relation(fields: [leadListId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  addedAt DateTime @default(now())
+
+  @@unique([leadListId, leadId])
+  @@index([leadListId])
+  @@index([leadId])
+}
+
+enum ImportBatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum DuplicateStrategy {
+  SKIP
+  UPDATE_BLANKS
+  OVERWRITE
+  REJECT
+  ALLOW_SEPARATE
+}
+
+model ImportBatch {
+  id                String            @id @default(cuid())
+  organisationId    String
+  createdByUserId   String
+  fileName          String
+  /// Object storage key for the originally uploaded CSV (see packages/storage).
+  storageKey        String
+  columnMapping     Json
+  duplicateStrategy DuplicateStrategy
+  status            ImportBatchStatus @default(PENDING)
+  totalRows         Int               @default(0)
+  importedCount     Int               @default(0)
+  skippedCount      Int               @default(0)
+  errorCount        Int               @default(0)
+  errorMessage      String?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  rows         ImportRow[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId])
+  @@index([organisationId, status])
+}
+
+enum ImportRowStatus {
+  PENDING
+  IMPORTED
+  UPDATED
+  SKIPPED
+  ERROR
+}
+
+model ImportRow {
+  id            String          @id @default(cuid())
+  importBatchId String
+  rowNumber     Int
+  rawData       Json
+  status        ImportRowStatus @default(PENDING)
+  errorMessage  String?
+  leadId        String?
+
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  lead        Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  // Enables idempotent reprocessing: a worker retry can upsert on
+  // (importBatchId, rowNumber) instead of re-appending duplicate rows.
+  @@unique([importBatchId, rowNumber])
+  @@index([importBatchId])
+  @@index([importBatchId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Suppression foundation (full safety-rule engine lands in Phase 11)
+// ---------------------------------------------------------------------------
+
+enum SuppressionType {
+  EMAIL
+  DOMAIN
+}
+
+enum SuppressionReason {
+  HARD_BOUNCE
+  UNSUBSCRIBE
+  MANUAL_DO_NOT_CONTACT
+  INVALID_EMAIL
+  CUSTOMER
+  ACTIVE_OPPORTUNITY
+}
+
+model SuppressionEntry {
+  id              String            @id @default(cuid())
+  organisationId  String
+  type            SuppressionType
+  value           String
+  reason          SuppressionReason
+  createdByUserId String?
+  note            String?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([organisationId, type, value])
+  @@index([organisationId])
+  @@index([organisationId, type])
 }

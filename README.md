@@ -16,7 +16,7 @@ next begins.
 | 0     | Repo scaffold, tooling, Docker, CI, architecture boundary tests | ✅     |
 | 1     | Material 3 design system + application shell                    | ✅     |
 | 2     | Authentication, organisations, roles, invitations               | ✅     |
-| 3     | CSV import, leads, companies, suppression foundation            | ⬜     |
+| 3     | CSV import, leads, companies, suppression foundation            | ✅     |
 | 4     | Deterministic research and enrichment                           | ⬜     |
 | 5     | Controlled AI email generation                                  | ⬜     |
 | 6     | Google Workspace OAuth, inbox management, DNS checks            | ⬜     |
@@ -45,6 +45,8 @@ pnpm dev
 - [AI usage boundaries](docs/ai-boundaries.md)
 - [Design system](docs/design-system.md)
 - [Authentication & multi-tenancy](docs/authentication.md)
+- [CSV lead import](docs/csv-import.md)
+- [Queue architecture](docs/queue-architecture.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 
@@ -62,9 +64,11 @@ packages/
   database/       Prisma schema and client (only package with direct DB access)
   config/         Environment variable validation
   validation/      Shared Zod schemas
+  logging/         Structured JSON logger with redaction
+  storage/         S3-compatible object storage abstraction (Phase 3)
   design-system/   Material 3 tokens and components (Phase 1)
-  authentication/  Auth.js, roles, sessions (Phase 2)
-  leads/           Lead import, normalisation, lists (Phase 3)
+  authentication/  Auth.js, roles, sessions, invitations (Phase 2)
+  leads/           CSV import, normalisation, lead/company services, suppression foundation (Phase 3)
   research/        Deterministic enrichment providers (Phase 4)
   email-generation/  AI generation — the ONLY package allowed to import an AI SDK (Phase 5)
   gmail/           Gmail OAuth and sending (Phase 6)
@@ -73,11 +77,10 @@ packages/
   conversations/   Reply sync, classification, retargeting (Phase 9)
   analytics/       Metrics and dashboards (Phase 10)
   compliance/      Suppression, safety rules, export/deletion (Phase 11)
-  logging/         Structured JSON logger with redaction
 tests/
   architecture/    Cross-package boundary tests (e.g. AI SDK import boundary)
   fixtures/        Shared test fixtures (golden AI-generation fixtures, etc.)
-  integration/      Integration tests against isolated Postgres/Redis
+  integration/      Integration tests against real Postgres/Redis/MinIO (docker-compose)
   e2e/              Playwright end-to-end tests
 docs/              Architecture, setup, and operational documentation
 ```

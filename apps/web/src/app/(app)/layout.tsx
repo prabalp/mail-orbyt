@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getCurrentOrganisation } from "@/lib/current-organisation";
 import { AppShellClient } from "./app-shell-client";
+import { OrganisationProvider } from "./organisation-context";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -17,15 +18,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <AppShellClient
-      organisations={currentOrganisation.memberships.map((m) => ({ id: m.id, name: m.name }))}
-      activeOrganisationId={currentOrganisation.organisationId}
-      user={{
-        name: session.user.name ?? session.user.email ?? "Unknown",
-        email: session.user.email ?? "",
+    <OrganisationProvider
+      value={{
+        organisationId: currentOrganisation.organisationId,
+        organisationName: currentOrganisation.organisationName,
+        role: currentOrganisation.role,
       }}
     >
-      {children}
-    </AppShellClient>
+      <AppShellClient
+        organisations={currentOrganisation.memberships.map((m) => ({ id: m.id, name: m.name }))}
+        activeOrganisationId={currentOrganisation.organisationId}
+        user={{
+          name: session.user.name ?? session.user.email ?? "Unknown",
+          email: session.user.email ?? "",
+        }}
+      >
+        {children}
+      </AppShellClient>
+    </OrganisationProvider>
   );
 }

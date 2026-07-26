@@ -1,0 +1,20 @@
+{
+  "name": "@mail-orbyt/integration-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:integration": "vitest run"
+  },
+  "devDependencies": {
+    "@mail-orbyt/authentication": "workspace:*",
+    "@mail-orbyt/config": "workspace:*",
+    "@mail-orbyt/database": "workspace:*",
+    "@mail-orbyt/leads": "workspace:*",
+    "@mail-orbyt/storage": "workspace:*",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

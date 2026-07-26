@@ -9,6 +9,7 @@ const nextConfig = {
     "@mail-orbyt/design-system",
     "@mail-orbyt/authentication",
     "@mail-orbyt/leads",
+    "@mail-orbyt/storage",
     "@mail-orbyt/research",
     "@mail-orbyt/gmail",
     "@mail-orbyt/campaigns",

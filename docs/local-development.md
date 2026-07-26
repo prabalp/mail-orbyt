@@ -22,6 +22,11 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
+MinIO does not auto-create buckets. Create the one named in `STORAGE_BUCKET`
+(default `mail-orbyt`) once, via the console at http://localhost:9001
+(minioadmin/minioadmin) → Buckets → Create Bucket. Needed before CSV lead
+import (Phase 3) will work.
+
 ## Running
 
 ```bash
