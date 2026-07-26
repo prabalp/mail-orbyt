@@ -13,7 +13,18 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.7.4",
+    "@mail-orbyt/config": "workspace:*",
+    "@mail-orbyt/database": "workspace:*",
+    "@mail-orbyt/logging": "workspace:*",
+    "@mail-orbyt/validation": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "next-auth": "5.0.0-beta.32",
+    "zod": "^3.24.1"
+  },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

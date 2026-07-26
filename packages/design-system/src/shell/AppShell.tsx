@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, type ComponentType, type ReactNode } from "react";
 import { Sidebar, type LinkComponentProps } from "./Sidebar";
 import { MobileDrawer } from "./MobileDrawer";

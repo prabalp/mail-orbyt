@@ -1,3 +1,5 @@
+"use client";
+
 import { forwardRef, useId, type SelectHTMLAttributes } from "react";
 import { cn } from "../cn";
 

@@ -12,13 +12,17 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@mail-orbyt/authentication": "workspace:*",
     "@mail-orbyt/config": "workspace:*",
     "@mail-orbyt/database": "workspace:*",
     "@mail-orbyt/design-system": "workspace:*",
     "@mail-orbyt/logging": "workspace:*",
+    "@mail-orbyt/validation": "workspace:*",
     "next": "^15.1.3",
+    "next-auth": "5.0.0-beta.32",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.2",

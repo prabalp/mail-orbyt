@@ -6,8 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# NODE_ENV is deliberately NOT set here at the workflow level. Next.js's own
+# build step sets NODE_ENV=production internally; a pre-set NODE_ENV=test in
+# the shell environment overrides that and triggers a confusing, unrelated
+# Next.js build failure ("<Html> should not be imported outside of
+# pages/_document"). NODE_ENV is instead set per-step, only on steps that
+# actually need it (see "Unit tests" / "Architecture boundary tests" below).
 env:
-  NODE_ENV: test
   DATABASE_URL: postgresql://mail_orbyt:mail_orbyt@localhost:5432/mail_orbyt_test
   REDIS_URL: redis://localhost:6379
   AUTH_SECRET: ci-test-secret-please-override-in-real-envs-000
@@ -82,9 +87,13 @@ jobs:
 
       - name: Architecture boundary tests
         run: pnpm test:architecture
+        env:
+          NODE_ENV: test
 
       - name: Unit tests
         run: pnpm test
+        env:
+          NODE_ENV: test
 
       - name: Build
         run: pnpm build

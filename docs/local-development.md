@@ -47,14 +47,36 @@ pnpm test:integration    # integration tests (added from Phase 2 onward)
 pnpm test:e2e            # Playwright tests (added from Phase 2 onward)
 ```
 
+## Gotcha: NODE_ENV and `pnpm build`
+
+Don't `source .env` (or otherwise export `NODE_ENV=development`) into the
+shell before running `pnpm build` / `next build`. Next.js sets its own
+`NODE_ENV=production` internally during the build; a pre-set `NODE_ENV` in
+the shell environment overrides that and triggers a confusing, unrelated
+failure during static page generation (`<Html> should not be imported
+outside of pages/_document`, on `/404` or `/500`). If you need env vars from
+`.env` loaded for a one-off build, export everything except `NODE_ENV`, or
+run `unset NODE_ENV` right before the build command. `next dev` is
+unaffected — this only bites the production build.
+
 ## Seed data
 
-Phase 0 seeds only the `emergency_stop` feature flag. As each phase lands, the
-seed script (`packages/database/prisma/seed.ts`) grows to include: a seed
-organisation with a user for every role (OWNER/ADMIN/MEMBER/VIEWER), sample
-leads and companies, sample research facts, a draft campaign, a mock
-connected inbox, and sample conversation/meeting data — matching the spec's
-required local dev fixtures. No real credentials are ever included in seed
+`pnpm db:seed` creates the `emergency_stop` feature flag and a demo
+organisation ("Demo Organisation") with one verified user per role:
+
+| Email                        | Password           | Role   |
+| ---------------------------- | ------------------ | ------ |
+| `owner@demo.mailorbyt.test`  | `Sup3rSecretPass1` | OWNER  |
+| `admin@demo.mailorbyt.test`  | `Sup3rSecretPass1` | ADMIN  |
+| `member@demo.mailorbyt.test` | `Sup3rSecretPass1` | MEMBER |
+| `viewer@demo.mailorbyt.test` | `Sup3rSecretPass1` | VIEWER |
+
+These are local-only fixtures — not real credentials, and the `.test` TLD
+ensures the email addresses can never resolve to a real mailbox. As each
+later phase lands, the seed script (`packages/database/prisma/seed.ts`)
+grows to include sample leads and companies, sample research facts, a draft
+campaign, a mock connected inbox, and sample conversation/meeting data. No
+real credentials are ever included in seed
 data.
 
 ## Environment variables
