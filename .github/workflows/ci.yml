@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_ENV: test
+  DATABASE_URL: postgresql://mail_orbyt:mail_orbyt@localhost:5432/mail_orbyt_test
+  REDIS_URL: redis://localhost:6379
+  AUTH_SECRET: ci-test-secret-please-override-in-real-envs-000
+  AUTH_URL: http://localhost:3000
+  APP_URL: http://localhost:3000
+  GOOGLE_LOGIN_CLIENT_ID: ci-client-id
+  GOOGLE_LOGIN_CLIENT_SECRET: ci-client-secret
+  GMAIL_OAUTH_CLIENT_ID: ci-gmail-client-id
+  GMAIL_OAUTH_CLIENT_SECRET: ci-gmail-client-secret
+  GMAIL_OAUTH_REDIRECT_URI: http://localhost:3000/api/gmail/oauth/callback
+  TOKEN_ENCRYPTION_KEY: 00000000000000000000000000000000
+  STORAGE_ENDPOINT: http://localhost:9000
+  STORAGE_BUCKET: mail-orbyt-ci
+  STORAGE_ACCESS_KEY_ID: minioadmin
+  STORAGE_SECRET_ACCESS_KEY: minioadmin
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mail_orbyt
+          POSTGRES_PASSWORD: mail_orbyt
+          POSTGRES_DB: mail_orbyt_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mail_orbyt"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Run database migrations
+        run: pnpm --filter @mail-orbyt/database db:migrate:deploy
+
+      - name: Architecture boundary tests
+        run: pnpm test:architecture
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

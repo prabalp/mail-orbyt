@@ -1,0 +1,40 @@
+// Mail Orbyt database schema.
+//
+// This file grows one phase at a time. Phase 0 establishes the toolchain
+// (datasource, generator, migrations) with the two cross-cutting models that
+// every later phase depends on: FeatureFlag (operational kill switches) and
+// AuditEvent (compliance trail, required from Phase 2 onward).
+//
+// Full model list target (see docs/architecture.md): User, Account, Session,
+// VerificationToken, Organisation, OrganisationMembership, Invitation,
+// AuditEvent, Lead, Company, LeadCompany, LeadList, LeadListMembership,
+// ImportBatch, ImportRow, DataSource, ResearchJob, ResearchProviderRun,
+// ResearchSource, ResearchDocument, ResearchFact, ResearchFactEvidence,
+// ResearchSnapshot, Campaign, CampaignLead, SequenceStep, EmailDraft,
+// EmailGeneration, InboxConnection, OAuthCredential, InboxSettings,
+// SendingDomain, DomainAuthenticationCheck, ScheduledEmail, OutboxMessage,
+// SentEmail, EmailEvent, Conversation, Reply, Meeting, MeetingOutcome,
+// AttributionRecord, SuppressionEntry, RetargetTask, JobFailure, FeatureFlag.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Operational kill switches (e.g. organisation-wide emergency sending stop).
+/// Introduced in Phase 0 because the architecture test and worker bootstrap
+/// both need a real table to prove migrations work end-to-end.
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+}
