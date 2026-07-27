@@ -111,7 +111,9 @@ describe("processOutboxItem", () => {
       subject: "Hi",
       body: "Would you be open to a call?",
     });
-    const sendEmail = vi.fn().mockResolvedValueOnce({ messageId: "gmail-msg-1" });
+    const sendEmail = vi
+      .fn()
+      .mockResolvedValueOnce({ messageId: "gmail-msg-1", threadId: "gmail-thread-1" });
 
     const prisma = fakePrisma({ ...BASE_ITEM });
     const result = await processOutboxItem(prisma, { ...BASE_DEPS, sendEmail }, "outbox-1");

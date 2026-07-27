@@ -22,7 +22,7 @@ next begins.
 | 6     | Google Workspace OAuth, inbox management, DNS checks            | ✅     |
 | 7     | Campaign and sequence builder                                   | ✅     |
 | 8     | Scheduler, inbox rotation, outbox, sending                      | ✅     |
-| 9     | Replies, follow-ups, conversations, retargeting                 | ⬜     |
+| 9     | Replies, follow-ups, conversations, retargeting                 | ✅     |
 | 10    | Meetings, attribution, analytics                                | ⬜     |
 | 11    | Safety, compliance, export/deletion/retention                   | ⬜     |
 | 12    | Security audit, load testing, hardening, deployment docs        | ⬜     |
@@ -52,6 +52,7 @@ pnpm dev
 - [Gmail OAuth, inbox management, DNS checks](docs/gmail-inboxes.md)
 - [Campaign and sequence builder](docs/campaigns.md)
 - [Scheduler, inbox rotation, outbox, sending](docs/scheduling-sending.md)
+- [Replies, follow-ups, conversations, retargeting](docs/replies-conversations.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 

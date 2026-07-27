@@ -177,6 +177,7 @@ model Organisation {
   domainDnsChecks    DomainDnsCheck[]
   campaigns          Campaign[]
   outboxItems        OutboxItem[]
+  conversations      Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -358,6 +359,7 @@ model Lead {
   emailDrafts         EmailDraft[]
   campaignEnrollments CampaignEnrollment[]
   outboxItems         OutboxItem[]
+  conversations       Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -833,9 +835,10 @@ model Inbox {
   lastSyncedAt          DateTime?
   disconnectedAt        DateTime?
 
-  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  campaigns    CampaignInbox[]
-  outboxItems  OutboxItem[]
+  organisation  Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  campaigns     CampaignInbox[]
+  outboxItems   OutboxItem[]
+  conversations Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1038,6 +1041,7 @@ model OutboxItem {
   lastError      String?
   sentAt         DateTime?
   providerMessageId String?
+  providerThreadId  String?
 
   organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   campaign     Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -1053,4 +1057,74 @@ model OutboxItem {
   @@index([organisationId])
   @@index([status, scheduledFor])
   @@index([inboxId])
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+/// One email thread with a lead, scoped to the inbox it lives in (Phase 9).
+/// Deliberately keyed by (organisationId, leadId, inboxId) rather than
+/// per-campaign — a reply from a lead pauses ALL of that lead's automated
+/// sequences across every campaign, not just the one that triggered it, per
+/// the product's human-safety principle that a reply always hands control
+/// to a person.
+model Conversation {
+  id             String             @id @default(cuid())
+  organisationId String
+  leadId         String
+  inboxId        String
+  gmailThreadId  String
+  subject        String?
+  status         ConversationStatus @default(OPEN)
+  lastMessageAt  DateTime           @default(now())
+
+  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead         Lead                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  inbox        Inbox                 @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  messages     ConversationMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organisationId, leadId, inboxId])
+  @@index([organisationId])
+  @@index([leadId])
+}
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+/// Deliberately NOT AI-classified — see packages/conversations'
+/// reply-classifier.ts. Deterministic keyword rules only, per the spec's
+/// AI usage boundary (reply classification is explicitly listed as a
+/// forbidden AI use case).
+enum ReplyClassification {
+  INTERESTED
+  NOT_INTERESTED
+  OUT_OF_OFFICE
+  UNSUBSCRIBE_REQUEST
+  BOUNCE
+  UNCLASSIFIED
+}
+
+model ConversationMessage {
+  id              String            @id @default(cuid())
+  conversationId  String
+  direction       MessageDirection
+  gmailMessageId  String?
+  outboxItemId    String?
+  classification  ReplyClassification?
+  snippet         String?
+  occurredAt      DateTime
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([conversationId, gmailMessageId])
+  @@index([conversationId])
 }

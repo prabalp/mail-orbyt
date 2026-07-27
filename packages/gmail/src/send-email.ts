@@ -19,6 +19,7 @@ export interface OutboundMessage {
 
 export interface SendResult {
   messageId: string;
+  threadId: string;
 }
 
 function encodeBase64Url(input: string): string {
@@ -58,11 +59,11 @@ async function callGmailSend(
     throw new GmailSendError(`Gmail send failed with status ${response.status}`);
   }
 
-  const data = (await response.json()) as { id?: string };
-  if (!data.id) {
-    throw new GmailSendError("Gmail send response was missing a message id.");
+  const data = (await response.json()) as { id?: string; threadId?: string };
+  if (!data.id || !data.threadId) {
+    throw new GmailSendError("Gmail send response was missing a message id or thread id.");
   }
-  return { messageId: data.id };
+  return { messageId: data.id, threadId: data.threadId };
 }
 
 /** Sends a plain-text email through a connected inbox's Gmail account, refreshing its access token first if needed. */

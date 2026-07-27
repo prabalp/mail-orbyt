@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@mail-orbyt/config": "workspace:*",
+    "@mail-orbyt/conversations": "workspace:*",
     "@mail-orbyt/database": "workspace:*",
     "@mail-orbyt/email-generation": "workspace:*",
     "@mail-orbyt/gmail": "workspace:*",

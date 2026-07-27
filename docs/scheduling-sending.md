@@ -31,8 +31,8 @@ resends the exact same text rather than generating new AI copy.
 ## Timezone-aware sending windows
 
 `packages/scheduling/src/sending-window.ts` computes a campaign's
-day-of-week and minutes-since-midnight *as observed in the campaign's own
-IANA timezone*, using `Intl.DateTimeFormat` (no external date library
+day-of-week and minutes-since-midnight _as observed in the campaign's own
+IANA timezone_, using `Intl.DateTimeFormat` (no external date library
 needed — the tz database is already in Node/V8). `nextSendableTime` jumps
 day-by-day to find the next moment inside the configured
 `sendingDaysOfWeek`/window; the day-jump is an approximate +24h (can be off
@@ -76,7 +76,7 @@ retried further, and visible for a human to investigate.
 **`EMERGENCY_STOP=false` in `.env` was silently engaging the kill switch.**
 `packages/config`'s env schema originally used `z.coerce.boolean()`, which
 runs the JS `Boolean()` constructor on the raw string — and
-`Boolean("false")` is `true` (only the *empty* string is falsy). Every
+`Boolean("false")` is `true` (only the _empty_ string is falsy). Every
 outbox item processed while the worker was running with the literal env
 line `EMERGENCY_STOP=false` (the natural, obviously-correct way to write
 "not stopped") was silently left in `SCHEDULED` forever, with the worker

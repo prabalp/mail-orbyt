@@ -34,7 +34,11 @@ describe("sendFromInbox", () => {
       inbox: { findUniqueOrThrow: vi.fn().mockResolvedValue(inbox) },
     } as never;
 
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ id: "gmail-message-id-123" }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ id: "gmail-message-id-123", threadId: "gmail-thread-id-456" }),
+      );
 
     const result = await sendFromInbox(
       prisma,
@@ -43,7 +47,7 @@ describe("sendFromInbox", () => {
       fetchImpl,
     );
 
-    expect(result).toEqual({ messageId: "gmail-message-id-123" });
+    expect(result).toEqual({ messageId: "gmail-message-id-123", threadId: "gmail-thread-id-456" });
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
       expect.objectContaining({
@@ -59,6 +63,27 @@ describe("sendFromInbox", () => {
     expect(decoded).toContain("To: prospect@example.com");
     expect(decoded).toContain("Subject: Hi");
     expect(decoded).toContain("Would you be open to a quick call?");
+  });
+
+  it("throws GmailSendError when the response is missing a thread id", async () => {
+    const { encryptToken } = await import("./token-crypto");
+    const { sendFromInbox, GmailSendError } = await import("./send-email");
+
+    const inbox = {
+      id: "inbox-1",
+      emailAddress: "alex@acme.example",
+      encryptedAccessToken: encryptToken("valid-access-token"),
+      encryptedRefreshToken: encryptToken("refresh-token"),
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    };
+    const prisma = {
+      inbox: { findUniqueOrThrow: vi.fn().mockResolvedValue(inbox) },
+    } as never;
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ id: "gmail-message-id-123" }));
+
+    await expect(
+      sendFromInbox(prisma, "inbox-1", { to: "a@b.com", subject: "Hi", body: "Body" }, fetchImpl),
+    ).rejects.toBeInstanceOf(GmailSendError);
   });
 
   it("throws GmailSendError when the Gmail API call fails", async () => {

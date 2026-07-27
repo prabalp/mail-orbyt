@@ -43,7 +43,7 @@ export interface ProcessOutboxItemDeps {
   sendEmail: (
     inboxId: string,
     message: { to: string; subject: string; body: string },
-  ) => Promise<{ messageId: string }>;
+  ) => Promise<{ messageId: string; threadId: string }>;
   /** Resolves the sender identity to use in AI-generated copy — deferred to a callback rather than static strings, since each OutboxItem's campaign can belong to a different organisation. */
   getSenderContext: (
     organisationId: string,
@@ -162,7 +162,12 @@ export async function processOutboxItem(
     const [updatedItem] = await Promise.all([
       prisma.outboxItem.update({
         where: { id: item.id },
-        data: { status: "SENT", sentAt, providerMessageId: result.messageId },
+        data: {
+          status: "SENT",
+          sentAt,
+          providerMessageId: result.messageId,
+          providerThreadId: result.threadId,
+        },
       }),
       prisma.campaignEnrollment.update({
         where: { id: item.enrollmentId },

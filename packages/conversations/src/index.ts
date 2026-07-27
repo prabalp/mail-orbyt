@@ -1,7 +1,8 @@
-/**
- * @mail-orbyt/conversations — implemented in Phase 9.
- * This package is scaffolded in Phase 0 so the workspace graph, TypeScript
- * project references, and architecture boundary tests are correct from the
- * start. It intentionally exports nothing yet.
- */
-export {};
+export { classifyReply, type ReplyClassification } from "./reply-classifier";
+export {
+  syncRepliesForOutboxItem,
+  type FetchThreadFn,
+  type SyncRepliesResult,
+} from "./reply-sync-service";
+export { listConversations, getConversation } from "./conversations-service";
+export { listRetargetableLeads, type ListRetargetableLeadsParams } from "./retargeting-service";

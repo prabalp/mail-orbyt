@@ -26,3 +26,4 @@ export {
 } from "./inbox-service";
 export { runDomainDnsCheck, listDomainDnsChecks } from "./dns-check-service";
 export { sendFromInbox, GmailSendError, type OutboundMessage, type SendResult } from "./send-email";
+export { fetchThreadMessages, type ThreadMessage } from "./fetch-thread";

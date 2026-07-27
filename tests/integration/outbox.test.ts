@@ -110,7 +110,10 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
         message: { to: string; subject: string; body: string },
       ) => {
         sentMessages.push(message);
-        return { messageId: `fake-message-${sentMessages.length}` };
+        return {
+          messageId: `fake-message-${sentMessages.length}`,
+          threadId: `fake-thread-${sentMessages.length}`,
+        };
       },
       getSenderContext: async () => ({ senderName: "Alex", senderCompanyName: "Mail Orbyt" }),
       emergencyStop: false,
@@ -234,7 +237,7 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
       aiGenerator: undefined,
       sendEmail: async () => {
         sendCount += 1;
-        return { messageId: "fake-message" };
+        return { messageId: "fake-message", threadId: "fake-thread" };
       },
       getSenderContext: async () => ({ senderName: "Alex", senderCompanyName: "Mail Orbyt" }),
       emergencyStop: false,

@@ -50,6 +50,9 @@ importers:
       '@mail-orbyt/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@mail-orbyt/conversations':
+        specifier: workspace:*
+        version: link:../../packages/conversations
       '@mail-orbyt/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -123,6 +126,9 @@ importers:
       '@mail-orbyt/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@mail-orbyt/conversations':
+        specifier: workspace:*
+        version: link:../../packages/conversations
       '@mail-orbyt/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -252,6 +258,16 @@ importers:
         version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
 
   packages/conversations:
+    dependencies:
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
+      '@mail-orbyt/gmail':
+        specifier: workspace:*
+        version: link:../gmail
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -511,6 +527,9 @@ importers:
       '@mail-orbyt/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@mail-orbyt/conversations':
+        specifier: workspace:*
+        version: link:../../packages/conversations
       '@mail-orbyt/database':
         specifier: workspace:*
         version: link:../../packages/database
