@@ -25,7 +25,7 @@ next begins.
 | 9     | Replies, follow-ups, conversations, retargeting                 | ✅     |
 | 10    | Meetings, attribution, analytics                                | ✅     |
 | 11    | Safety, compliance, export/deletion/retention                   | ✅     |
-| 12    | Security audit, load testing, hardening, deployment docs        | ⬜     |
+| 12    | Security audit, load testing, hardening, deployment docs        | ✅     |
 
 ## Quick start
 
@@ -55,6 +55,8 @@ pnpm dev
 - [Replies, follow-ups, conversations, retargeting](docs/replies-conversations.md)
 - [Meetings, attribution, analytics](docs/analytics.md)
 - [Safety, compliance, export/deletion/retention](docs/compliance.md)
+- [Security audit, load testing, hardening](docs/security-audit.md)
+- [Deployment](docs/deployment.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 

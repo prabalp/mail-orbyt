@@ -20,6 +20,7 @@
     "@mail-orbyt/logging": "workspace:*",
     "@mail-orbyt/validation": "workspace:*",
     "bcryptjs": "^2.4.3",
+    "ioredis": "^5.4.2",
     "next-auth": "5.0.0-beta.32",
     "zod": "^3.24.1"
   },

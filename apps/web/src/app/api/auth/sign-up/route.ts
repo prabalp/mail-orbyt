@@ -5,6 +5,7 @@ import { emailSchema, nonEmptyString } from "@mail-orbyt/validation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { emailSender } from "@/lib/email";
+import { clientIpFrom, rateLimiter } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
   name: nonEmptyString(120),
@@ -12,7 +13,22 @@ const bodySchema = z.object({
   password: passwordSchema,
 });
 
+const SIGN_UP_MAX_ATTEMPTS = 5;
+const SIGN_UP_WINDOW_SECONDS = 60 * 60;
+
 export async function POST(request: Request): Promise<NextResponse> {
+  const allowed = await rateLimiter.attempt(
+    `sign-up:${clientIpFrom(request)}`,
+    SIGN_UP_MAX_ATTEMPTS,
+    SIGN_UP_WINDOW_SECONDS,
+  );
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many sign-up attempts. Please try again later." },
+      { status: 429 },
+    );
+  }
+
   const json = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
