@@ -2,19 +2,19 @@
 //
 // This file grows one phase at a time. Phase 0 established the toolchain;
 // Phase 2 added authentication, multi-tenancy, invitations, and audit
-// logging; Phase 3 adds lead import, companies, lead lists, and the
-// suppression foundation.
+// logging; Phase 3 added lead import, companies, lead lists, and the
+// suppression foundation; Phase 4 adds deterministic research/enrichment.
 //
-// Implemented so far (Phases 0-3): FeatureFlag, User, Account, Session,
+// Implemented so far (Phases 0-4): FeatureFlag, User, Account, Session,
 // VerificationToken, PasswordResetToken, EmailVerificationToken,
 // Organisation, OrganisationMembership, Invitation, AuditEvent, DataSource,
 // Company, Lead, LeadCompany, LeadList, LeadListMembership, ImportBatch,
-// ImportRow, SuppressionEntry.
+// ImportRow, SuppressionEntry, ResearchJob, ResearchProviderRun,
+// ResearchSource, ResearchDocument, ResearchFact, ResearchFactEvidence,
+// ResearchSnapshot.
 //
-// Remaining model list target (see docs/architecture.md): ResearchJob,
-// ResearchProviderRun, ResearchSource, ResearchDocument, ResearchFact,
-// ResearchFactEvidence, ResearchSnapshot, Campaign, CampaignLead,
-// SequenceStep, EmailDraft, EmailGeneration, InboxConnection,
+// Remaining model list target (see docs/architecture.md): Campaign,
+// CampaignLead, SequenceStep, EmailDraft, EmailGeneration, InboxConnection,
 // OAuthCredential, InboxSettings, SendingDomain, DomainAuthenticationCheck,
 // ScheduledEmail, OutboxMessage, SentEmail, EmailEvent, Conversation, Reply,
 // Meeting, MeetingOutcome, AttributionRecord, RetargetTask, JobFailure.
@@ -169,6 +169,9 @@ model Organisation {
   leadLists          LeadList[]
   importBatches      ImportBatch[]
   suppressionEntries SuppressionEntry[]
+  researchJobs       ResearchJob[]
+  researchFacts      ResearchFact[]
+  researchSnapshots  ResearchSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -307,9 +310,11 @@ model Company {
   /// Per-field provenance: { [fieldName]: { source: DataSourceKind, updatedAt: ISO string } }
   fieldSources   Json?
 
-  organisation  Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation  Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   leads         Lead[]
   leadCompanies LeadCompany[]
+  researchJobs  ResearchJob[]
+  researchFacts ResearchFact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -343,6 +348,8 @@ model Lead {
   leadCompanies       LeadCompany[]
   leadListMemberships LeadListMembership[]
   importRows          ImportRow[]
+  researchJobs        ResearchJob[]
+  researchFacts       ResearchFact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -511,4 +518,223 @@ model SuppressionEntry {
   @@unique([organisationId, type, value])
   @@index([organisationId])
   @@index([organisationId, type])
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic research & enrichment (Phase 4)
+//
+// No model in this section is ever written to by an AI call — see
+// docs/ai-boundaries.md. Fact `category` is a validated string (see
+// packages/research/src/categories.ts) rather than a Prisma enum: the
+// spec's category taxonomy has ~50 entries across person/company facts, and
+// application-level validation keeps the prohibited-category blocklist and
+// the allow-list in one place instead of split across a migration too.
+// ---------------------------------------------------------------------------
+
+enum ResearchSubjectType {
+  LEAD
+  COMPANY
+}
+
+enum ResearchJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model ResearchJob {
+  id                String              @id @default(cuid())
+  organisationId    String
+  subjectType       ResearchSubjectType
+  leadId            String?
+  companyId         String?
+  status            ResearchJobStatus   @default(PENDING)
+  requestedByUserId String?
+  errorMessage      String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead         Lead?                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company      Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  providerRuns ResearchProviderRun[]
+  facts        ResearchFact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId])
+  @@index([organisationId, status])
+  @@index([leadId])
+  @@index([companyId])
+}
+
+enum ResearchProviderKind {
+  WEBSITE
+  SEARCH
+  NEWS
+  RSS
+  ENRICHMENT
+}
+
+enum ResearchProviderRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED_NOT_CONFIGURED
+}
+
+/// One row per provider invocation within a job — a job fans out to every
+/// configured provider (website is always available; search/news/enrichment
+/// require an API key and record SKIPPED_NOT_CONFIGURED when absent).
+model ResearchProviderRun {
+  id            String                    @id @default(cuid())
+  researchJobId String
+  provider      ResearchProviderKind
+  status        ResearchProviderRunStatus @default(PENDING)
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  researchJob ResearchJob      @relation(fields: [researchJobId], references: [id], onDelete: Cascade)
+  sources     ResearchSource[]
+
+  createdAt DateTime @default(now())
+
+  @@index([researchJobId])
+}
+
+/// A single fetched/queried source (a URL, or a search/news API result) within a provider run.
+model ResearchSource {
+  id                    String    @id @default(cuid())
+  researchProviderRunId String
+  url                   String
+  title                 String?
+  publishedAt           DateTime?
+  fetchedAt             DateTime  @default(now())
+  httpStatus            Int?
+
+  providerRun ResearchProviderRun @relation(fields: [researchProviderRunId], references: [id], onDelete: Cascade)
+  documents   ResearchDocument[]
+
+  createdAt DateTime @default(now())
+
+  @@index([researchProviderRunId])
+  @@index([url])
+}
+
+enum ExtractionMethod {
+  JSON_LD
+  OPEN_GRAPH
+  META_TAG
+  REGEX
+  STRUCTURED_ENDPOINT
+}
+
+/// The deterministically-extracted structured content from one source (never
+/// raw HTML — see docs/ai-boundaries.md on what is and isn't sent anywhere).
+model ResearchDocument {
+  id               String           @id @default(cuid())
+  researchSourceId String
+  extractionMethod ExtractionMethod
+  /// Structured extracted fields only (e.g. JSON-LD Person/Organization
+  /// properties, OG tags) — never raw HTML or full page text.
+  extractedData    Json
+
+  source ResearchSource @relation(fields: [researchSourceId], references: [id], onDelete: Cascade)
+  facts  ResearchFact[]
+
+  createdAt DateTime @default(now())
+
+  @@index([researchSourceId])
+}
+
+enum ResearchFactStatus {
+  OBSERVED
+  USER_CONFIRMED
+  USER_REJECTED
+  EXPIRED
+  CONFLICTED
+}
+
+model ResearchFact {
+  id                 String              @id @default(cuid())
+  organisationId     String
+  subjectType        ResearchSubjectType
+  leadId             String?
+  companyId          String?
+  researchJobId      String?
+  researchDocumentId String?
+  /// Validated against packages/research's category allow-list at write time.
+  category           String
+  value              String
+  sourceUrl          String
+  sourceTitle        String?
+  sourcePublishedAt  DateTime?
+  observedAt         DateTime            @default(now())
+  extractionMethod   ExtractionMethod
+  confidence         Float
+  /// Short, permitted excerpt only — never full page text. Null when the
+  /// source doesn't permit excerpting or none was captured.
+  evidenceExcerpt    String?
+  freshnessExpiresAt DateTime?
+  status             ResearchFactStatus  @default(OBSERVED)
+
+  organisation     Organisation           @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead             Lead?                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company          Company?               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  researchJob      ResearchJob?           @relation(fields: [researchJobId], references: [id], onDelete: SetNull)
+  researchDocument ResearchDocument?      @relation(fields: [researchDocumentId], references: [id], onDelete: SetNull)
+  evidence         ResearchFactEvidence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId])
+  @@index([leadId])
+  @@index([companyId])
+  @@index([organisationId, status])
+  @@index([category])
+}
+
+/// Supplementary corroborating evidence for a fact, beyond its primary
+/// source (recorded directly on ResearchFact). Not every fact has extra
+/// evidence rows.
+model ResearchFactEvidence {
+  id             String  @id @default(cuid())
+  researchFactId String
+  sourceUrl      String
+  excerpt        String?
+
+  researchFact ResearchFact @relation(fields: [researchFactId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([researchFactId])
+}
+
+/// Point-in-time copy of a subject's USER_CONFIRMED facts, taken when a user
+/// finalizes research before generating an email (Phase 5 reads the latest
+/// snapshot rather than live-querying facts, so a generation's inputs are
+/// reproducible even if facts change afterward). leadId/companyId are
+/// intentionally plain columns (not Prisma relations) — a snapshot is
+/// archival and outliving the lead/company it was taken from is acceptable.
+model ResearchSnapshot {
+  id             String              @id @default(cuid())
+  organisationId String
+  subjectType    ResearchSubjectType
+  leadId         String?
+  companyId      String?
+  /// Array of { factId, category, value, sourceUrl } at snapshot time.
+  facts          Json
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([organisationId])
+  @@index([leadId])
+  @@index([companyId])
 }

@@ -17,7 +17,7 @@ next begins.
 | 1     | Material 3 design system + application shell                    | ✅     |
 | 2     | Authentication, organisations, roles, invitations               | ✅     |
 | 3     | CSV import, leads, companies, suppression foundation            | ✅     |
-| 4     | Deterministic research and enrichment                           | ⬜     |
+| 4     | Deterministic research and enrichment                           | ✅     |
 | 5     | Controlled AI email generation                                  | ⬜     |
 | 6     | Google Workspace OAuth, inbox management, DNS checks            | ⬜     |
 | 7     | Campaign and sequence builder                                   | ⬜     |
@@ -47,6 +47,7 @@ pnpm dev
 - [Authentication & multi-tenancy](docs/authentication.md)
 - [CSV lead import](docs/csv-import.md)
 - [Queue architecture](docs/queue-architecture.md)
+- [Deterministic research and enrichment](docs/research.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 

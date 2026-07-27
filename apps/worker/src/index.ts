@@ -5,14 +5,14 @@ import { prisma } from "@mail-orbyt/database";
 import { S3ObjectStorage } from "@mail-orbyt/storage";
 import type { Worker } from "bullmq";
 import { createLeadImportWorker } from "./queues/lead-import";
+import { createResearchWorker } from "./queues/research";
 
 /**
- * Worker process bootstrap. Job queues (import, research, generation,
- * scheduling, send, reply-sync) are registered as they land in later phases
- * — see docs/queue-architecture.md. Phase 3 adds the first real queue
- * (lead-import); Phase 0 established the process lifecycle: connect
- * dependencies, drain in-flight work on shutdown signals, exit non-zero on
- * unrecoverable startup failure.
+ * Worker process bootstrap. Job queues (generation, scheduling, send,
+ * reply-sync) are registered as they land in later phases — see
+ * docs/queue-architecture.md. Phase 0 established the process lifecycle:
+ * connect dependencies, drain in-flight work on shutdown signals, exit
+ * non-zero on unrecoverable startup failure.
  */
 
 const env = loadEnv();
@@ -62,9 +62,14 @@ async function main(): Promise<void> {
       storage,
       logger: logger.child({ queue: "lead-import" }),
     }),
+    createResearchWorker({
+      connection: redis,
+      prisma,
+      logger: logger.child({ queue: "research" }),
+    }),
   );
 
-  logger.info("worker started", { environment: env.NODE_ENV, queues: ["lead-import"] });
+  logger.info("worker started", { environment: env.NODE_ENV, queues: ["lead-import", "research"] });
 }
 
 main().catch((error: unknown) => {

@@ -16,6 +16,28 @@ export interface ListLeadsResult {
 }
 
 /**
+ * A search term is matched per-word (AND across words, OR across fields per
+ * word) rather than as one literal substring — searching the full "First
+ * Last" name a user actually sees in the UI must match a lead whose
+ * firstName and lastName are two separate columns, neither of which
+ * contains the combined string. A single-word search behaves exactly as a
+ * plain substring search would.
+ */
+function buildSearchFilter(search: string): Prisma.LeadWhereInput {
+  const words = search.trim().split(/\s+/).filter(Boolean);
+  return {
+    AND: words.map((word) => ({
+      OR: [
+        { firstName: { contains: word, mode: "insensitive" as const } },
+        { lastName: { contains: word, mode: "insensitive" as const } },
+        { email: { contains: word, mode: "insensitive" as const } },
+        { title: { contains: word, mode: "insensitive" as const } },
+      ],
+    })),
+  };
+}
+
+/**
  * All lead queries take an already-validated organisationId — the caller
  * (an API route) must have gone through
  * requireOrganisationMembership first. This function does not re-check
@@ -29,16 +51,7 @@ export async function listLeads(
     organisationId: params.organisationId,
     status: params.status ?? "ACTIVE",
     ...(params.companyId ? { companyId: params.companyId } : {}),
-    ...(params.search
-      ? {
-          OR: [
-            { firstName: { contains: params.search, mode: "insensitive" } },
-            { lastName: { contains: params.search, mode: "insensitive" } },
-            { email: { contains: params.search, mode: "insensitive" } },
-            { title: { contains: params.search, mode: "insensitive" } },
-          ],
-        }
-      : {}),
+    ...(params.search ? buildSearchFilter(params.search) : {}),
   };
 
   const [leads, totalCount] = await Promise.all([

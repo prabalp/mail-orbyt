@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Card, EmptyState, PageHeader, Skeleton, Table } from "@mail-orbyt/design-system";
 import { useOrganisation } from "../../organisation-context";
+import { ResearchPanel } from "../../_components/ResearchPanel";
 
 interface CompanyDetail {
   id: string;
@@ -118,6 +119,10 @@ export default function CompanyDetailPage(): React.ReactElement {
             getRowKey={(lead) => lead.id}
           />
         )}
+      </Card>
+
+      <Card>
+        <ResearchPanel subjectType="COMPANY" companyId={company.id} />
       </Card>
     </div>
   );

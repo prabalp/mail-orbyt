@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Drawer, Skeleton, Badge } from "@mail-orbyt/design-system";
 import { useOrganisation } from "../organisation-context";
+import { ResearchPanel } from "../_components/ResearchPanel";
 
 interface LeadDetail {
   id: string;
@@ -142,6 +143,12 @@ export function LeadDetailDrawer({
             </div>
           ) : null}
         </dl>
+      ) : null}
+
+      {lead ? (
+        <div className="mt-6 border-t border-outline/20 pt-6">
+          <ResearchPanel subjectType="LEAD" leadId={lead.id} />
+        </div>
       ) : null}
     </Drawer>
   );
