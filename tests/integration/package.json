@@ -9,6 +9,7 @@
     "test:integration": "vitest run"
   },
   "devDependencies": {
+    "@mail-orbyt/analytics": "workspace:*",
     "@mail-orbyt/authentication": "workspace:*",
     "@mail-orbyt/campaigns": "workspace:*",
     "@mail-orbyt/config": "workspace:*",

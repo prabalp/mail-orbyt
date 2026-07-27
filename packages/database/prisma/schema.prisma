@@ -178,6 +178,7 @@ model Organisation {
   campaigns          Campaign[]
   outboxItems        OutboxItem[]
   conversations      Conversation[]
+  meetings           Meeting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -360,6 +361,7 @@ model Lead {
   campaignEnrollments CampaignEnrollment[]
   outboxItems         OutboxItem[]
   conversations       Conversation[]
+  meetings            Meeting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1127,4 +1129,43 @@ model ConversationMessage {
 
   @@unique([conversationId, gmailMessageId])
   @@index([conversationId])
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+/// A booked meeting, logged by a human (no calendar integration exists —
+/// this is a manual record, typically created from a Conversation once a
+/// reply turns into a booked call). campaignId is captured at booking time
+/// for attribution — it snapshots which campaign's outreach led to this
+/// meeting, since the lead's campaign membership can change later.
+/// `qualified` is the human judgment call that feeds the product's primary
+/// metric (qualified meeting rate = qualified meetings / unique prospects
+/// contacted) — never inferred automatically.
+model Meeting {
+  id              String        @id @default(cuid())
+  organisationId  String
+  leadId          String
+  campaignId      String?
+  conversationId  String?
+  status          MeetingStatus @default(SCHEDULED)
+  qualified       Boolean       @default(false)
+  scheduledFor    DateTime?
+  notes           String?
+  createdByUserId String
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  bookedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId])
+  @@index([leadId])
+  @@index([campaignId])
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Card, EmptyState, PageHeader } from "@mail-orbyt/design-system";
+import { Badge, Button, Card, EmptyState, PageHeader, useToast } from "@mail-orbyt/design-system";
 import { useOrganisation } from "../organisation-context";
 
 interface ConversationMessage {
@@ -14,6 +14,7 @@ interface ConversationMessage {
 
 interface Conversation {
   id: string;
+  leadId: string;
   subject: string | null;
   status: "OPEN" | "CLOSED";
   lastMessageAt: string;
@@ -32,6 +33,7 @@ const CLASSIFICATION_TONE: Record<string, "success" | "error" | "warning" | "neu
 
 export default function ConversationsPage(): React.ReactElement {
   const { organisationId } = useOrganisation();
+  const toast = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +49,19 @@ export default function ConversationsPage(): React.ReactElement {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function handleLogMeeting(conversation: Conversation) {
+    const response = await fetch(`/api/organisations/${organisationId}/meetings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadId: conversation.leadId, conversationId: conversation.id }),
+    });
+    if (response.ok) {
+      toast.show("Meeting logged", "success");
+    } else {
+      toast.show("Could not log meeting", "error");
+    }
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -88,6 +103,9 @@ export default function ConversationsPage(): React.ReactElement {
                       <Badge tone={conversation.status === "OPEN" ? "neutral" : "success"}>
                         {conversation.status}
                       </Badge>
+                      <Button variant="text" onClick={() => handleLogMeeting(conversation)}>
+                        Log meeting
+                      </Button>
                     </div>
                   </div>
                 </li>

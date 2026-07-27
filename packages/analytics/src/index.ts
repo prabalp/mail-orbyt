@@ -1,7 +1,17 @@
-/**
- * @mail-orbyt/analytics — implemented in Phase 10.
- * This package is scaffolded in Phase 0 so the workspace graph, TypeScript
- * project references, and architecture boundary tests are correct from the
- * start. It intentionally exports nothing yet.
- */
-export {};
+export {
+  createMeeting,
+  listMeetings,
+  updateMeeting,
+  type CreateMeetingParams,
+  type UpdateMeetingParams,
+} from "./meeting-service";
+export {
+  getUniqueProspectsContacted,
+  getQualifiedMeetingsBooked,
+  getQualifiedMeetingRate,
+  getReplyRate,
+  getCampaignMetricsBreakdown,
+  type MetricsFilter,
+  type QualifiedMeetingRateResult,
+  type CampaignMetrics,
+} from "./metrics-service";

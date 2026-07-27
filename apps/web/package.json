@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@mail-orbyt/analytics": "workspace:*",
     "@mail-orbyt/authentication": "workspace:*",
     "@mail-orbyt/campaigns": "workspace:*",
     "@mail-orbyt/config": "workspace:*",
