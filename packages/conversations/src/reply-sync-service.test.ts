@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { syncRepliesForOutboxItem } from "./reply-sync-service";
+
+const addSuppressionEntryMock = vi.fn();
+vi.mock("@mail-orbyt/leads", () => ({ addSuppressionEntry: addSuppressionEntryMock }));
+
+const { syncRepliesForOutboxItem } = await import("./reply-sync-service");
 
 const SENT_ITEM = {
   id: "outbox-1",
@@ -88,6 +92,38 @@ describe("syncRepliesForOutboxItem", () => {
       where: { id: "enrollment-1" },
       data: expect.objectContaining({ status: "EXITED", exitReason: "Lead replied" }),
     });
+  });
+
+  it("adds the lead to the suppression list when the reply is classified as an unsubscribe request", async () => {
+    const prisma = fakePrisma(SENT_ITEM);
+    const fetchThread = vi.fn().mockResolvedValue([
+      {
+        gmailMessageId: "msg-1",
+        from: "Alex <alex@acme.example>",
+        subject: "Hi",
+        snippet: "Hi",
+        internalDate: new Date(),
+      },
+      {
+        gmailMessageId: "msg-2",
+        from: "Jamie Prospect <prospect@example.com>",
+        subject: "Re: Hi",
+        snippet: "Please unsubscribe me from this list.",
+        internalDate: new Date(),
+      },
+    ]);
+
+    await syncRepliesForOutboxItem(prisma as never, fetchThread, "outbox-1");
+
+    expect(addSuppressionEntryMock).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        organisationId: "org-1",
+        type: "EMAIL",
+        value: "prospect@example.com",
+        reason: "UNSUBSCRIBE",
+      }),
+    );
   });
 
   it("does not create a duplicate ConversationMessage for an already-recorded reply", async () => {

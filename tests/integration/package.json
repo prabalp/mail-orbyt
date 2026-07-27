@@ -12,6 +12,7 @@
     "@mail-orbyt/analytics": "workspace:*",
     "@mail-orbyt/authentication": "workspace:*",
     "@mail-orbyt/campaigns": "workspace:*",
+    "@mail-orbyt/compliance": "workspace:*",
     "@mail-orbyt/config": "workspace:*",
     "@mail-orbyt/conversations": "workspace:*",
     "@mail-orbyt/database": "workspace:*",

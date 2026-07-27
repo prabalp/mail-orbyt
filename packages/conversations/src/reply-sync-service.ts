@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@mail-orbyt/database";
 import type { ThreadMessage } from "@mail-orbyt/gmail";
+import { addSuppressionEntry } from "@mail-orbyt/leads";
 import { classifyReply } from "./reply-classifier";
 
 export type FetchThreadFn = (
@@ -80,17 +81,31 @@ export async function syncRepliesForOutboxItem(
     });
     if (existing) continue;
 
+    const classification = classifyReply(reply.subject, reply.snippet);
+
     await prisma.conversationMessage.create({
       data: {
         conversationId: conversation.id,
         direction: "INBOUND",
         gmailMessageId: reply.gmailMessageId,
-        classification: classifyReply(reply.subject, reply.snippet),
+        classification,
         snippet: reply.snippet,
         occurredAt: reply.internalDate,
       },
     });
     newReplies += 1;
+
+    // An unsubscribe request must take effect immediately and permanently
+    // — added to the canonical suppression list so every future campaign
+    // (not just this one) re-checks and respects it at send time.
+    if (classification === "UNSUBSCRIBE_REQUEST" && item.lead.email) {
+      await addSuppressionEntry(prisma, {
+        organisationId: item.organisationId,
+        type: "EMAIL",
+        value: item.lead.email,
+        reason: "UNSUBSCRIBE",
+      });
+    }
   }
 
   if (newReplies > 0) {

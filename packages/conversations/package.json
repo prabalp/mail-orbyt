@@ -16,6 +16,7 @@
   "dependencies": {
     "@mail-orbyt/database": "workspace:*",
     "@mail-orbyt/gmail": "workspace:*",
+    "@mail-orbyt/leads": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

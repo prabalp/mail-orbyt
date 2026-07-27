@@ -24,7 +24,7 @@ next begins.
 | 8     | Scheduler, inbox rotation, outbox, sending                      | ✅     |
 | 9     | Replies, follow-ups, conversations, retargeting                 | ✅     |
 | 10    | Meetings, attribution, analytics                                | ✅     |
-| 11    | Safety, compliance, export/deletion/retention                   | ⬜     |
+| 11    | Safety, compliance, export/deletion/retention                   | ✅     |
 | 12    | Security audit, load testing, hardening, deployment docs        | ⬜     |
 
 ## Quick start
@@ -54,6 +54,7 @@ pnpm dev
 - [Scheduler, inbox rotation, outbox, sending](docs/scheduling-sending.md)
 - [Replies, follow-ups, conversations, retargeting](docs/replies-conversations.md)
 - [Meetings, attribution, analytics](docs/analytics.md)
+- [Safety, compliance, export/deletion/retention](docs/compliance.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 

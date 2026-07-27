@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Drawer, Skeleton, Badge } from "@mail-orbyt/design-system";
+import { Button, Drawer, Skeleton, Badge, useToast } from "@mail-orbyt/design-system";
 import { useOrganisation } from "../organisation-context";
 import { ResearchPanel } from "../_components/ResearchPanel";
 import { EmailDraftPanel } from "../_components/EmailDraftPanel";
@@ -35,9 +35,11 @@ export function LeadDetailDrawer({
   onClose: () => void;
 }): React.ReactElement {
   const { organisationId } = useOrganisation();
+  const toast = useToast();
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!leadId) return;
@@ -56,6 +58,47 @@ export function LeadDetailDrawer({
   }, [leadId, organisationId]);
 
   const name = lead ? [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "(no name)" : "";
+
+  async function handleExport() {
+    if (!lead) return;
+    const response = await fetch(`/api/organisations/${organisationId}/leads/${lead.id}/export`);
+    if (!response.ok) {
+      toast.show("Could not export lead data", "error");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lead-${lead.id}-export.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleDelete() {
+    if (!lead) return;
+    if (
+      !window.confirm(
+        "Permanently delete this lead and all associated data? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/organisations/${organisationId}/leads/${lead.id}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        toast.show("Lead data deleted", "success");
+        onClose();
+      } else {
+        toast.show("Could not delete lead data", "error");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <Drawer
@@ -155,6 +198,17 @@ export function LeadDetailDrawer({
       {lead ? (
         <div className="mt-6 border-t border-outline/20 pt-6">
           <EmailDraftPanel leadId={lead.id} />
+        </div>
+      ) : null}
+
+      {lead ? (
+        <div className="mt-6 flex gap-2 border-t border-outline/20 pt-6">
+          <Button variant="outlined" onClick={handleExport}>
+            Export data
+          </Button>
+          <Button variant="outlined" loading={deleting} onClick={handleDelete}>
+            Delete lead data
+          </Button>
         </div>
       ) : null}
     </Drawer>
