@@ -175,6 +175,7 @@ model Organisation {
   emailDrafts        EmailDraft[]
   inboxes            Inbox[]
   domainDnsChecks    DomainDnsCheck[]
+  campaigns          Campaign[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -354,6 +355,7 @@ model Lead {
   researchJobs        ResearchJob[]
   researchFacts       ResearchFact[]
   emailDrafts         EmailDraft[]
+  campaignEnrollments CampaignEnrollment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -829,7 +831,8 @@ model Inbox {
   lastSyncedAt          DateTime?
   disconnectedAt        DateTime?
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  campaigns    CampaignInbox[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -870,4 +873,125 @@ model DomainDnsCheck {
 
   @@unique([organisationId, domain])
   @@index([organisationId])
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+/// A campaign is a sequence of steps sent to enrolled leads from a pool of
+/// inboxes (Phase 7 builds the definition; Phase 8 executes it). Sending
+/// days/window are stored per-campaign in the campaign's own timezone —
+/// the scheduler (Phase 8) is responsible for converting to each send's
+/// actual wall-clock time.
+model Campaign {
+  id                       String         @id @default(cuid())
+  organisationId           String
+  name                     String
+  description              String?
+  status                   CampaignStatus @default(DRAFT)
+  timezone                 String         @default("UTC")
+  /// 0 (Sunday) - 6 (Saturday).
+  sendingDaysOfWeek        Int[]          @default([1, 2, 3, 4, 5])
+  sendingWindowStartMinute Int            @default(540)
+  sendingWindowEndMinute   Int            @default(1020)
+  createdByUserId          String
+
+  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  steps        CampaignStep[]
+  inboxes      CampaignInbox[]
+  enrollments  CampaignEnrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId])
+  @@index([organisationId, status])
+}
+
+enum SequenceStepType {
+  INITIAL
+  FOLLOW_UP
+  CLOSE_THE_LOOP
+}
+
+/// One step in a campaign's sequence, ordered by orderIndex. Content is
+/// either generated via AI at send time (Phase 5's generateEmail, using
+/// callToActionOverride if set) or a manually-written template with simple
+/// {{firstName}}-style merge tokens — never both, per useAiGeneration.
+model CampaignStep {
+  id                   String           @id @default(cuid())
+  campaignId           String
+  orderIndex           Int
+  stepType             SequenceStepType
+  /// Days after the previous step (0 for the first step).
+  delayDays            Int              @default(0)
+  useAiGeneration      Boolean          @default(true)
+  callToActionOverride String?
+  manualSubject        String?
+  manualBody           String?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, orderIndex])
+  @@index([campaignId])
+}
+
+/// The rotation pool of sending inboxes for a campaign (Phase 8 rotates
+/// sends across these). Many-to-many: one inbox can serve multiple
+/// campaigns, one campaign can use multiple inboxes.
+model CampaignInbox {
+  id         String @id @default(cuid())
+  campaignId String
+  inboxId    String
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  inbox    Inbox    @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([campaignId, inboxId])
+  @@index([campaignId])
+}
+
+enum CampaignEnrollmentStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  COMPLETED
+  EXITED
+  SUPPRESSED
+}
+
+/// A lead's participation in a campaign. currentStepIndex tracks progress
+/// through Campaign.steps (Phase 8 advances it on send); a lead already
+/// suppressed at enrollment time is enrolled with status SUPPRESSED rather
+/// than silently skipped, so it's visible in the UI why they're not being
+/// contacted.
+model CampaignEnrollment {
+  id              String                   @id @default(cuid())
+  campaignId      String
+  leadId          String
+  status          CampaignEnrollmentStatus @default(PENDING)
+  currentStepIndex Int                     @default(0)
+  exitReason      String?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  enrolledAt DateTime  @default(now())
+  exitedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([campaignId, leadId])
+  @@index([campaignId])
+  @@index([leadId])
 }

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@mail-orbyt/authentication": "workspace:*",
+    "@mail-orbyt/campaigns": "workspace:*",
     "@mail-orbyt/config": "workspace:*",
     "@mail-orbyt/database": "workspace:*",
     "@mail-orbyt/design-system": "workspace:*",

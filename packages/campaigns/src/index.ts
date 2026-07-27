@@ -1,7 +1,26 @@
-/**
- * @mail-orbyt/campaigns — implemented in Phase 7.
- * This package is scaffolded in Phase 0 so the workspace graph, TypeScript
- * project references, and architecture boundary tests are correct from the
- * start. It intentionally exports nothing yet.
- */
-export {};
+export {
+  createCampaign,
+  listCampaigns,
+  getCampaign,
+  updateCampaign,
+  archiveCampaign,
+  CampaignActivationError,
+  type CreateCampaignParams,
+  type UpdateCampaignParams,
+} from "./campaign-service";
+export {
+  addStep,
+  updateStep,
+  removeStep,
+  reorderSteps,
+  InvalidStepError,
+  type AddStepParams,
+} from "./step-service";
+export { setCampaignInboxes, InvalidInboxPoolError } from "./inbox-pool-service";
+export {
+  enrollLeads,
+  enrollLeadsFromList,
+  listEnrollments,
+  exitEnrollment,
+  type EnrollLeadsResult,
+} from "./enrollment-service";
