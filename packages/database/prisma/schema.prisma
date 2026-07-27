@@ -176,6 +176,7 @@ model Organisation {
   inboxes            Inbox[]
   domainDnsChecks    DomainDnsCheck[]
   campaigns          Campaign[]
+  outboxItems        OutboxItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -356,6 +357,7 @@ model Lead {
   researchFacts       ResearchFact[]
   emailDrafts         EmailDraft[]
   campaignEnrollments CampaignEnrollment[]
+  outboxItems         OutboxItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -833,6 +835,7 @@ model Inbox {
 
   organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   campaigns    CampaignInbox[]
+  outboxItems  OutboxItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -905,6 +908,7 @@ model Campaign {
   steps        CampaignStep[]
   inboxes      CampaignInbox[]
   enrollments  CampaignEnrollment[]
+  outboxItems  OutboxItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -935,7 +939,8 @@ model CampaignStep {
   manualSubject        String?
   manualBody           String?
 
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  outboxItems OutboxItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -976,15 +981,20 @@ enum CampaignEnrollmentStatus {
 /// than silently skipped, so it's visible in the UI why they're not being
 /// contacted.
 model CampaignEnrollment {
-  id              String                   @id @default(cuid())
-  campaignId      String
-  leadId          String
-  status          CampaignEnrollmentStatus @default(PENDING)
-  currentStepIndex Int                     @default(0)
-  exitReason      String?
+  id               String                   @id @default(cuid())
+  campaignId       String
+  leadId           String
+  status           CampaignEnrollmentStatus @default(PENDING)
+  currentStepIndex Int                      @default(0)
+  /// When the most recent step's email was actually sent — the anchor
+  /// enrollment-progression.ts's delay math counts forward from, not
+  /// enrolledAt (which never changes).
+  lastStepSentAt   DateTime?
+  exitReason       String?
 
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaign    Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead        Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  outboxItems OutboxItem[]
 
   enrolledAt DateTime  @default(now())
   exitedAt   DateTime?
@@ -994,4 +1004,53 @@ model CampaignEnrollment {
   @@unique([campaignId, leadId])
   @@index([campaignId])
   @@index([leadId])
+}
+
+enum OutboxItemStatus {
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+  SKIPPED_SUPPRESSED
+  CANCELLED
+}
+
+/// One scheduled/sent email for one enrollment's step. The unique
+/// constraint on (campaignId, leadId, campaignStepId) is the idempotency
+/// guarantee — the scheduler can be re-run any number of times without
+/// ever creating a duplicate send for the same lead+step. Content is
+/// materialized (subject/body populated) once, at send time, and never
+/// regenerated on retry, so a retried send is byte-identical to the first
+/// attempt.
+model OutboxItem {
+  id             String           @id @default(cuid())
+  organisationId String
+  campaignId     String
+  leadId         String
+  campaignStepId String
+  enrollmentId   String
+  status         OutboxItemStatus @default(SCHEDULED)
+  scheduledFor   DateTime
+  inboxId        String?
+  subject        String?
+  body           String?
+  attempts       Int              @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  providerMessageId String?
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  campaign     Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead         Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaignStep CampaignStep       @relation(fields: [campaignStepId], references: [id], onDelete: Cascade)
+  enrollment   CampaignEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  inbox        Inbox?             @relation(fields: [inboxId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, leadId, campaignStepId])
+  @@index([organisationId])
+  @@index([status, scheduledFor])
+  @@index([inboxId])
 }

@@ -16,6 +16,7 @@
     "@mail-orbyt/gmail": "workspace:*",
     "@mail-orbyt/leads": "workspace:*",
     "@mail-orbyt/research": "workspace:*",
+    "@mail-orbyt/scheduling": "workspace:*",
     "@mail-orbyt/storage": "workspace:*",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

@@ -46,4 +46,26 @@ describe("loadEnv", () => {
     expect(second).toBe(first);
     expect(second.APP_NAME).toBe("Mail Orbyt");
   });
+
+  it("parses the literal string 'false' as false, not truthy (regression: z.coerce.boolean() bug)", () => {
+    expect(loadEnv({ ...validEnv, EMERGENCY_STOP: "false" }).EMERGENCY_STOP).toBe(false);
+  });
+
+  it("parses the literal string 'true' as true", () => {
+    expect(loadEnv({ ...validEnv, EMERGENCY_STOP: "true" }).EMERGENCY_STOP).toBe(true);
+  });
+
+  it("defaults EMERGENCY_STOP to false when unset", () => {
+    expect(loadEnv(validEnv).EMERGENCY_STOP).toBe(false);
+  });
+
+  it("parses STORAGE_FORCE_PATH_STYLE='false' as false", () => {
+    expect(
+      loadEnv({ ...validEnv, STORAGE_FORCE_PATH_STYLE: "false" }).STORAGE_FORCE_PATH_STYLE,
+    ).toBe(false);
+  });
+
+  it("defaults STORAGE_FORCE_PATH_STYLE to true when unset", () => {
+    expect(loadEnv(validEnv).STORAGE_FORCE_PATH_STYLE).toBe(true);
+  });
 });

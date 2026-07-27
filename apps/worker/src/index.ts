@@ -3,9 +3,12 @@ import { loadEnv } from "@mail-orbyt/config";
 import { createLogger } from "@mail-orbyt/logging";
 import { prisma } from "@mail-orbyt/database";
 import { S3ObjectStorage } from "@mail-orbyt/storage";
+import { scheduleRecurringTick } from "@mail-orbyt/scheduling";
 import type { Worker } from "bullmq";
 import { createLeadImportWorker } from "./queues/lead-import";
 import { createResearchWorker } from "./queues/research";
+import { createCampaignSchedulerWorker } from "./queues/campaign-scheduler";
+import { createOutboxWorker } from "./queues/outbox";
 
 /**
  * Worker process bootstrap. Job queues (generation, scheduling, send,
@@ -67,9 +70,24 @@ async function main(): Promise<void> {
       prisma,
       logger: logger.child({ queue: "research" }),
     }),
+    createCampaignSchedulerWorker({
+      connection: redis,
+      prisma,
+      logger: logger.child({ queue: "campaign-scheduler" }),
+    }),
+    createOutboxWorker({
+      connection: redis,
+      prisma,
+      logger: logger.child({ queue: "outbox" }),
+    }),
   );
 
-  logger.info("worker started", { environment: env.NODE_ENV, queues: ["lead-import", "research"] });
+  await scheduleRecurringTick(redis);
+
+  logger.info("worker started", {
+    environment: env.NODE_ENV,
+    queues: ["lead-import", "research", "campaign-scheduler", "outbox"],
+  });
 }
 
 main().catch((error: unknown) => {

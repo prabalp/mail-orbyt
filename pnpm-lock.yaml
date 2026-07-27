@@ -126,6 +126,12 @@ importers:
       '@mail-orbyt/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@mail-orbyt/email-generation':
+        specifier: workspace:*
+        version: link:../../packages/email-generation
+      '@mail-orbyt/gmail':
+        specifier: workspace:*
+        version: link:../../packages/gmail
       '@mail-orbyt/leads':
         specifier: workspace:*
         version: link:../../packages/leads
@@ -135,6 +141,9 @@ importers:
       '@mail-orbyt/research':
         specifier: workspace:*
         version: link:../../packages/research
+      '@mail-orbyt/scheduling':
+        specifier: workspace:*
+        version: link:../../packages/scheduling
       '@mail-orbyt/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -426,7 +435,35 @@ importers:
         version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
 
   packages/scheduling:
+    dependencies:
+      '@mail-orbyt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
+      '@mail-orbyt/email-generation':
+        specifier: workspace:*
+        version: link:../email-generation
+      '@mail-orbyt/gmail':
+        specifier: workspace:*
+        version: link:../gmail
+      '@mail-orbyt/leads':
+        specifier: workspace:*
+        version: link:../leads
+      '@mail-orbyt/research':
+        specifier: workspace:*
+        version: link:../research
+      bullmq:
+        specifier: ^5.34.2
+        version: 5.81.2
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -486,6 +523,9 @@ importers:
       '@mail-orbyt/research':
         specifier: workspace:*
         version: link:../../packages/research
+      '@mail-orbyt/scheduling':
+        specifier: workspace:*
+        version: link:../../packages/scheduling
       '@mail-orbyt/storage':
         specifier: workspace:*
         version: link:../../packages/storage

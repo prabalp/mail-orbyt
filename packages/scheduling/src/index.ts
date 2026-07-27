@@ -1,7 +1,26 @@
-/**
- * @mail-orbyt/scheduling — implemented in Phase 8.
- * This package is scaffolded in Phase 0 so the workspace graph, TypeScript
- * project references, and architecture boundary tests are correct from the
- * start. It intentionally exports nothing yet.
- */
-export {};
+export {
+  isWithinSendingWindow,
+  nextSendableTime,
+  type SendingWindowConfig,
+} from "./sending-window";
+export { pickNextInbox } from "./inbox-rotation";
+export { scheduleNextStepForEnrollment } from "./enrollment-progression";
+export {
+  materializeStepContent,
+  AiNotConfiguredForStepError,
+  type MaterializeContentParams,
+} from "./content";
+export {
+  enqueueDueOutboxItems,
+  processOutboxItem,
+  type ProcessOutboxItemDeps,
+} from "./outbox-service";
+export {
+  getSchedulerQueue,
+  scheduleRecurringTick,
+  getOutboxQueue,
+  enqueueOutboxItem,
+  SCHEDULER_QUEUE_NAME,
+  OUTBOX_QUEUE_NAME,
+  type OutboxJobData,
+} from "./queue";

@@ -1,6 +1,24 @@
 import { z } from "zod";
 
 /**
+ * z.coerce.boolean() runs the JS `Boolean()` constructor on the raw env
+ * string, and `Boolean("false")` is `true` — any non-empty string coerces
+ * to true, which silently inverted the intended meaning of `X=false` in a
+ * .env file (caught live: EMERGENCY_STOP=false was making the outbox
+ * worker treat the kill switch as engaged). This parses the literal
+ * strings "true"/"false"/"1"/"0" instead.
+ */
+function booleanEnvVar(defaultValue: boolean) {
+  return z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value === "") return defaultValue;
+      return value.toLowerCase() === "true" || value === "1";
+    });
+}
+
+/**
  * Central environment schema. Every environment variable the platform reads
  * must be declared here — no `process.env.X` access is permitted outside
  * this package. Validation happens once at process startup; a misconfigured
@@ -42,7 +60,7 @@ const envSchema = z.object({
   STORAGE_BUCKET: z.string().min(1),
   STORAGE_ACCESS_KEY_ID: z.string().min(1),
   STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
-  STORAGE_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+  STORAGE_FORCE_PATH_STYLE: booleanEnvVar(true),
 
   // AI provider (packages/email-generation ONLY)
   AI_PROVIDER_API_KEY: z.string().min(1).optional(),
@@ -55,7 +73,7 @@ const envSchema = z.object({
   ENRICHMENT_PROVIDER_API_KEY: z.string().optional(),
 
   // Email sending safety
-  EMERGENCY_STOP: z.coerce.boolean().default(false),
+  EMERGENCY_STOP: booleanEnvVar(false),
 
   // Observability
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

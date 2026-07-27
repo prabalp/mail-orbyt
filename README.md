@@ -21,7 +21,7 @@ next begins.
 | 5     | Controlled AI email generation                                  | ✅     |
 | 6     | Google Workspace OAuth, inbox management, DNS checks            | ✅     |
 | 7     | Campaign and sequence builder                                   | ✅     |
-| 8     | Scheduler, inbox rotation, outbox, sending                      | ⬜     |
+| 8     | Scheduler, inbox rotation, outbox, sending                      | ✅     |
 | 9     | Replies, follow-ups, conversations, retargeting                 | ⬜     |
 | 10    | Meetings, attribution, analytics                                | ⬜     |
 | 11    | Safety, compliance, export/deletion/retention                   | ⬜     |
@@ -51,6 +51,7 @@ pnpm dev
 - [Controlled AI email generation](docs/ai-email-generation.md)
 - [Gmail OAuth, inbox management, DNS checks](docs/gmail-inboxes.md)
 - [Campaign and sequence builder](docs/campaigns.md)
+- [Scheduler, inbox rotation, outbox, sending](docs/scheduling-sending.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 

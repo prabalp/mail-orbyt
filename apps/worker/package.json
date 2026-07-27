@@ -15,9 +15,12 @@
   "dependencies": {
     "@mail-orbyt/config": "workspace:*",
     "@mail-orbyt/database": "workspace:*",
+    "@mail-orbyt/email-generation": "workspace:*",
+    "@mail-orbyt/gmail": "workspace:*",
     "@mail-orbyt/leads": "workspace:*",
     "@mail-orbyt/logging": "workspace:*",
     "@mail-orbyt/research": "workspace:*",
+    "@mail-orbyt/scheduling": "workspace:*",
     "@mail-orbyt/storage": "workspace:*",
     "bullmq": "^5.34.2",
     "ioredis": "^5.4.2"
