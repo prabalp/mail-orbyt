@@ -173,6 +173,8 @@ model Organisation {
   researchFacts      ResearchFact[]
   researchSnapshots  ResearchSnapshot[]
   emailDrafts        EmailDraft[]
+  inboxes            Inbox[]
+  domainDnsChecks    DomainDnsCheck[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -793,4 +795,79 @@ model EmailDraft {
   @@index([organisationId])
   @@index([leadId])
   @@index([basedOnDraftId])
+}
+
+enum InboxProvider {
+  GOOGLE
+}
+
+enum InboxStatus {
+  CONNECTED
+  REAUTH_REQUIRED
+  DISCONNECTED
+  ERROR
+}
+
+/// A connected Gmail sending mailbox (Phase 6). Distinct from Account (Auth.js
+/// login) — this uses its own OAuth client/scopes and its own encrypted
+/// token storage, per the spec's requirement that login and sending
+/// credentials never share a token. Tokens are encrypted at rest with
+/// TOKEN_ENCRYPTION_KEY (see packages/gmail/src/token-crypto.ts); only that
+/// package ever decrypts them.
+model Inbox {
+  id                    String        @id @default(cuid())
+  organisationId        String
+  emailAddress          String
+  displayName           String?
+  provider              InboxProvider @default(GOOGLE)
+  status                InboxStatus   @default(CONNECTED)
+  dailySendLimit        Int           @default(30)
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  tokenExpiresAt        DateTime
+  connectedByUserId     String
+  lastSyncedAt          DateTime?
+  disconnectedAt        DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organisationId, emailAddress])
+  @@index([organisationId])
+}
+
+enum DnsCheckStatus {
+  PASS
+  FAIL
+  MISSING
+  UNKNOWN
+}
+
+/// Deterministic SPF/DKIM/DMARC deliverability check for a sending domain
+/// (Phase 6). Domain-level, not per-inbox — multiple inboxes on the same
+/// domain share one record. DKIM requires a selector (Google Workspace
+/// selectors aren't guessable/fixed), so dkimStatus stays UNKNOWN until one
+/// is supplied.
+model DomainDnsCheck {
+  id           String         @id @default(cuid())
+  organisationId String
+  domain       String
+  spfStatus    DnsCheckStatus @default(UNKNOWN)
+  spfRecord    String?
+  dkimSelector String?
+  dkimStatus   DnsCheckStatus @default(UNKNOWN)
+  dkimRecord   String?
+  dmarcStatus  DnsCheckStatus @default(UNKNOWN)
+  dmarcRecord  String?
+  checkedAt    DateTime       @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organisationId, domain])
+  @@index([organisationId])
 }

@@ -56,6 +56,9 @@ importers:
       '@mail-orbyt/email-generation':
         specifier: workspace:*
         version: link:../../packages/email-generation
+      '@mail-orbyt/gmail':
+        specifier: workspace:*
+        version: link:../../packages/gmail
       '@mail-orbyt/leads':
         specifier: workspace:*
         version: link:../../packages/leads
@@ -323,6 +326,16 @@ importers:
         version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
 
   packages/gmail:
+    dependencies:
+      '@mail-orbyt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -448,6 +461,9 @@ importers:
       '@mail-orbyt/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@mail-orbyt/gmail':
+        specifier: workspace:*
+        version: link:../../packages/gmail
       '@mail-orbyt/leads':
         specifier: workspace:*
         version: link:../../packages/leads

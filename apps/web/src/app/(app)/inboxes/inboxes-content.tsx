@@ -1,0 +1,229 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  Table,
+  TextInput,
+  useToast,
+} from "@mail-orbyt/design-system";
+import { useOrganisation } from "../organisation-context";
+
+interface Inbox {
+  id: string;
+  emailAddress: string;
+  displayName: string | null;
+  status: "CONNECTED" | "REAUTH_REQUIRED" | "DISCONNECTED" | "ERROR";
+  dailySendLimit: number;
+  createdAt: string;
+}
+
+interface DnsCheck {
+  id: string;
+  domain: string;
+  spfStatus: "PASS" | "FAIL" | "MISSING" | "UNKNOWN";
+  dkimStatus: "PASS" | "FAIL" | "MISSING" | "UNKNOWN";
+  dmarcStatus: "PASS" | "FAIL" | "MISSING" | "UNKNOWN";
+  dkimSelector: string | null;
+}
+
+const INBOX_STATUS_TONE: Record<Inbox["status"], "success" | "warning" | "neutral" | "error"> = {
+  CONNECTED: "success",
+  REAUTH_REQUIRED: "warning",
+  DISCONNECTED: "neutral",
+  ERROR: "error",
+};
+
+const DNS_STATUS_TONE: Record<DnsCheck["spfStatus"], "success" | "error" | "warning" | "neutral"> =
+  {
+    PASS: "success",
+    FAIL: "error",
+    MISSING: "warning",
+    UNKNOWN: "neutral",
+  };
+
+export function InboxesContent(): React.ReactElement {
+  const { organisationId } = useOrganisation();
+  const toast = useToast();
+  const searchParams = useSearchParams();
+  const [inboxes, setInboxes] = useState<Inbox[]>([]);
+  const [dnsChecks, setDnsChecks] = useState<DnsCheck[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectors, setSelectors] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    const response = await fetch(`/api/organisations/${organisationId}/inboxes`);
+    if (response.ok) {
+      const data = await response.json();
+      setInboxes(data.inboxes);
+      setDnsChecks(data.dnsChecks);
+    }
+    setLoading(false);
+  }, [organisationId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const status = searchParams.get("gmailOAuth");
+    if (status === "connected") {
+      toast.show("Gmail inbox connected", "success");
+    } else if (status === "error") {
+      toast.show(searchParams.get("message") ?? "Could not connect Gmail inbox", "error");
+    }
+  }, [searchParams, toast]);
+
+  async function handleDisconnect(inboxId: string) {
+    const response = await fetch(`/api/organisations/${organisationId}/inboxes/${inboxId}`, {
+      method: "DELETE",
+    });
+    if (response.ok) {
+      await load();
+    } else {
+      toast.show("Could not disconnect inbox", "error");
+    }
+  }
+
+  async function handleUpdateLimit(inboxId: string, dailySendLimit: number) {
+    const response = await fetch(`/api/organisations/${organisationId}/inboxes/${inboxId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dailySendLimit }),
+    });
+    if (response.ok) {
+      await load();
+    } else {
+      toast.show("Could not update daily send limit", "error");
+    }
+  }
+
+  async function handleRecheck(domain: string) {
+    const response = await fetch(`/api/organisations/${organisationId}/dns-checks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain, dkimSelector: selectors[domain] || undefined }),
+    });
+    if (response.ok) {
+      await load();
+    } else {
+      toast.show("Could not run DNS check", "error");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="Inboxes"
+        description="Connect Gmail sending mailboxes and check their deliverability DNS records."
+        actions={
+          <Button
+            onClick={() => {
+              window.location.href = `/api/gmail/oauth/start?organisationId=${organisationId}`;
+            }}
+          >
+            Connect Gmail inbox
+          </Button>
+        }
+      />
+
+      <Card>
+        {loading ? null : inboxes.length === 0 ? (
+          <EmptyState
+            title="No inboxes connected"
+            description="Connect a Gmail account to send campaigns from."
+          />
+        ) : (
+          <Table
+            columns={[
+              { key: "email", header: "Inbox", render: (inbox: Inbox) => inbox.emailAddress },
+              {
+                key: "status",
+                header: "Status",
+                render: (inbox: Inbox) => (
+                  <Badge tone={INBOX_STATUS_TONE[inbox.status]}>
+                    {inbox.status.replace("_", " ")}
+                  </Badge>
+                ),
+              },
+              {
+                key: "limit",
+                header: "Daily send limit",
+                render: (inbox: Inbox) => (
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    defaultValue={inbox.dailySendLimit}
+                    className="w-20 rounded-md-sm border border-outline/40 bg-transparent px-2 py-1 text-sm"
+                    onBlur={(event) => {
+                      const value = Number(event.target.value);
+                      if (value && value !== inbox.dailySendLimit)
+                        void handleUpdateLimit(inbox.id, value);
+                    }}
+                  />
+                ),
+              },
+              {
+                key: "actions",
+                header: "",
+                render: (inbox: Inbox) => (
+                  <Button variant="text" onClick={() => handleDisconnect(inbox.id)}>
+                    Disconnect
+                  </Button>
+                ),
+              },
+            ]}
+            rows={inboxes}
+            getRowKey={(inbox) => inbox.id}
+          />
+        )}
+      </Card>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-on-surface-variant">Domain deliverability</h3>
+        {dnsChecks.length === 0 ? (
+          <EmptyState
+            title="No domains checked yet"
+            description="Connect an inbox to automatically run its first DNS check."
+          />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {dnsChecks.map((check) => (
+              <li key={check.id} className="rounded-md-md border border-outline/30 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-on-surface">{check.domain}</p>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={DNS_STATUS_TONE[check.spfStatus]}>SPF {check.spfStatus}</Badge>
+                    <Badge tone={DNS_STATUS_TONE[check.dkimStatus]}>DKIM {check.dkimStatus}</Badge>
+                    <Badge tone={DNS_STATUS_TONE[check.dmarcStatus]}>
+                      DMARC {check.dmarcStatus}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-end gap-2">
+                  <TextInput
+                    label="DKIM selector"
+                    placeholder="e.g. google"
+                    defaultValue={check.dkimSelector ?? ""}
+                    onChange={(event) =>
+                      setSelectors((prev) => ({ ...prev, [check.domain]: event.target.value }))
+                    }
+                  />
+                  <Button variant="outlined" onClick={() => handleRecheck(check.domain)}>
+                    Recheck
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

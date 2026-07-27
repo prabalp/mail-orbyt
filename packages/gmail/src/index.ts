@@ -1,7 +1,27 @@
-/**
- * @mail-orbyt/gmail — implemented in Phase 6.
- * This package is scaffolded in Phase 0 so the workspace graph, TypeScript
- * project references, and architecture boundary tests are correct from the
- * start. It intentionally exports nothing yet.
- */
-export {};
+export { encryptToken, decryptToken, TokenDecryptionError } from "./token-crypto";
+export {
+  buildAuthorizationUrl,
+  exchangeCodeForTokens,
+  refreshAccessToken,
+  revokeToken,
+  fetchGoogleUserEmail,
+  GoogleOAuthError,
+  type GoogleOAuthConfig,
+  type GoogleTokens,
+} from "./google-oauth";
+export {
+  checkDomainDns,
+  type DomainDnsCheckResult,
+  type DnsCheckResult,
+  type DnsCheckStatus,
+} from "./dns-check";
+export {
+  connectInbox,
+  listInboxes,
+  updateDailySendLimit,
+  disconnectInbox,
+  getValidAccessToken,
+  extractDomain,
+  type ConnectInboxParams,
+} from "./inbox-service";
+export { runDomainDnsCheck, listDomainDnsChecks } from "./dns-check-service";

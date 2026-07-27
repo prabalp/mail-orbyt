@@ -12,6 +12,7 @@
     "@mail-orbyt/authentication": "workspace:*",
     "@mail-orbyt/config": "workspace:*",
     "@mail-orbyt/database": "workspace:*",
+    "@mail-orbyt/gmail": "workspace:*",
     "@mail-orbyt/leads": "workspace:*",
     "@mail-orbyt/research": "workspace:*",
     "@mail-orbyt/storage": "workspace:*",

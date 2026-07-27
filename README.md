@@ -19,7 +19,7 @@ next begins.
 | 3     | CSV import, leads, companies, suppression foundation            | ✅     |
 | 4     | Deterministic research and enrichment                           | ✅     |
 | 5     | Controlled AI email generation                                  | ✅     |
-| 6     | Google Workspace OAuth, inbox management, DNS checks            | ⬜     |
+| 6     | Google Workspace OAuth, inbox management, DNS checks            | ✅     |
 | 7     | Campaign and sequence builder                                   | ⬜     |
 | 8     | Scheduler, inbox rotation, outbox, sending                      | ⬜     |
 | 9     | Replies, follow-ups, conversations, retargeting                 | ⬜     |
@@ -49,6 +49,7 @@ pnpm dev
 - [Queue architecture](docs/queue-architecture.md)
 - [Deterministic research and enrichment](docs/research.md)
 - [Controlled AI email generation](docs/ai-email-generation.md)
+- [Gmail OAuth, inbox management, DNS checks](docs/gmail-inboxes.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
 
