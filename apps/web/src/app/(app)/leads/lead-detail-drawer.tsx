@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Drawer, Skeleton, Badge } from "@mail-orbyt/design-system";
 import { useOrganisation } from "../organisation-context";
 import { ResearchPanel } from "../_components/ResearchPanel";
+import { EmailDraftPanel } from "../_components/EmailDraftPanel";
 
 interface LeadDetail {
   id: string;
@@ -148,6 +149,12 @@ export function LeadDetailDrawer({
       {lead ? (
         <div className="mt-6 border-t border-outline/20 pt-6">
           <ResearchPanel subjectType="LEAD" leadId={lead.id} />
+        </div>
+      ) : null}
+
+      {lead ? (
+        <div className="mt-6 border-t border-outline/20 pt-6">
+          <EmailDraftPanel leadId={lead.id} />
         </div>
       ) : null}
     </Drawer>

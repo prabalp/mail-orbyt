@@ -55,3 +55,8 @@ export {
   RESEARCH_QUEUE_NAME,
   type ResearchJobData,
 } from "./queue";
+export {
+  createResearchSnapshot,
+  type CreateResearchSnapshotParams,
+  type SnapshotFact,
+} from "./snapshot";

@@ -53,6 +53,9 @@ importers:
       '@mail-orbyt/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
+      '@mail-orbyt/email-generation':
+        specifier: workspace:*
+        version: link:../../packages/email-generation
       '@mail-orbyt/leads':
         specifier: workspace:*
         version: link:../../packages/leads

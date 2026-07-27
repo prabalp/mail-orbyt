@@ -172,6 +172,7 @@ model Organisation {
   researchJobs       ResearchJob[]
   researchFacts      ResearchFact[]
   researchSnapshots  ResearchSnapshot[]
+  emailDrafts        EmailDraft[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -350,6 +351,7 @@ model Lead {
   importRows          ImportRow[]
   researchJobs        ResearchJob[]
   researchFacts       ResearchFact[]
+  emailDrafts         EmailDraft[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -731,10 +733,64 @@ model ResearchSnapshot {
   facts          Json
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  emailDrafts  EmailDraft[]
 
   createdAt DateTime @default(now())
 
   @@index([organisationId])
   @@index([leadId])
   @@index([companyId])
+}
+
+enum EmailGenerationType {
+  INITIAL
+  FOLLOW_UP
+  CLOSE_THE_LOOP
+}
+
+enum EmailRewriteStyle {
+  SHORTER
+  FORMAL
+  DIRECT
+}
+
+enum EmailDraftStatus {
+  DRAFT
+  APPROVED
+  DISCARDED
+}
+
+/// An AI-generated email draft (Phase 5). Every draft is traceable to the
+/// exact ResearchSnapshot of facts it was generated from — the AI is never
+/// given live, unbounded access to a lead/company's facts, and a draft's
+/// inputs remain reproducible even if facts are edited or deleted later. A
+/// rewrite (shorter/formal/direct) or an experiment variant points back at
+/// the draft it was derived from via basedOnDraftId rather than duplicating
+/// the snapshot, since a rewrite must not introduce new factual claims.
+model EmailDraft {
+  id                 String              @id @default(cuid())
+  organisationId     String
+  leadId             String
+  generationType     EmailGenerationType
+  rewriteStyle       EmailRewriteStyle?
+  basedOnDraftId     String?
+  researchSnapshotId String?
+  subject            String
+  body               String
+  modelUsed          String
+  status             EmailDraftStatus    @default(DRAFT)
+  createdByUserId    String?
+
+  organisation     Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead             Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  basedOnDraft     EmailDraft?       @relation("EmailDraftDerivations", fields: [basedOnDraftId], references: [id])
+  derivedDrafts    EmailDraft[]      @relation("EmailDraftDerivations")
+  researchSnapshot ResearchSnapshot? @relation(fields: [researchSnapshotId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId])
+  @@index([leadId])
+  @@index([basedOnDraftId])
 }

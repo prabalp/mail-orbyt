@@ -16,6 +16,7 @@
     "@mail-orbyt/config": "workspace:*",
     "@mail-orbyt/database": "workspace:*",
     "@mail-orbyt/design-system": "workspace:*",
+    "@mail-orbyt/email-generation": "workspace:*",
     "@mail-orbyt/leads": "workspace:*",
     "@mail-orbyt/logging": "workspace:*",
     "@mail-orbyt/research": "workspace:*",
