@@ -12,6 +12,7 @@ import {
   TextInput,
   useToast,
 } from "@mail-orbyt/design-system";
+import { Mails } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface Inbox {
@@ -135,6 +136,7 @@ export function InboxesContent(): React.ReactElement {
       <Card>
         {loading ? null : inboxes.length === 0 ? (
           <EmptyState
+            icon={<Mails />}
             title="No inboxes connected"
             description="Connect a Gmail account to send campaigns from."
           />

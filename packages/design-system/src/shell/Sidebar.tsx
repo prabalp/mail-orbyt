@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { cn } from "../cn";
 import { NAV_ITEMS } from "./navigation";
@@ -46,26 +47,31 @@ export function Sidebar({
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="rounded-full p-2 text-on-surface-variant hover:bg-on-surface/8"
         >
-          {collapsed ? "»" : "«"}
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
       </div>
       <ul className="flex flex-1 flex-col gap-1 px-2">
         {NAV_ITEMS.map((item) => {
           const isActive = item.key === activeKey;
+          const Icon = item.icon;
           return (
             <li key={item.key}>
               <LinkComponent
                 href={item.href}
                 className={cn(
-                  "flex items-center rounded-md-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-md-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-primary-container text-on-primary-container"
                     : "text-on-surface-variant hover:bg-on-surface/8",
                   collapsed && "justify-center px-0",
                 )}
               >
-                <span aria-current={isActive ? "page" : undefined}>
-                  {collapsed ? item.label.slice(0, 1) : item.label}
+                <Icon size={20} className="shrink-0" aria-hidden="true" />
+                <span
+                  aria-current={isActive ? "page" : undefined}
+                  className={collapsed ? "sr-only" : undefined}
+                >
+                  {item.label}
                 </span>
               </LinkComponent>
             </li>

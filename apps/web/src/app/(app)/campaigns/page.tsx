@@ -13,6 +13,7 @@ import {
   TextInput,
   useToast,
 } from "@mail-orbyt/design-system";
+import { Send } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface Campaign {
@@ -83,6 +84,7 @@ export default function CampaignsPage(): React.ReactElement {
       <Card>
         {loading ? null : campaigns.length === 0 ? (
           <EmptyState
+            icon={<Send />}
             title="No campaigns yet"
             description="Create your first campaign to get started."
           />

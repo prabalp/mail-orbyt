@@ -10,6 +10,7 @@ import {
   Select,
   useToast,
 } from "@mail-orbyt/design-system";
+import { CalendarCheck } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface Meeting {
@@ -73,6 +74,7 @@ export default function MeetingsPage(): React.ReactElement {
       <Card>
         {loading ? null : meetings.length === 0 ? (
           <EmptyState
+            icon={<CalendarCheck />}
             title="No meetings logged yet"
             description="Log a meeting from a lead's conversation once a call is booked."
           />

@@ -7,7 +7,14 @@ import globals from "globals";
 
 const AI_SDK_IMPORT_PATTERNS = [
   {
-    group: ["@anthropic-ai/sdk", "@anthropic-ai/sdk/*", "openai", "openai/*"],
+    group: [
+      "@anthropic-ai/sdk",
+      "@anthropic-ai/sdk/*",
+      "openai",
+      "openai/*",
+      "@google/genai",
+      "@google/genai/*",
+    ],
     message:
       "AI provider SDKs may only be imported from packages/email-generation. See docs/ai-boundaries.md.",
   },

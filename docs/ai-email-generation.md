@@ -7,12 +7,12 @@ covers the concrete architecture.
 ## The boundary, mechanically enforced
 
 `packages/email-generation` is the only package in the monorepo permitted to
-import `@anthropic-ai/sdk` or read `AI_PROVIDER_API_KEY`. This is enforced by
+import `@google/genai` or read `AI_PROVIDER_API_KEY`. This is enforced by
 `tests/architecture/ai-boundary.test.ts`, which scans every source file
 outside that package for the SDK import, the key reference, or a deep import
 of `@mail-orbyt/email-generation/src/client` (which would let another
 package construct an AI call by hand). Even `apps/web`, which triggers
-generation, never touches the API key or the Anthropic client directly — it
+generation, never touches the API key or the Gemini client directly — it
 only calls the package's public `generateEmail`/`rewriteEmail` functions and
 checks `isAiConfigured()`.
 
@@ -85,8 +85,8 @@ when it isn't, rather than crashing or silently no-opping.
 
 - **Unit tests** (`packages/email-generation`, 24 tests): prompt construction
   per generation type, every validator rule, retry-on-validation-failure
-  behavior, and the Anthropic client wrapper — mocked at the SDK boundary
-  (`vi.mock("@anthropic-ai/sdk")`), since making real, billed model calls
+  behavior, and the Gemini client wrapper — mocked at the SDK boundary
+  (`vi.mock("@google/genai")`), since making real, billed model calls
   from an automated test run isn't appropriate. This mirrors how Phase 4's
   optional third-party search/news/enrichment providers were tested.
 - **Integration test** (`tests/integration/research-snapshot.test.ts`, 2
@@ -99,7 +99,7 @@ when it isn't, rather than crashing or silently no-opping.
   with `AiNotConfiguredError`'s message, rather than a fake success. With an
   invalid (unreachable) key set, the same endpoint returns a friendly `502`
   via `AiGenerationFailedError` instead of leaking a raw exception. Manual
-  end-to-end generation against a real Anthropic API key was not run in this
+  end-to-end generation against a real Gemini API key was not run in this
   environment (no billed key configured here) — this is the one manual
   verification step a real deployment must perform before relying on this
   feature.

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, EmptyState, MetricCard, PageHeader, Table } from "@mail-orbyt/design-system";
+import { BarChart3 } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface CampaignMetrics {
@@ -73,6 +74,7 @@ export default function AnalyticsPage(): React.ReactElement {
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">By campaign</h3>
         {data.campaigns.length === 0 ? (
           <EmptyState
+            icon={<BarChart3 />}
             title="No campaigns yet"
             description="Create a campaign to see its metrics here."
           />

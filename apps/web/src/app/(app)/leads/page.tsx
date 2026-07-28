@@ -14,6 +14,7 @@ import {
   TextInput,
   useToast,
 } from "@mail-orbyt/design-system";
+import { Users } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 import { LeadDetailDrawer } from "./lead-detail-drawer";
 
@@ -143,6 +144,7 @@ export default function LeadsPage(): React.ReactElement {
         {!loading && leads.length === 0 ? (
           <div className="p-6">
             <EmptyState
+              icon={<Users />}
               title="No leads yet"
               description="Import a CSV to get started."
               action={

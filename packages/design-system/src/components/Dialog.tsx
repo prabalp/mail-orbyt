@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "../cn";
 
@@ -61,7 +62,7 @@ export function Dialog({
           onClick={onClose}
           className="rounded-full p-1 text-on-surface-variant hover:bg-on-surface/8"
         >
-          ×
+          <X size={18} aria-hidden="true" />
         </button>
       </div>
       <div className="px-6 py-4 text-on-surface">{children}</div>

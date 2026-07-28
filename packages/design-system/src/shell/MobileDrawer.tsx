@@ -30,17 +30,19 @@ export function MobileDrawer({
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => {
           const isActive = item.key === activeKey;
+          const Icon = item.icon;
           return (
             <li key={item.key}>
               <LinkComponent
                 href={item.href}
                 className={cn(
-                  "block rounded-md-md px-3 py-2 text-sm font-medium",
+                  "flex items-center gap-3 rounded-md-md px-3 py-2 text-sm font-medium",
                   isActive
                     ? "bg-primary-container text-on-primary-container"
                     : "text-on-surface-variant hover:bg-on-surface/8",
                 )}
               >
+                <Icon size={20} className="shrink-0" aria-hidden="true" />
                 {item.label}
               </LinkComponent>
             </li>

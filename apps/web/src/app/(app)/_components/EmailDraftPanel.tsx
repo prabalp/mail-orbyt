@@ -11,6 +11,7 @@ import {
   TextInput,
   useToast,
 } from "@mail-orbyt/design-system";
+import { Mail } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface EmailDraft {
@@ -154,6 +155,7 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
 
       {drafts.length === 0 ? (
         <EmptyState
+          icon={<Mail />}
           title="No drafts yet"
           description="Generate an AI draft from this lead's confirmed research facts."
         />

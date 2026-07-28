@@ -24,6 +24,7 @@ const IGNORED_DIR_NAMES = new Set(["node_modules", "dist", ".next", ".turbo", "c
 const FORBIDDEN_PATTERNS: { label: string; pattern: RegExp }[] = [
   { label: "AI provider SDK import (@anthropic-ai/sdk)", pattern: /@anthropic-ai\/sdk/ },
   { label: "AI provider SDK import (openai)", pattern: /from\s+["']openai["']/ },
+  { label: "AI provider SDK import (@google/genai)", pattern: /@google\/genai/ },
   {
     label: "AI provider API key usage",
     pattern: /(process\.env|env)\.AI_PROVIDER_API_KEY/,
@@ -103,7 +104,7 @@ describe("AI SDK import boundary", () => {
         };
         const deps = { ...pkgJson.dependencies, ...pkgJson.devDependencies };
         const hasAiSdk = Object.keys(deps).some(
-          (dep) => dep.includes("anthropic") || dep === "openai",
+          (dep) => dep.includes("anthropic") || dep === "openai" || dep === "@google/genai",
         );
         if (hasAiSdk && pkgJson.name !== "@mail-orbyt/email-generation") {
           offenders.push(pkgJson.name ?? dir);

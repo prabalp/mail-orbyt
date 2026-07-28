@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, EmptyState, PageHeader, useToast } from "@mail-orbyt/design-system";
+import { MessageSquare } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface ConversationMessage {
@@ -73,6 +74,7 @@ export default function ConversationsPage(): React.ReactElement {
       <Card>
         {loading ? null : conversations.length === 0 ? (
           <EmptyState
+            icon={<MessageSquare />}
             title="No replies yet"
             description="Replies detected from connected inboxes will show up here."
           />

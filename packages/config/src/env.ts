@@ -62,9 +62,9 @@ const envSchema = z.object({
   STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
   STORAGE_FORCE_PATH_STYLE: booleanEnvVar(true),
 
-  // AI provider (packages/email-generation ONLY)
+  // AI provider (packages/email-generation ONLY) — Google Gemini API
   AI_PROVIDER_API_KEY: z.string().min(1).optional(),
-  AI_PROVIDER_MODEL: z.string().default("claude-haiku-4-5-20251001"),
+  AI_PROVIDER_MODEL: z.string().default("gemini-2.5-flash"),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(600),
 
   // External research providers

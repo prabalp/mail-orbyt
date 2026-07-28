@@ -1,5 +1,6 @@
 "use client";
 
+import { Menu } from "lucide-react";
 import { useState, type ComponentType, type ReactNode } from "react";
 import { Sidebar, type LinkComponentProps } from "./Sidebar";
 import { MobileDrawer } from "./MobileDrawer";
@@ -61,7 +62,7 @@ export function AppShell({
           <div className="flex items-center gap-2">
             <IconButton
               label="Open menu"
-              icon={<span aria-hidden="true">☰</span>}
+              icon={<Menu size={20} aria-hidden="true" />}
               className="md:hidden"
               onClick={() => setMobileMenuOpen(true)}
             />

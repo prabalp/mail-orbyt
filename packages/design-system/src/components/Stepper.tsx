@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { cn } from "../cn";
 
 export interface StepperStep {
@@ -34,7 +35,7 @@ export function Stepper({
                     : "border border-outline text-on-surface-variant",
               )}
             >
-              {isCompleted ? "✓" : index + 1}
+              {isCompleted ? <Check size={14} aria-hidden="true" /> : index + 1}
             </span>
             <span
               className={cn(

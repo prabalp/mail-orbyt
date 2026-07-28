@@ -1,4 +1,5 @@
 import { EmptyState, PageHeader } from "@mail-orbyt/design-system";
+import { LayoutDashboard } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getCurrentOrganisation } from "@/lib/current-organisation";
 
@@ -15,6 +16,7 @@ export default async function OverviewPage(): Promise<React.ReactElement> {
         }
       />
       <EmptyState
+        icon={<LayoutDashboard />}
         title="Nothing to show yet"
         description="Import leads and launch your first campaign to see qualified meeting rate, delivery, and reply metrics here."
       />

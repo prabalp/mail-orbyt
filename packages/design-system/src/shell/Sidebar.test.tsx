@@ -17,9 +17,9 @@ describe("Sidebar", () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
-  it("abbreviates labels when collapsed", () => {
+  it("visually hides labels when collapsed, keeping them screen-reader accessible", () => {
     render(<Sidebar activeKey="leads" collapsed onToggleCollapsed={vi.fn()} />);
-    expect(screen.queryByText("Leads")).not.toBeInTheDocument();
+    expect(screen.getByText("Leads")).toHaveClass("sr-only");
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
   });
 });

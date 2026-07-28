@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const createMock = vi.fn();
+const generateContentMock = vi.fn();
 
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: class {
-    messages = { create: createMock };
+vi.mock("@google/genai", () => ({
+  GoogleGenAI: class {
+    models = { generateContent: generateContentMock };
   },
+  Type: { OBJECT: "OBJECT", STRING: "STRING" },
 }));
 
 let envOverride: { AI_PROVIDER_API_KEY?: string } = {};
@@ -20,7 +21,7 @@ vi.mock("@mail-orbyt/config", () => ({
 describe("isAiConfigured / getAiEmailGenerator", () => {
   beforeEach(() => {
     vi.resetModules();
-    createMock.mockReset();
+    generateContentMock.mockReset();
     envOverride = {};
   });
 
@@ -37,10 +38,10 @@ describe("isAiConfigured / getAiEmailGenerator", () => {
     expect(isAiConfigured()).toBe(true);
   });
 
-  it("returns parsed subject/body from a successful tool_use response", async () => {
+  it("returns parsed subject/body from a successful structured-output response", async () => {
     envOverride = { AI_PROVIDER_API_KEY: "test-key" };
-    createMock.mockResolvedValueOnce({
-      content: [{ type: "tool_use", input: { subject: "Hi", body: "Body text" } }],
+    generateContentMock.mockResolvedValueOnce({
+      text: JSON.stringify({ subject: "Hi", body: "Body text" }),
     });
     const { getAiEmailGenerator } = await import("./client");
     const generator = getAiEmailGenerator();
@@ -50,7 +51,7 @@ describe("isAiConfigured / getAiEmailGenerator", () => {
 
   it("wraps a rejected provider call in AiGenerationFailedError", async () => {
     envOverride = { AI_PROVIDER_API_KEY: "test-key" };
-    createMock.mockRejectedValueOnce(new Error("network down"));
+    generateContentMock.mockRejectedValueOnce(new Error("network down"));
     const { getAiEmailGenerator, AiGenerationFailedError } = await import("./client");
     const generator = getAiEmailGenerator();
     await expect(generator.complete({ system: "sys", user: "usr" })).rejects.toBeInstanceOf(
@@ -58,9 +59,19 @@ describe("isAiConfigured / getAiEmailGenerator", () => {
     );
   });
 
-  it("wraps a missing tool_use block in AiGenerationFailedError", async () => {
+  it("wraps a missing/empty response text in AiGenerationFailedError", async () => {
     envOverride = { AI_PROVIDER_API_KEY: "test-key" };
-    createMock.mockResolvedValueOnce({ content: [{ type: "text", text: "oops" }] });
+    generateContentMock.mockResolvedValueOnce({ text: undefined });
+    const { getAiEmailGenerator, AiGenerationFailedError } = await import("./client");
+    const generator = getAiEmailGenerator();
+    await expect(generator.complete({ system: "sys", user: "usr" })).rejects.toBeInstanceOf(
+      AiGenerationFailedError,
+    );
+  });
+
+  it("wraps malformed JSON in AiGenerationFailedError", async () => {
+    envOverride = { AI_PROVIDER_API_KEY: "test-key" };
+    generateContentMock.mockResolvedValueOnce({ text: "not json" });
     const { getAiEmailGenerator, AiGenerationFailedError } = await import("./client");
     const generator = getAiEmailGenerator();
     await expect(generator.complete({ system: "sys", user: "usr" })).rejects.toBeInstanceOf(

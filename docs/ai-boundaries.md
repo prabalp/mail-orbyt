@@ -28,15 +28,15 @@ All of the above are implemented as deterministic code in
 ## Enforcement
 
 1. **Import boundary.** Only `packages/email-generation` may depend on
-   `@anthropic-ai/sdk` (or any other AI provider SDK). This is enforced two
+   `@google/genai` (or any other AI provider SDK). This is enforced two
    ways:
    - `tests/architecture/ai-boundary.test.ts` scans every `.ts`/`.tsx` file
      in `apps/` and `packages/` for forbidden import patterns and scans every
      `package.json` for a forbidden dependency, failing CI if any package
      other than `@mail-orbyt/email-generation` matches.
    - `eslint.config.js` sets `no-restricted-imports` against
-     `@anthropic-ai/sdk` / `openai` for every package except
-     `packages/email-generation`.
+     `@google/genai` / `@anthropic-ai/sdk` / `openai` for every package
+     except `packages/email-generation`.
 2. **Input boundary** (Phase 5). The model receives only a compact,
    structured fact payload — never full webpages, raw HTML, search result
    pages, scraped text, scripts, hidden page content, or private profile

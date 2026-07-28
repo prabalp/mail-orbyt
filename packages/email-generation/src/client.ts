@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI, Type } from "@google/genai";
 import { loadEnv } from "@mail-orbyt/config";
 import { generatedEmailSchema, type GeneratedEmail } from "./types";
 
@@ -50,69 +50,68 @@ export function isAiConfigured(): boolean {
   return getAiConfig() !== undefined;
 }
 
-const EMAIL_TOOL_NAME = "write_email";
+let cachedClient: GoogleGenAI | undefined;
 
-let cachedClient: Anthropic | undefined;
-
-function getAnthropicClient(apiKey: string): Anthropic {
+function getGeminiClient(apiKey: string): GoogleGenAI {
   if (!cachedClient) {
-    cachedClient = new Anthropic({ apiKey });
+    cachedClient = new GoogleGenAI({ apiKey });
   }
   return cachedClient;
 }
 
-class AnthropicEmailGenerator implements AiEmailGenerator {
+class GeminiEmailGenerator implements AiEmailGenerator {
   constructor(
-    private readonly client: Anthropic,
+    private readonly client: GoogleGenAI,
     private readonly model: string,
     private readonly maxOutputTokens: number,
   ) {}
 
   async complete(params: { system: string; user: string }): Promise<GeneratedEmail> {
-    let response: Anthropic.Message;
+    let responseText: string | undefined;
     try {
-      response = await this.client.messages.create({
+      const response = await this.client.models.generateContent({
         model: this.model,
-        max_tokens: this.maxOutputTokens,
-        system: params.system,
-        messages: [{ role: "user", content: params.user }],
-        tools: [
-          {
-            name: EMAIL_TOOL_NAME,
-            description: "Return the generated email as structured subject/body fields.",
-            input_schema: {
-              type: "object",
-              properties: {
-                subject: { type: "string" },
-                body: { type: "string" },
-              },
-              required: ["subject", "body"],
+        contents: [{ role: "user", parts: [{ text: params.user }] }],
+        config: {
+          systemInstruction: params.system,
+          maxOutputTokens: this.maxOutputTokens,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              subject: { type: Type.STRING },
+              body: { type: Type.STRING },
             },
+            required: ["subject", "body"],
           },
-        ],
-        tool_choice: { type: "tool", name: EMAIL_TOOL_NAME },
+        },
       });
+      responseText = response.text;
     } catch (error) {
       throw new AiGenerationFailedError(error);
     }
 
-    const toolUse = response.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-    );
-    if (!toolUse) {
+    if (!responseText) {
       throw new AiGenerationFailedError(
-        new Error("AI provider response did not include the expected structured tool call."),
+        new Error("AI provider response did not include the expected structured output."),
       );
     }
 
-    return generatedEmailSchema.parse(toolUse.input);
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(responseText);
+    } catch (error) {
+      throw new AiGenerationFailedError(error);
+    }
+
+    return generatedEmailSchema.parse(parsedJson);
   }
 }
 
-/** Returns the configured Anthropic-backed generator, or throws AiNotConfiguredError if no API key is set. */
+/** Returns the configured Gemini-backed generator, or throws AiNotConfiguredError if no API key is set. */
 export function getAiEmailGenerator(): AiEmailGenerator {
   const config = getAiConfig();
   if (!config) throw new AiNotConfiguredError();
-  const client = getAnthropicClient(config.apiKey);
-  return new AnthropicEmailGenerator(client, config.model, config.maxOutputTokens);
+  const client = getGeminiClient(config.apiKey);
+  return new GeminiEmailGenerator(client, config.model, config.maxOutputTokens);
 }

@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { DropdownMenu } from "../components/DropdownMenu";
 
 export interface OrgSwitcherOrganisation {
@@ -25,7 +26,7 @@ export function OrgSwitcher({
       trigger={
         <span className="flex items-center gap-2 rounded-md-md px-3 py-2 text-sm font-medium text-on-surface hover:bg-on-surface/8">
           {active?.name ?? "Select organisation"}
-          <span aria-hidden="true">⌄</span>
+          <ChevronDown size={16} aria-hidden="true" />
         </span>
       }
       items={[

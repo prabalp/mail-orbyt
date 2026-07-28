@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Card, EmptyState, PageHeader, Skeleton, Table } from "@mail-orbyt/design-system";
+import { Building2, Users } from "lucide-react";
 import { useOrganisation } from "../../organisation-context";
 import { ResearchPanel } from "../../_components/ResearchPanel";
 
@@ -57,7 +58,7 @@ export default function CompanyDetailPage(): React.ReactElement {
   }
 
   if (notFound || !company) {
-    return <EmptyState title="Company not found" />;
+    return <EmptyState icon={<Building2 />} title="Company not found" />;
   }
 
   return (
@@ -101,7 +102,7 @@ export default function CompanyDetailPage(): React.ReactElement {
         </div>
         {leads.length === 0 ? (
           <div className="p-6">
-            <EmptyState title="No leads linked to this company yet" />
+            <EmptyState icon={<Users />} title="No leads linked to this company yet" />
           </div>
         ) : (
           <Table<LeadRow>

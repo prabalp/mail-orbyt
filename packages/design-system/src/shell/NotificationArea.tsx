@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import { DropdownMenu } from "../components/DropdownMenu";
 import { Badge } from "../components/Badge";
 
@@ -24,7 +25,7 @@ export function NotificationArea({
       align="end"
       trigger={
         <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-on-surface/8">
-          <span aria-hidden="true">🔔</span>
+          <Bell size={18} aria-hidden="true" />
           <span className="sr-only">
             Notifications{unreadCount > 0 ? ` (${unreadCount} unread)` : ""}
           </span>

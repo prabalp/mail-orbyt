@@ -13,6 +13,7 @@ import {
   TextInput,
   useToast,
 } from "@mail-orbyt/design-system";
+import { ListOrdered, Mails } from "lucide-react";
 import { useOrganisation } from "../../organisation-context";
 
 interface Step {
@@ -238,6 +239,7 @@ export default function CampaignDetailPage(): React.ReactElement {
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sequence steps</h3>
         {campaign.steps.length === 0 ? (
           <EmptyState
+            icon={<ListOrdered />}
             title="No steps yet"
             description="Add the first step in this campaign's sequence."
           />
@@ -310,6 +312,7 @@ export default function CampaignDetailPage(): React.ReactElement {
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sending inbox pool</h3>
         {allInboxes.length === 0 ? (
           <EmptyState
+            icon={<Mails />}
             title="No inboxes connected"
             description="Connect a Gmail inbox on the Inboxes page first."
           />

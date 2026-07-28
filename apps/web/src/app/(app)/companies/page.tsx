@@ -10,6 +10,7 @@ import {
   Table,
   TextInput,
 } from "@mail-orbyt/design-system";
+import { Building2 } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface Company {
@@ -70,6 +71,7 @@ export default function CompaniesPage(): React.ReactElement {
         {!loading && companies.length === 0 ? (
           <div className="p-6">
             <EmptyState
+              icon={<Building2 />}
               title="No companies yet"
               description="Companies are created automatically when you import leads with a company name."
             />

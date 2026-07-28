@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Badge, Card, EmptyState, PageHeader, Table } from "@mail-orbyt/design-system";
+import { Search } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface ResearchJobRow {
@@ -51,6 +52,7 @@ export default function ResearchPage(): React.ReactElement {
         {!loading && jobs.length === 0 ? (
           <div className="p-6">
             <EmptyState
+              icon={<Search />}
               title="No research runs yet"
               description="Open a lead or company and click “Run research” to gather publicly available facts."
             />

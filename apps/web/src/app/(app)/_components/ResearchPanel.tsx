@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Badge, Button, EmptyState, Skeleton, useToast } from "@mail-orbyt/design-system";
+import { Search } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 
 interface ResearchFact {
@@ -131,6 +132,7 @@ export function ResearchPanel({
 
       {facts.length === 0 && !isRunning ? (
         <EmptyState
+          icon={<Search />}
           title="No research facts yet"
           description="Run research to gather publicly available, source-linked facts."
         />

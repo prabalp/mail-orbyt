@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { cn } from "../cn";
 
@@ -22,6 +23,13 @@ const TONE_CLASSES: Record<ToastTone, string> = {
   success: "bg-success text-white",
   warning: "bg-warning text-white",
   error: "bg-error text-on-error",
+};
+
+const TONE_ICON: Record<ToastTone, typeof Info> = {
+  info: Info,
+  success: CheckCircle2,
+  warning: AlertTriangle,
+  error: XCircle,
 };
 
 let toastIdCounter = 0;
@@ -47,18 +55,22 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
         aria-live="polite"
         className="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col gap-2"
       >
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            role="status"
-            className={cn(
-              "pointer-events-auto rounded-md-md px-4 py-2.5 text-sm shadow-md-2",
-              TONE_CLASSES[toast.tone],
-            )}
-          >
-            {toast.message}
-          </div>
-        ))}
+        {toasts.map((toast) => {
+          const ToneIcon = TONE_ICON[toast.tone];
+          return (
+            <div
+              key={toast.id}
+              role="status"
+              className={cn(
+                "pointer-events-auto flex items-center gap-2 rounded-md-md px-4 py-2.5 text-sm shadow-md-2",
+                TONE_CLASSES[toast.tone],
+              )}
+            >
+              <ToneIcon size={18} className="shrink-0" aria-hidden="true" />
+              {toast.message}
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );
