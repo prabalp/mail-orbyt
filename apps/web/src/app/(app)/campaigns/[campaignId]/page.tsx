@@ -73,6 +73,7 @@ export default function CampaignDetailPage(): React.ReactElement {
   const [leadResults, setLeadResults] = useState<LeadSearchResult[]>([]);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [enrolling, setEnrolling] = useState(false);
+  const [sendingNow, setSendingNow] = useState(false);
 
   const load = useCallback(async () => {
     const [campaignRes, enrollmentsRes, inboxesRes] = await Promise.all([
@@ -175,6 +176,28 @@ export default function CampaignDetailPage(): React.ReactElement {
     }
   }
 
+  async function handleSendNow() {
+    setSendingNow(true);
+    try {
+      const response = await fetch(
+        `/api/organisations/${organisationId}/campaigns/${campaignId}/send-now`,
+        { method: "POST" },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        toast.show(
+          `Considered ${data.considered}, sent ${data.sent}, failed ${data.failed}, skipped ${data.skipped}`,
+          data.failed ? "error" : "success",
+        );
+        await load();
+      } else {
+        toast.show(data.error ?? "Could not send campaign now", "error");
+      }
+    } finally {
+      setSendingNow(false);
+    }
+  }
+
   async function handleLeadSearch() {
     const url = new URL(`/api/organisations/${organisationId}/leads`, window.location.origin);
     if (leadSearch) url.searchParams.set("search", leadSearch);
@@ -220,18 +243,32 @@ export default function CampaignDetailPage(): React.ReactElement {
         title={campaign.name}
         description={`Status: ${campaign.status}`}
         actions={
-          <Select
-            label="Status"
-            hideLabel
-            value={campaign.status}
-            options={[
-              { value: "DRAFT", label: "Draft" },
-              { value: "ACTIVE", label: "Active" },
-              { value: "PAUSED", label: "Paused" },
-              { value: "COMPLETED", label: "Completed" },
-            ]}
-            onChange={(event) => handleStatusChange(event.target.value as CampaignDetail["status"])}
-          />
+          <div className="flex items-center gap-2">
+            {process.env.NODE_ENV !== "production" ? (
+              <Button
+                variant="outlined"
+                loading={sendingNow}
+                disabled={campaign.status !== "ACTIVE"}
+                onClick={handleSendNow}
+              >
+                Send now (dev)
+              </Button>
+            ) : null}
+            <Select
+              label="Status"
+              hideLabel
+              value={campaign.status}
+              options={[
+                { value: "DRAFT", label: "Draft" },
+                { value: "ACTIVE", label: "Active" },
+                { value: "PAUSED", label: "Paused" },
+                { value: "COMPLETED", label: "Completed" },
+              ]}
+              onChange={(event) =>
+                handleStatusChange(event.target.value as CampaignDetail["status"])
+              }
+            />
+          </div>
         }
       />
 

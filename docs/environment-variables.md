@@ -23,6 +23,8 @@ from an unset variable deep in a request path.
 | `AI_PROVIDER_MODEL`                                                                                                                           | no (default `gemini-2.5-flash`)             | Gemini model identifier used for generation                                                |
 | `AI_MAX_OUTPUT_TOKENS`                                                                                                                        | no (default 600)                            | Hard cap on generation output tokens                                                       |
 | `SEARCH_PROVIDER_API_KEY` / `NEWS_PROVIDER_API_KEY` / `ENRICHMENT_PROVIDER_API_KEY`                                                           | no                                          | Optional research providers (Phase 4)                                                      |
+| `RESEND_API_KEY`                                                                                                                              | no                                          | Resend API key for transactional email (verification, password reset, invitations). Unset falls back to logging emails to the console |
+| `EMAIL_FROM_ADDRESS`                                                                                                                          | no (default `onboarding@resend.dev`)        | From address for transactional email — must be on a domain verified in Resend for production |
 | `EMERGENCY_STOP`                                                                                                                              | no (default `false`)                        | Organisation-wide kill switch checked before every send                                    |
 | `LOG_LEVEL`                                                                                                                                   | no (default `info`)                         | `debug` \| `info` \| `warn` \| `error`                                                     |
 
@@ -33,6 +35,7 @@ from an unset variable deep in a request path.
 - `TOKEN_ENCRYPTION_KEY`: rotating requires re-encrypting all stored OAuth
   tokens with the new key before removing the old one (dual-key decrypt
   window). Documented in full once `packages/gmail` lands in Phase 6.
-- Provider API keys (`AI_PROVIDER_API_KEY`, research providers): rotate at
-  the provider dashboard, then update the deployment secret store; no
-  application-level migration needed since these are not persisted.
+- Provider API keys (`AI_PROVIDER_API_KEY`, research providers,
+  `RESEND_API_KEY`): rotate at the provider dashboard, then update the
+  deployment secret store; no application-level migration needed since
+  these are not persisted.

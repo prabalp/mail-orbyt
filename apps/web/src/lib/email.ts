@@ -1,9 +1,15 @@
-import { ConsoleEmailSender, type EmailSender } from "@mail-orbyt/authentication";
+import { ConsoleEmailSender, ResendEmailSender, type EmailSender } from "@mail-orbyt/authentication";
+import { loadEnv } from "@mail-orbyt/config";
 
 /**
- * No real transactional email provider is configured yet — emails are
- * logged to the server console. Swap this for a real EmailSender
- * implementation (SES/Postmark/Resend/...) when one is wired up; every
+ * Sends through Resend when RESEND_API_KEY is configured; otherwise falls
+ * back to logging emails to the console (local dev without a key). Every
  * call site depends only on the EmailSender interface.
  */
-export const emailSender: EmailSender = new ConsoleEmailSender();
+function buildEmailSender(): EmailSender {
+  const env = loadEnv();
+  if (!env.RESEND_API_KEY) return new ConsoleEmailSender();
+  return new ResendEmailSender(env.RESEND_API_KEY, env.EMAIL_FROM_ADDRESS);
+}
+
+export const emailSender: EmailSender = buildEmailSender();

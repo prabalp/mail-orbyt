@@ -75,6 +75,11 @@ class GeminiEmailGenerator implements AiEmailGenerator {
         config: {
           systemInstruction: params.system,
           maxOutputTokens: this.maxOutputTokens,
+          // Gemini 2.5 models spend output tokens on internal "thinking"
+          // before the visible response by default, which can burn the
+          // whole maxOutputTokens budget and truncate the JSON mid-object.
+          // This call needs deterministic structured output, not reasoning.
+          thinkingConfig: { thinkingBudget: 0 },
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,

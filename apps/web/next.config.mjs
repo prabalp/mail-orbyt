@@ -16,6 +16,16 @@ const nextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
+  webpack: (config) => {
+    // In this pnpm monorepo, node_modules alone spans 500+ directories
+    // (workspace symlinks + the .pnpm store) — watching all of it blows
+    // past the OS file-descriptor limit (EMFILE) regardless of ulimit.
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: ["**/node_modules/**", "**/.git/**", "**/.turbo/**", "**/.next/**", "**/dist/**"],
+    };
+    return config;
+  },
   transpilePackages: [
     "@mail-orbyt/config",
     "@mail-orbyt/database",

@@ -25,6 +25,7 @@
     "@mail-orbyt/leads": "workspace:*",
     "@mail-orbyt/logging": "workspace:*",
     "@mail-orbyt/research": "workspace:*",
+    "@mail-orbyt/scheduling": "workspace:*",
     "@mail-orbyt/storage": "workspace:*",
     "@mail-orbyt/validation": "workspace:*",
     "ioredis": "^5.4.2",

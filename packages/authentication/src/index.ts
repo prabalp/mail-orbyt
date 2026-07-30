@@ -43,5 +43,5 @@ export {
   type RemoveMemberParams,
 } from "./members";
 export type { EmailSender, TransactionalEmail } from "./email/sender";
-export { ConsoleEmailSender } from "./email/sender";
+export { ConsoleEmailSender, ResendEmailSender, ResendSendError } from "./email/sender";
 export { verificationEmail, passwordResetEmail, invitationEmail } from "./email/templates";

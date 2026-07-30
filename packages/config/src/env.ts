@@ -72,6 +72,12 @@ const envSchema = z.object({
   NEWS_PROVIDER_API_KEY: z.string().optional(),
   ENRICHMENT_PROVIDER_API_KEY: z.string().optional(),
 
+  // Transactional email provider (verification, password reset,
+  // invitations) — Resend. Optional: unset falls back to logging emails to
+  // the console instead of sending them (local dev default).
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM_ADDRESS: z.string().email().default("onboarding@resend.dev"),
+
   // Email sending safety
   EMERGENCY_STOP: booleanEnvVar(false),
 
