@@ -16,7 +16,7 @@ export class EmailAlreadyInUseError extends Error {
   }
 }
 
-type SignUpPrisma = Pick<PrismaClient, "user" | "emailVerificationToken">;
+type SignUpPrisma = Pick<PrismaClient, "user">;
 
 export interface SignUpParams {
   name: string;
@@ -38,22 +38,32 @@ export async function signUp(
   }
 
   const passwordHash = await hashPassword(params.password);
-  const user = await prisma.user.create({
-    data: { name: params.name.trim(), email: normalizedEmail, passwordHash },
-  });
-
   const rawToken = generateSecureToken();
-  await prisma.emailVerificationToken.create({
+  const user = await prisma.user.create({
     data: {
-      userId: user.id,
-      token: hashToken(rawToken),
-      expiresAt: tokenExpiryDate(EMAIL_VERIFICATION_TOKEN_TTL_MS),
+      name: params.name.trim(),
+      email: normalizedEmail,
+      passwordHash,
+      emailVerificationTokens: {
+        create: {
+          token: hashToken(rawToken),
+          expiresAt: tokenExpiryDate(EMAIL_VERIFICATION_TOKEN_TTL_MS),
+        },
+      },
     },
   });
 
-  await emailSender.send(
-    verificationEmail({ to: normalizedEmail, appUrl: params.appUrl, rawToken }),
-  );
+  try {
+    await emailSender.send(
+      verificationEmail({ to: normalizedEmail, appUrl: params.appUrl, rawToken }),
+    );
+  } catch (error) {
+    // Sending is the last step: if it fails, undo the user/token creation so
+    // the caller sees a clean failure and can retry with the same email
+    // instead of hitting EmailAlreadyInUseError on the next attempt.
+    await prisma.user.delete({ where: { id: user.id } });
+    throw error;
+  }
 
   return user;
 }

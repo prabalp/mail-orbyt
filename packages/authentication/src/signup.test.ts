@@ -7,15 +7,13 @@ function fakePrisma(existingUser: unknown = null) {
     user: {
       findUnique: vi.fn().mockResolvedValue(existingUser),
       create: vi.fn().mockImplementation(({ data }) => ({ id: "user-1", ...data })),
-    },
-    emailVerificationToken: {
-      create: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
     },
   };
 }
 
-function fakeEmailSender() {
-  return { send: vi.fn().mockResolvedValue(undefined) };
+function fakeEmailSender(sendImpl?: () => Promise<void>) {
+  return { send: vi.fn().mockImplementation(sendImpl ?? (() => Promise.resolve())) };
 }
 
 describe("signUp", () => {
@@ -35,9 +33,26 @@ describe("signUp", () => {
     await expect(verifyPassword("Sup3rSecretPass", user.passwordHash as string)).resolves.toBe(
       true,
     );
-    expect(prisma.emailVerificationToken.create).toHaveBeenCalledTimes(1);
+    expect(prisma.user.create).toHaveBeenCalledTimes(1);
     expect(emailSender.send).toHaveBeenCalledTimes(1);
     expect(emailSender.send.mock.calls[0][0].to).toBe("jane@example.com");
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+  });
+
+  it("rolls back user creation when sending the verification email fails, so the same email can be retried", async () => {
+    const prisma = fakePrisma();
+    const emailSender = fakeEmailSender(() => Promise.reject(new Error("Resend is down")));
+
+    await expect(
+      signUp(prisma, emailSender, {
+        name: "Jane Doe",
+        email: "jane@example.com",
+        password: "Sup3rSecretPass",
+        appUrl: "http://localhost:3000",
+      }),
+    ).rejects.toThrow("Resend is down");
+
+    expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: "user-1" } });
   });
 
   it("rejects sign-up when the email is already registered", async () => {
