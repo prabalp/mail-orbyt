@@ -5,10 +5,10 @@ import { prisma } from "@mail-orbyt/database";
 import { S3ObjectStorage } from "@mail-orbyt/storage";
 import { scheduleRecurringTick } from "@mail-orbyt/scheduling";
 import type { Worker } from "bullmq";
-import { createLeadImportWorker } from "./queues/lead-import";
-import { createResearchWorker } from "./queues/research";
-import { createCampaignSchedulerWorker } from "./queues/campaign-scheduler";
-import { createOutboxWorker } from "./queues/outbox";
+import { createLeadImportWorker } from "./queues/lead-import.js";
+import { createResearchWorker } from "./queues/research.js";
+import { createCampaignSchedulerWorker } from "./queues/campaign-scheduler.js";
+import { createOutboxWorker } from "./queues/outbox.js";
 
 /**
  * Worker process bootstrap. Job queues (generation, scheduling, send,
