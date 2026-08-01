@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createCredentialsAuthorize } from "./auth.config";
+import { createCredentialsAuthorize, EmailNotVerifiedError } from "./auth.config";
 import { hashPassword } from "./password";
 import { createNoopRateLimiter, type RateLimiter } from "./rate-limiter";
 
@@ -40,14 +40,20 @@ describe("createCredentialsAuthorize", () => {
     expect(rateLimiter.reset).not.toHaveBeenCalled();
   });
 
-  it("returns null for an unverified email even with the correct password", async () => {
+  it("throws EmailNotVerifiedError for an unverified email, but only after the password is confirmed correct", async () => {
     const user = { ...(await makeUser()), emailVerified: null };
     const rateLimiter: RateLimiter = { attempt: vi.fn().mockResolvedValue(true), reset: vi.fn() };
     const authorize = createCredentialsAuthorize(fakePrisma(user), rateLimiter);
 
-    const result = await authorize({ email: "jamie@example.com", password: "correct-password" });
+    await expect(
+      authorize({ email: "jamie@example.com", password: "correct-password" }),
+    ).rejects.toThrow(EmailNotVerifiedError);
 
-    expect(result).toBeNull();
+    const wrongPasswordResult = await authorize({
+      email: "jamie@example.com",
+      password: "wrong-password",
+    });
+    expect(wrongPasswordResult).toBeNull();
   });
 
   it("resets the rate limit counter and returns the user on a successful login", async () => {

@@ -10,7 +10,7 @@ export class GeneratedEmailValidationError extends Error {
   }
 }
 
-const URL_PATTERN = /https?:\/\/[^\s)]+/gi;
+export const URL_PATTERN = /https?:\/\/[^\s)]+/gi;
 const EMAIL_PATTERN = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*?>/i;
 const RESEARCH_DISCLOSURE_PATTERNS = [
@@ -22,7 +22,8 @@ const RESEARCH_DISCLOSURE_PATTERNS = [
 ];
 const MAX_BODY_WORDS = 220;
 
-function extractHostname(url: string): string | null {
+/** Exported for reuse by generate.ts's rewrite allow-list (a rewrite may keep a URL already present in the original email). */
+export function extractHostname(url: string): string | null {
   try {
     return new URL(url).hostname.toLowerCase();
   } catch {

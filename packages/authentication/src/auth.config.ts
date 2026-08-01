@@ -2,6 +2,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { PrismaClient } from "@mail-orbyt/database";
 import { emailSchema } from "@mail-orbyt/validation";
 import type { NextAuthConfig } from "next-auth";
+import { CredentialsSignin } from "@auth/core/errors";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { z } from "zod";
@@ -13,6 +14,15 @@ const credentialsSchema = z.object({ email: emailSchema, password: z.string().mi
 
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
+
+/**
+ * Thrown only after the password has already been verified as correct —
+ * revealing "this account just needs verification" to someone who doesn't
+ * know the password would leak account existence/verification state.
+ */
+export class EmailNotVerifiedError extends CredentialsSignin {
+  override code = "email-not-verified";
+}
 
 export interface BuildAuthConfigParams {
   prisma: PrismaClient;
@@ -49,10 +59,14 @@ export function createCredentialsAuthorize(prisma: PrismaClient, rateLimiter: Ra
 
     const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
     if (!user?.passwordHash) return null;
-    if (!user.emailVerified) return null;
 
     const isValid = await verifyPassword(parsed.data.password, user.passwordHash);
     if (!isValid) return null;
+
+    // Checked after password verification, not before: only someone who
+    // already knows the correct password learns that the account just
+    // needs verification, rather than any caller able to enumerate emails.
+    if (!user.emailVerified) throw new EmailNotVerifiedError();
 
     await rateLimiter.reset(`login:${parsed.data.email}`);
     return { id: user.id, email: user.email, name: user.name };

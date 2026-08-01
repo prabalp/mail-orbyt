@@ -39,9 +39,13 @@ export {
 export {
   createResearchJob,
   processResearchJob,
+  upsertResearchFact,
   type CreateResearchJobParams,
   type ResearchProviders,
+  type ProcessResearchJobResult,
+  type UpsertResearchFactParams,
 } from "./research-job-service";
+export { extractVisibleText } from "./extraction/page-text";
 export {
   listFacts,
   confirmFact,
@@ -60,3 +64,8 @@ export {
   type CreateResearchSnapshotParams,
   type SnapshotFact,
 } from "./snapshot";
+export {
+  getLatestPageText,
+  type GetLatestPageTextParams,
+  type LatestPageText,
+} from "./page-text-lookup";

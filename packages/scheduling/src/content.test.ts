@@ -4,7 +4,11 @@ const generateEmailMock = vi.fn();
 vi.mock("@mail-orbyt/email-generation", () => ({ generateEmail: generateEmailMock }));
 
 const createResearchSnapshotMock = vi.fn();
-vi.mock("@mail-orbyt/research", () => ({ createResearchSnapshot: createResearchSnapshotMock }));
+const getLatestPageTextMock = vi.fn();
+vi.mock("@mail-orbyt/research", () => ({
+  createResearchSnapshot: createResearchSnapshotMock,
+  getLatestPageText: getLatestPageTextMock,
+}));
 
 const { materializeStepContent, AiNotConfiguredForStepError } = await import("./content");
 
@@ -81,6 +85,7 @@ describe("materializeStepContent", () => {
         },
       ],
     });
+    getLatestPageTextMock.mockResolvedValue(null);
     generateEmailMock.mockResolvedValue({ subject: "Quick question", body: "Generated body" });
 
     const fakeGenerator = {} as never;

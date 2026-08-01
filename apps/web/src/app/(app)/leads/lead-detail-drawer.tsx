@@ -105,6 +105,11 @@ export function LeadDetailDrawer({
       open={leadId !== null}
       onClose={onClose}
       title={loading ? "Loading…" : name || "Lead detail"}
+      resizable
+      resizeStorageKey="lead-detail-drawer-width"
+      minWidth={360}
+      maxWidth={960}
+      defaultWidth={420}
     >
       {loading ? (
         <div className="flex flex-col gap-3">

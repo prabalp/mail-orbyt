@@ -72,6 +72,11 @@ const envSchema = z.object({
   NEWS_PROVIDER_API_KEY: z.string().optional(),
   ENRICHMENT_PROVIDER_API_KEY: z.string().optional(),
 
+  // Keyword extraction mode for packages/research-keywords. Defaults to the
+  // deterministic (non-AI) extractor; "ai" is an explicit opt-in — see
+  // docs/ai-boundaries.md.
+  KEYWORD_EXTRACTION_MODE: z.enum(["deterministic", "ai"]).default("deterministic"),
+
   // Transactional email provider (verification, password reset,
   // invitations) — Resend. Optional: unset falls back to logging emails to
   // the console instead of sending them (local dev default).

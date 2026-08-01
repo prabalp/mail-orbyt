@@ -10,10 +10,14 @@ async function getSenderContext(prisma: PrismaClient, organisationId: string) {
   const organisation = await prisma.organisation.findUniqueOrThrow({
     where: { id: organisationId },
   });
-  // Simplification: the organisation's name is used as both the sender's
-  // display name and company name in AI-generated copy — there is no
-  // separate "from" persona configured per campaign yet.
-  return { senderName: organisation.name, senderCompanyName: organisation.name };
+  // Sender NAME comes from the inbox actually sending (see
+  // resolveInboxSenderName in packages/scheduling/src/outbox-service.ts),
+  // not from here — the organisation only supplies company-level context.
+  return {
+    senderCompanyName: organisation.name,
+    customInstructions: organisation.emailPromptInstructions ?? undefined,
+    bookingLink: organisation.calendlyUrl ?? undefined,
+  };
 }
 
 export function createOutboxWorker(params: {

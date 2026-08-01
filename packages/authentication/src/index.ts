@@ -8,7 +8,11 @@
 // Next.js build: webpack tried to parse the ambient declaration file as a
 // runtime module and failed.
 
-export { buildAuthConfig, type BuildAuthConfigParams } from "./auth.config";
+export {
+  buildAuthConfig,
+  EmailNotVerifiedError,
+  type BuildAuthConfigParams,
+} from "./auth.config";
 export { createRedisRateLimiter, createNoopRateLimiter, type RateLimiter } from "./rate-limiter";
 export { hashPassword, verifyPassword, passwordSchema } from "./password";
 export {

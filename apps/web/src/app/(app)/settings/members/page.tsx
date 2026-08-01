@@ -4,6 +4,7 @@ import { PageHeader } from "@mail-orbyt/design-system";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getCurrentOrganisation } from "@/lib/current-organisation";
+import { SettingsNav } from "../settings-nav";
 import { MembersClient } from "./members-client";
 
 export default async function MembersPage(): Promise<React.ReactElement> {
@@ -31,6 +32,7 @@ export default async function MembersPage(): Promise<React.ReactElement> {
         title="Members"
         description={`Manage who has access to ${organisation.organisationName}.`}
       />
+      <SettingsNav />
       <MembersClient
         organisationId={organisation.organisationId}
         currentUserId={session.user.id}

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@mail-orbyt/database";
 import { isSuppressed } from "@mail-orbyt/leads";
 import type { AiEmailGenerator } from "@mail-orbyt/email-generation";
+import { resolveInboxSenderName } from "@mail-orbyt/gmail";
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
 import { pickNextInbox } from "./inbox-rotation";
 import { materializeStepContent } from "./content";
@@ -15,6 +16,8 @@ type Prisma = Pick<
   | "auditEvent"
   | "researchFact"
   | "researchSnapshot"
+  | "researchSource"
+  | "researchPageText"
 >;
 
 const MAX_ATTEMPTS = 3;
@@ -44,10 +47,18 @@ export interface ProcessOutboxItemDeps {
     inboxId: string,
     message: { to: string; subject: string; body: string },
   ) => Promise<{ messageId: string; threadId: string }>;
-  /** Resolves the sender identity to use in AI-generated copy — deferred to a callback rather than static strings, since each OutboxItem's campaign can belong to a different organisation. */
-  getSenderContext: (
-    organisationId: string,
-  ) => Promise<{ senderName: string; senderCompanyName: string }>;
+  /**
+   * Resolves organisation-level context for AI-generated copy — deferred to
+   * a callback rather than static strings, since each OutboxItem's campaign
+   * can belong to a different organisation. Sender NAME is deliberately not
+   * part of this — it comes from whichever inbox this send actually goes
+   * out from (see resolveInboxSenderName below), not the organisation.
+   */
+  getSenderContext: (organisationId: string) => Promise<{
+    senderCompanyName: string;
+    customInstructions?: string;
+    bookingLink?: string;
+  }>;
   emergencyStop: boolean;
   now?: Date;
 }
@@ -135,15 +146,19 @@ export async function processOutboxItem(
       }
     }
 
-    const { senderName, senderCompanyName } = await deps.getSenderContext(item.organisationId);
+    const { senderCompanyName, customInstructions, bookingLink } = await deps.getSenderContext(
+      item.organisationId,
+    );
     const generated = await materializeStepContent(prisma, {
       organisationId: item.organisationId,
       lead: item.lead,
       step: item.campaignStep,
-      senderName,
+      senderName: resolveInboxSenderName(inbox),
       senderCompanyName,
       priorEmail,
       aiGenerator: deps.aiGenerator,
+      customInstructions,
+      bookingLink,
     });
     subject = generated.subject;
     body = generated.body;

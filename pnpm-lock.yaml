@@ -80,6 +80,9 @@ importers:
       '@mail-orbyt/research':
         specifier: workspace:*
         version: link:../../packages/research
+      '@mail-orbyt/research-keywords':
+        specifier: workspace:*
+        version: link:../../packages/research-keywords
       '@mail-orbyt/scheduling':
         specifier: workspace:*
         version: link:../../packages/scheduling
@@ -159,6 +162,9 @@ importers:
       '@mail-orbyt/research':
         specifier: workspace:*
         version: link:../../packages/research
+      '@mail-orbyt/research-keywords':
+        specifier: workspace:*
+        version: link:../../packages/research-keywords
       '@mail-orbyt/scheduling':
         specifier: workspace:*
         version: link:../../packages/scheduling
@@ -200,6 +206,9 @@ importers:
 
   packages/authentication:
     dependencies:
+      '@auth/core':
+        specifier: 0.41.3
+        version: 0.41.3
       '@auth/prisma-adapter':
         specifier: ^2.7.4
         version: 2.11.3(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))
@@ -480,6 +489,34 @@ importers:
       node-html-parser:
         specifier: ^6.1.13
         version: 6.1.13
+    devDependencies:
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/research-keywords:
+    dependencies:
+      '@google/genai':
+        specifier: ^2.13.0
+        version: 2.13.0
+      '@mail-orbyt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
+      '@mail-orbyt/research':
+        specifier: workspace:*
+        version: link:../research
+      bullmq:
+        specifier: ^5.34.2
+        version: 5.81.2
     devDependencies:
       ioredis:
         specifier: ^5.4.2

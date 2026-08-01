@@ -38,6 +38,7 @@ export const PERSON_FACT_CATEGORIES = [
   "relevant_business_triggers",
   "vocabulary_and_terminology",
   "public_case_studies",
+  "extracted_keywords",
 ] as const;
 
 export const COMPANY_FACT_CATEGORIES = [
@@ -62,6 +63,7 @@ export const COMPANY_FACT_CATEGORIES = [
   "public_business_priorities",
   "publicly_stated_challenges",
   "relevant_use_cases",
+  "extracted_keywords",
 ] as const;
 
 /**

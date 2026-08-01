@@ -1,0 +1,36 @@
+import { hasPermission } from "@mail-orbyt/authentication";
+import { prisma } from "@mail-orbyt/database";
+import { PageHeader } from "@mail-orbyt/design-system";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { getCurrentOrganisation } from "@/lib/current-organisation";
+import { SettingsNav } from "../settings-nav";
+import { EmailTemplateClient } from "./email-template-client";
+
+export default async function EmailTemplatePage(): Promise<React.ReactElement> {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/sign-in");
+
+  const organisation = await getCurrentOrganisation(session.user.id);
+  if (!organisation) redirect("/onboarding");
+
+  const org = await prisma.organisation.findUniqueOrThrow({
+    where: { id: organisation.organisationId },
+  });
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Email template"
+        description="Customize the tone AI-generated emails use, and embed a booking link in every one."
+      />
+      <SettingsNav />
+      <EmailTemplateClient
+        organisationId={organisation.organisationId}
+        canManage={hasPermission(organisation.role, "campaigns:manage")}
+        emailPromptInstructions={org.emailPromptInstructions ?? ""}
+        calendlyUrl={org.calendlyUrl ?? ""}
+      />
+    </div>
+  );
+}

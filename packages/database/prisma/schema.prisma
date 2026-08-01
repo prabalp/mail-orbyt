@@ -160,6 +160,13 @@ model Organisation {
   id   String @id @default(cuid())
   name String
   slug String @unique
+  /// Additive tone/style guidance appended to (never replacing) the fixed
+  /// core safety rules in packages/email-generation's system prompt. See
+  /// docs/ai-boundaries.md.
+  emailPromptInstructions String? @db.Text
+  /// Booking link embedded verbatim (via deterministic substitution, never
+  /// model-generated) into every AI-drafted email's call to action.
+  calendlyUrl             String?
 
   memberships        OrganisationMembership[]
   invitations        Invitation[]
@@ -170,8 +177,10 @@ model Organisation {
   importBatches      ImportBatch[]
   suppressionEntries SuppressionEntry[]
   researchJobs       ResearchJob[]
+  researchSources    ResearchSource[]
   researchFacts      ResearchFact[]
   researchSnapshots  ResearchSnapshot[]
+  researchKeywordRuns ResearchKeywordRun[]
   emailDrafts        EmailDraft[]
   inboxes            Inbox[]
   domainDnsChecks    DomainDnsCheck[]
@@ -320,8 +329,9 @@ model Company {
   organisation  Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   leads         Lead[]
   leadCompanies LeadCompany[]
-  researchJobs  ResearchJob[]
-  researchFacts ResearchFact[]
+  researchJobs    ResearchJob[]
+  researchSources ResearchSource[]
+  researchFacts   ResearchFact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -356,6 +366,7 @@ model Lead {
   leadListMemberships LeadListMembership[]
   importRows          ImportRow[]
   researchJobs        ResearchJob[]
+  researchSources     ResearchSource[]
   researchFacts       ResearchFact[]
   emailDrafts         EmailDraft[]
   campaignEnrollments CampaignEnrollment[]
@@ -618,23 +629,85 @@ model ResearchProviderRun {
   @@index([researchJobId])
 }
 
-/// A single fetched/queried source (a URL, or a search/news API result) within a provider run.
+/// A single fetched source for a subject+URL — kept as one continuously
+/// updated row across reruns (see findOrCreateResearchSource in
+/// research-job-service.ts), not one row per research run. organisationId/
+/// subjectType/leadId/companyId are denormalized here (rather than derived
+/// by walking providerRun -> researchJob) specifically so this row can
+/// outlive, and be looked up independently of, any single job/provider run.
 model ResearchSource {
-  id                    String    @id @default(cuid())
-  researchProviderRunId String
-  url                   String
-  title                 String?
-  publishedAt           DateTime?
-  fetchedAt             DateTime  @default(now())
-  httpStatus            Int?
+  id             String              @id @default(cuid())
+  organisationId String
+  subjectType    ResearchSubjectType
+  leadId         String?
+  companyId      String?
+  url            String
+  title          String?
+  publishedAt    DateTime?
+  fetchedAt      DateTime            @default(now())
+  httpStatus     Int?
+  /// The provider run that most recently fetched/updated this row —
+  /// informational only, not an owning parent (see onDelete: SetNull).
+  researchProviderRunId String?
 
-  providerRun ResearchProviderRun @relation(fields: [researchProviderRunId], references: [id], onDelete: Cascade)
-  documents   ResearchDocument[]
+  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead         Lead?                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company      Company?             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  providerRun  ResearchProviderRun? @relation(fields: [researchProviderRunId], references: [id], onDelete: SetNull)
+  document     ResearchDocument?
+  pageText     ResearchPageText?
+  keywordRuns  ResearchKeywordRun[]
 
   createdAt DateTime @default(now())
 
+  @@index([organisationId])
+  @@index([leadId])
+  @@index([companyId])
   @@index([researchProviderRunId])
   @@index([url])
+}
+
+/// The full stripped visible text (scripts/styles removed) of a fetched
+/// website source, saved unconditionally whenever the fetch itself succeeds
+/// — a deliberate, separate exception to ResearchDocument's "never raw HTML
+/// or full page text" rule below, kept isolated to this one model so
+/// packages/research-keywords can re-run keyword extraction later without
+/// re-fetching the site. See docs/ai-boundaries.md.
+model ResearchPageText {
+  id               String   @id @default(cuid())
+  researchSourceId String   @unique
+  text             String   @db.Text
+  charCount        Int
+  extractedAt      DateTime @default(now())
+
+  researchSource ResearchSource @relation(fields: [researchSourceId], references: [id], onDelete: Cascade)
+}
+
+enum KeywordExtractionMode {
+  DETERMINISTIC
+  AI
+}
+
+/// One row per keyword-extraction attempt over a ResearchPageText — decoupled
+/// from ResearchJob so extraction can be re-run on demand (auto-chained after
+/// a successful website fetch, or manually rerun later) without re-fetching
+/// the site. Reuses ResearchProviderRunStatus for its status values.
+model ResearchKeywordRun {
+  id               String                    @id @default(cuid())
+  organisationId   String
+  researchSourceId String
+  mode             KeywordExtractionMode
+  status           ResearchProviderRunStatus @default(PENDING)
+  errorMessage     String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+
+  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  researchSource ResearchSource @relation(fields: [researchSourceId], references: [id], onDelete: Cascade)
+
+  @@index([researchSourceId])
+  @@index([organisationId])
 }
 
 enum ExtractionMethod {
@@ -643,13 +716,19 @@ enum ExtractionMethod {
   META_TAG
   REGEX
   STRUCTURED_ENDPOINT
+  KEYWORD_FREQUENCY
+  AI_KEYWORD
 }
 
 /// The deterministically-extracted structured content from one source (never
-/// raw HTML — see docs/ai-boundaries.md on what is and isn't sent anywhere).
+/// raw HTML or full page text — see ResearchPageText above for the one
+/// deliberate exception, and docs/ai-boundaries.md on what is and isn't sent
+/// anywhere). One row per source — a rerun overwrites this row's contents
+/// rather than creating a new one, so ResearchFact.researchDocumentId always
+/// points at the current extraction, not a stale one from an old run.
 model ResearchDocument {
   id               String           @id @default(cuid())
-  researchSourceId String
+  researchSourceId String           @unique
   extractionMethod ExtractionMethod
   /// Structured extracted fields only (e.g. JSON-LD Person/Organization
   /// properties, OG tags) — never raw HTML or full page text.

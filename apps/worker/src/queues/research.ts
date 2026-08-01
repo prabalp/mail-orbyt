@@ -8,6 +8,7 @@ import {
   processResearchJob,
   type ResearchJobData,
 } from "@mail-orbyt/research";
+import { enqueueResearchKeywordsJob } from "@mail-orbyt/research-keywords";
 import { Worker, type ConnectionOptions, type Job } from "bullmq";
 
 /**
@@ -36,7 +37,22 @@ export function createResearchWorker(params: {
         researchJobId: job.data.researchJobId,
       });
       try {
-        await processResearchJob(params.prisma, providers, job.data.researchJobId);
+        const { websiteSourceId } = await processResearchJob(
+          params.prisma,
+          providers,
+          job.data.researchJobId,
+        );
+        // Auto-chain keyword extraction after a successful website fetch —
+        // it reads the ResearchPageText that just got saved, never refetching.
+        if (websiteSourceId) {
+          const researchJob = await params.prisma.researchJob.findUniqueOrThrow({
+            where: { id: job.data.researchJobId },
+          });
+          await enqueueResearchKeywordsJob(params.connection, {
+            researchSourceId: websiteSourceId,
+            organisationId: researchJob.organisationId,
+          });
+        }
       } catch (error) {
         await params.prisma.researchJob.update({
           where: { id: job.data.researchJobId },

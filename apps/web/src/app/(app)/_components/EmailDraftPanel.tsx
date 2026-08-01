@@ -18,6 +18,7 @@ interface EmailDraft {
   id: string;
   generationType: "INITIAL" | "FOLLOW_UP" | "CLOSE_THE_LOOP";
   rewriteStyle: "SHORTER" | "FORMAL" | "DIRECT" | null;
+  basedOnDraftId: string | null;
   subject: string;
   body: string;
   status: "DRAFT" | "APPROVED" | "DISCARDED";
@@ -75,6 +76,14 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
     } finally {
       setGenerating(false);
     }
+  }
+
+  /** Re-runs generation for the same slot (INITIAL, or the same FOLLOW_UP/CLOSE_THE_LOOP continuing from the same prior draft) as a brand-new draft — used whether the existing one is still a DRAFT you don't like or already DISCARDED. */
+  async function handleRegenerate(draft: EmailDraft) {
+    await handleGenerate(
+      draft.generationType,
+      draft.generationType === "INITIAL" ? undefined : (draft.basedOnDraftId ?? undefined),
+    );
   }
 
   async function handleDraftAction(
@@ -198,6 +207,19 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
                       if (style) void handleDraftAction(draft.id, "rewrite", style);
                     }}
                   />
+                  <Button
+                    variant="text"
+                    loading={generating}
+                    onClick={() => handleRegenerate(draft)}
+                  >
+                    Regenerate
+                  </Button>
+                </div>
+              ) : draft.status === "DISCARDED" ? (
+                <div className="mt-3">
+                  <Button variant="text" loading={generating} onClick={() => handleRegenerate(draft)}>
+                    Regenerate
+                  </Button>
                 </div>
               ) : null}
             </li>

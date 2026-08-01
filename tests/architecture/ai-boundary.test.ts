@@ -4,16 +4,20 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Architecture boundary: only packages/email-generation may import an AI
- * provider SDK, adapter, or reference the AI provider API key. Every other
- * package/app in the monorepo (including apps/web and apps/worker) must be
- * free of these imports so that scraping, CSV parsing, validation,
- * scheduling, reply classification, and analytics can never silently start
- * calling an LLM.
+ * Architecture boundary: only packages/email-generation and
+ * packages/research-keywords may import an AI provider SDK, adapter, or
+ * reference the AI provider API key. Every other package/app in the
+ * monorepo (including apps/web and apps/worker) must be free of these
+ * imports so that scraping, CSV parsing, validation, scheduling, reply
+ * classification, and analytics can never silently start calling an LLM.
+ * research-keywords is a deliberate, narrow exception — see
+ * docs/ai-boundaries.md — and only ever runs over page text already fetched
+ * and saved deterministically by packages/research, gated behind an
+ * explicit KEYWORD_EXTRACTION_MODE=ai opt-in.
  */
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
-const ALLOWED_PACKAGE = "packages/email-generation";
+const ALLOWED_PACKAGES = ["packages/email-generation", "packages/research-keywords"];
 const SCAN_ROOTS = ["apps", "packages"];
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const IGNORED_DIR_NAMES = new Set(["node_modules", "dist", ".next", ".turbo", "coverage"]);
@@ -32,6 +36,10 @@ const FORBIDDEN_PATTERNS: { label: string; pattern: RegExp }[] = [
   {
     label: "direct AI provider adapter import outside email-generation",
     pattern: /@mail-orbyt\/email-generation\/src\/client/,
+  },
+  {
+    label: "direct AI provider adapter import outside research-keywords",
+    pattern: /@mail-orbyt\/research-keywords\/src\/client/,
   },
 ];
 
@@ -66,7 +74,7 @@ describe("AI SDK import boundary", () => {
 
   for (const file of files) {
     const relativePath = relative(REPO_ROOT, file);
-    const isAllowed = relativePath.startsWith(ALLOWED_PACKAGE);
+    const isAllowed = ALLOWED_PACKAGES.some((pkg) => relativePath.startsWith(pkg));
 
     if (isAllowed) continue;
 
@@ -78,7 +86,7 @@ describe("AI SDK import boundary", () => {
     });
   }
 
-  it("packages/email-generation is the only package declaring the AI SDK as a dependency", () => {
+  it("only packages/email-generation and packages/research-keywords declare the AI SDK as a dependency", () => {
     const allPackageJsonDirs = new Set<string>();
     for (const root of SCAN_ROOTS) {
       const rootPath = join(REPO_ROOT, root);
@@ -106,7 +114,8 @@ describe("AI SDK import boundary", () => {
         const hasAiSdk = Object.keys(deps).some(
           (dep) => dep.includes("anthropic") || dep === "openai" || dep === "@google/genai",
         );
-        if (hasAiSdk && pkgJson.name !== "@mail-orbyt/email-generation") {
+        const allowedNames = ["@mail-orbyt/email-generation", "@mail-orbyt/research-keywords"];
+        if (hasAiSdk && !allowedNames.includes(pkgJson.name ?? "")) {
           offenders.push(pkgJson.name ?? dir);
         }
       } catch {

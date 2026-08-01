@@ -9,7 +9,8 @@ import {
 } from "@mail-orbyt/email-generation";
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
-import { createResearchSnapshot } from "@mail-orbyt/research";
+import { resolveInboxSenderName } from "@mail-orbyt/gmail";
+import { createResearchSnapshot, getLatestPageText } from "@mail-orbyt/research";
 
 const env = loadEnv();
 
@@ -25,12 +26,27 @@ export interface GenerateDraftParams {
   basedOnDraftId?: string;
 }
 
+/**
+ * The sender identity for a one-off draft. Name comes from the
+ * organisation's first connected inbox (the same identity that would
+ * actually send the email), not the user who clicked "generate" — falling
+ * back to that user's name only if no inbox is connected yet.
+ */
 async function loadSenderContext(organisationId: string, createdByUserId: string) {
-  const [organisation, user] = await Promise.all([
+  const [organisation, user, inbox] = await Promise.all([
     prisma.organisation.findUniqueOrThrow({ where: { id: organisationId } }),
     prisma.user.findUniqueOrThrow({ where: { id: createdByUserId } }),
+    prisma.inbox.findFirst({
+      where: { organisationId, status: "CONNECTED" },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
-  return { senderCompanyName: organisation.name, senderName: user.name ?? user.email };
+  return {
+    senderCompanyName: organisation.name,
+    senderName: inbox ? resolveInboxSenderName(inbox) : (user.name ?? user.email),
+    customInstructions: organisation.emailPromptInstructions ?? undefined,
+    bookingLink: organisation.calendlyUrl ?? undefined,
+  };
 }
 
 export async function generateDraft(params: GenerateDraftParams) {
@@ -56,17 +72,21 @@ export async function generateDraft(params: GenerateDraftParams) {
     priorEmail = { subject: basedOn.subject, body: basedOn.body };
   }
 
-  const snapshot = await createResearchSnapshot(prisma, {
-    organisationId: params.organisationId,
-    subjectType: "LEAD",
-    leadId: params.leadId,
-  });
+  const [snapshot, pageText, { senderCompanyName, senderName, customInstructions, bookingLink }] =
+    await Promise.all([
+      createResearchSnapshot(prisma, {
+        organisationId: params.organisationId,
+        subjectType: "LEAD",
+        leadId: params.leadId,
+      }),
+      getLatestPageText(prisma, {
+        organisationId: params.organisationId,
+        subjectType: "LEAD",
+        leadId: params.leadId,
+      }),
+      loadSenderContext(params.organisationId, params.createdByUserId),
+    ]);
   const facts = snapshot.facts as { category: string; value: string; sourceUrl: string }[];
-
-  const { senderCompanyName, senderName } = await loadSenderContext(
-    params.organisationId,
-    params.createdByUserId,
-  );
 
   const generator = getAiEmailGenerator();
   const generated = await generateEmail(generator, {
@@ -79,6 +99,9 @@ export async function generateDraft(params: GenerateDraftParams) {
     callToAction: params.callToAction,
     facts,
     priorEmail,
+    websiteText: pageText?.text,
+    customInstructions,
+    bookingLink,
   });
 
   return prisma.emailDraft.create({

@@ -65,12 +65,8 @@ afterEach(async () => {
 afterAll(async () => {
   for (const organisationId of createdOrgIds) {
     await prisma.researchFact.deleteMany({ where: { organisationId } });
-    await prisma.researchDocument.deleteMany({
-      where: { source: { providerRun: { researchJob: { organisationId } } } },
-    });
-    await prisma.researchSource.deleteMany({
-      where: { providerRun: { researchJob: { organisationId } } },
-    });
+    await prisma.researchDocument.deleteMany({ where: { source: { organisationId } } });
+    await prisma.researchSource.deleteMany({ where: { organisationId } });
     await prisma.researchProviderRun.deleteMany({ where: { researchJob: { organisationId } } });
     await prisma.researchJob.deleteMany({ where: { organisationId } });
     await prisma.company.deleteMany({ where: { organisationId } });
@@ -164,6 +160,66 @@ describe("research job (end to end against real Postgres and a real HTTP server)
 
     const facts = await prisma.researchFact.findMany({ where: { companyId: company.id } });
     expect(facts).toHaveLength(1);
+  });
+
+  it("reuses (updates) the same ResearchSource/ResearchPageText/ResearchDocument across separate reruns instead of duplicating them", async () => {
+    const org = await prisma.organisation.create({
+      data: { name: "Research Test Org 4", slug: uniqueSlug() },
+    });
+    createdOrgIds.push(org.id);
+
+    const html = `<script type="application/ld+json">{"@type":"Organization","description":"Acme builds developer tools."}</script>`;
+    const baseUrl = await startServer(html);
+
+    const company = await prisma.company.create({
+      data: { organisationId: org.id, name: "Acme Inc", websiteUrl: baseUrl },
+    });
+
+    // First "Run research" click: its own ResearchJob.
+    const firstJob = await createResearchJob(prisma, {
+      organisationId: org.id,
+      subjectType: "COMPANY",
+      companyId: company.id,
+    });
+    const { websiteSourceId: firstSourceId } = await processResearchJob(
+      prisma,
+      providers,
+      firstJob.id,
+    );
+    expect(firstSourceId).not.toBeNull();
+    const firstFetchedAt = (
+      await prisma.researchSource.findUniqueOrThrow({ where: { id: firstSourceId! } })
+    ).fetchedAt;
+
+    // Second "Rerun research" click: a brand-new ResearchJob, same website.
+    await new Promise((resolve) => setTimeout(resolve, 10)); // ensure a distinguishable fetchedAt
+    const secondJob = await createResearchJob(prisma, {
+      organisationId: org.id,
+      subjectType: "COMPANY",
+      companyId: company.id,
+    });
+    const { websiteSourceId: secondSourceId } = await processResearchJob(
+      prisma,
+      providers,
+      secondJob.id,
+    );
+
+    expect(secondSourceId).toBe(firstSourceId); // same row, not a new one
+    expect(await prisma.researchSource.count({ where: { organisationId: org.id } })).toBe(1);
+    expect(
+      await prisma.researchPageText.count({ where: { researchSourceId: firstSourceId! } }),
+    ).toBe(1);
+    expect(
+      await prisma.researchDocument.count({ where: { researchSourceId: firstSourceId! } }),
+    ).toBe(1);
+
+    const updatedSource = await prisma.researchSource.findUniqueOrThrow({
+      where: { id: firstSourceId! },
+    });
+    expect(updatedSource.fetchedAt.getTime()).toBeGreaterThan(firstFetchedAt.getTime());
+
+    const facts = await prisma.researchFact.findMany({ where: { companyId: company.id } });
+    expect(facts).toHaveLength(1); // still deduped across the two separate jobs
   });
 
   it("records a FAILED website provider run when the subject has no website URL", async () => {

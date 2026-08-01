@@ -7,6 +7,7 @@ import { scheduleRecurringTick } from "@mail-orbyt/scheduling";
 import type { Worker } from "bullmq";
 import { createLeadImportWorker } from "./queues/lead-import.js";
 import { createResearchWorker } from "./queues/research.js";
+import { createResearchKeywordsWorker } from "./queues/research-keywords.js";
 import { createCampaignSchedulerWorker } from "./queues/campaign-scheduler.js";
 import { createOutboxWorker } from "./queues/outbox.js";
 
@@ -70,6 +71,11 @@ async function main(): Promise<void> {
       prisma,
       logger: logger.child({ queue: "research" }),
     }),
+    createResearchKeywordsWorker({
+      connection: redis,
+      prisma,
+      logger: logger.child({ queue: "research-keywords" }),
+    }),
     createCampaignSchedulerWorker({
       connection: redis,
       prisma,
@@ -86,7 +92,7 @@ async function main(): Promise<void> {
 
   logger.info("worker started", {
     environment: env.NODE_ENV,
-    queues: ["lead-import", "research", "campaign-scheduler", "outbox"],
+    queues: ["lead-import", "research", "research-keywords", "campaign-scheduler", "outbox"],
   });
 }
 

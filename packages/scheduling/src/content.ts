@@ -3,10 +3,13 @@ import {
   type AiEmailGenerator,
   type GenerateEmailInput,
 } from "@mail-orbyt/email-generation";
-import { createResearchSnapshot } from "@mail-orbyt/research";
+import { createResearchSnapshot, getLatestPageText } from "@mail-orbyt/research";
 import type { Lead, PrismaClient } from "@mail-orbyt/database";
 
-type Prisma = Pick<PrismaClient, "researchFact" | "researchSnapshot">;
+type Prisma = Pick<
+  PrismaClient,
+  "researchFact" | "researchSnapshot" | "researchSource" | "researchPageText"
+>;
 
 export class AiNotConfiguredForStepError extends Error {
   constructor() {
@@ -39,6 +42,9 @@ export interface MaterializeContentParams {
   senderCompanyName: string;
   priorEmail?: { subject: string; body: string };
   aiGenerator: AiEmailGenerator | undefined;
+  /** Organisation-configured additive tone guidance and booking link — see packages/email-generation's generateEmail. */
+  customInstructions?: string;
+  bookingLink?: string;
 }
 
 /** Produces the subject/body for a step's send — either a manual template with {{firstName}}-style merge tokens, or an AI-generated email built from the lead's current research snapshot. Never both. */
@@ -59,11 +65,18 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
     throw new AiNotConfiguredForStepError();
   }
 
-  const snapshot = await createResearchSnapshot(prisma, {
-    organisationId: params.organisationId,
-    subjectType: "LEAD",
-    leadId: params.lead.id,
-  });
+  const [snapshot, pageText] = await Promise.all([
+    createResearchSnapshot(prisma, {
+      organisationId: params.organisationId,
+      subjectType: "LEAD",
+      leadId: params.lead.id,
+    }),
+    getLatestPageText(prisma, {
+      organisationId: params.organisationId,
+      subjectType: "LEAD",
+      leadId: params.lead.id,
+    }),
+  ]);
   const facts = snapshot.facts as { category: string; value: string; sourceUrl: string }[];
 
   return generateEmail(params.aiGenerator, {
@@ -76,5 +89,8 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
       params.step.callToActionOverride ?? "connect and learn more about your priorities",
     facts,
     priorEmail: params.priorEmail,
+    websiteText: pageText?.text,
+    customInstructions: params.customInstructions,
+    bookingLink: params.bookingLink,
   });
 }

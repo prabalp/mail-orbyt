@@ -32,6 +32,20 @@ export const generateEmailInputSchema = z.object({
   facts: z.array(allowedFactSchema).max(20),
   /** Required for FOLLOW_UP and CLOSE_THE_LOOP — the email this one continues from. */
   priorEmail: priorEmailSchema.optional(),
+  /**
+   * The subject's saved website text — untrusted, context-only (tone/topic
+   * familiarity), never a source of new factual claims. Added alongside
+   * `facts`, never replacing them. See docs/ai-boundaries.md. This schema
+   * cap is just a sanity ceiling against a corrupted/oversized value — the
+   * real prompt-injection-surface control is prompt.ts's much smaller
+   * truncation (~2000 chars) of whatever is actually sent to the model, so
+   * callers should NOT need to pre-truncate real saved page text to fit here.
+   */
+  websiteText: z.string().max(50_000).optional(),
+  /** Organisation-configured tone/style guidance, appended to (never replacing) the fixed core system prompt. */
+  customInstructions: z.string().max(2000).optional(),
+  /** Embedded verbatim via deterministic post-generation substitution — the model never writes out the real URL itself. */
+  bookingLink: z.string().url().optional(),
 });
 export type GenerateEmailInput = z.infer<typeof generateEmailInputSchema>;
 

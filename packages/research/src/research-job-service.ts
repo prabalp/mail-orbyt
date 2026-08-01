@@ -1,13 +1,9 @@
-import type { PrismaClient, ResearchSubjectType } from "@mail-orbyt/database";
+import type { ExtractionMethod, PrismaClient, ResearchSubjectType } from "@mail-orbyt/database";
 import { assertAllowedCategory } from "./categories";
 import { extractJsonLd } from "./extraction/json-ld";
 import { extractMetaTags, extractOpenGraph } from "./extraction/open-graph";
-import {
-  factsFromJsonLdNodes,
-  factsFromMetaTags,
-  factsFromOpenGraph,
-  type FactCandidate,
-} from "./facts-from-document";
+import { extractVisibleText } from "./extraction/page-text";
+import { factsFromJsonLdNodes, factsFromMetaTags, factsFromOpenGraph } from "./facts-from-document";
 import type { EnrichmentProvider, NewsProvider, SearchProvider } from "./providers";
 import { fetchWebsite, WebsiteFetchError } from "./website-fetcher";
 import { UnsafeUrlError } from "./ssrf-guard";
@@ -18,6 +14,7 @@ type Prisma = Pick<
   | "researchProviderRun"
   | "researchSource"
   | "researchDocument"
+  | "researchPageText"
   | "researchFact"
   | "lead"
   | "company"
@@ -52,39 +49,49 @@ export interface ResearchProviders {
   enrichment: EnrichmentProvider;
 }
 
-async function upsertFact(
-  prisma: Pick<PrismaClient, "researchFact">,
-  params: {
-    organisationId: string;
-    subjectType: ResearchSubjectType;
-    leadId?: string;
-    companyId?: string;
-    researchJobId: string;
-    researchDocumentId?: string;
-    sourceUrl: string;
-    sourceTitle?: string;
-    candidate: FactCandidate;
-  },
-): Promise<void> {
-  assertAllowedCategory(params.candidate.category, params.subjectType);
+export interface UpsertResearchFactParams {
+  organisationId: string;
+  subjectType: ResearchSubjectType;
+  leadId?: string;
+  companyId?: string;
+  researchJobId?: string;
+  researchDocumentId?: string;
+  sourceUrl: string;
+  sourceTitle?: string;
+  category: string;
+  value: string;
+  confidence: number;
+  extractionMethod: ExtractionMethod;
+  evidenceExcerpt?: string;
+}
 
-  // Re-running research for the same subject must not pile up duplicate
-  // facts every time — a fact is the same observation if the subject,
-  // category, and value all match, regardless of which run produced it.
+/**
+ * Writes (or refreshes) a single ResearchFact, deduping on subject+category+
+ * value so re-running research/keyword-extraction for the same subject never
+ * piles up duplicate facts. Shared by the website provider below and by
+ * packages/research-keywords, which is why it's exported and takes a flat
+ * ExtractionMethod rather than the narrower website-only FactCandidate shape.
+ */
+export async function upsertResearchFact(
+  prisma: Pick<PrismaClient, "researchFact">,
+  params: UpsertResearchFactParams,
+): Promise<void> {
+  assertAllowedCategory(params.category, params.subjectType);
+
   const existing = await prisma.researchFact.findFirst({
     where: {
       organisationId: params.organisationId,
       leadId: params.leadId ?? null,
       companyId: params.companyId ?? null,
-      category: params.candidate.category,
-      value: params.candidate.value,
+      category: params.category,
+      value: params.value,
     },
   });
 
   if (existing) {
     await prisma.researchFact.update({
       where: { id: existing.id },
-      data: { observedAt: new Date(), confidence: params.candidate.confidence },
+      data: { observedAt: new Date(), confidence: params.confidence },
     });
     return;
   }
@@ -97,17 +104,71 @@ async function upsertFact(
       companyId: params.companyId,
       researchJobId: params.researchJobId,
       researchDocumentId: params.researchDocumentId,
-      category: params.candidate.category,
-      value: params.candidate.value,
+      category: params.category,
+      value: params.value,
       sourceUrl: params.sourceUrl,
       sourceTitle: params.sourceTitle,
-      extractionMethod: params.candidate.extractionMethod,
-      confidence: params.candidate.confidence,
-      evidenceExcerpt: params.candidate.evidenceExcerpt,
+      extractionMethod: params.extractionMethod,
+      confidence: params.confidence,
+      evidenceExcerpt: params.evidenceExcerpt,
     },
   });
 }
 
+/**
+ * Finds the existing ResearchSource for this subject+URL and updates it in
+ * place (httpStatus/fetchedAt/researchProviderRunId), or creates one if this
+ * is the first time this subject's website has been fetched. This is what
+ * keeps reruns from piling up duplicate rows — the URL's content is the same
+ * fetch target every time, so it's one continuously-refreshed row, not one
+ * per research run.
+ */
+async function findOrCreateResearchSource(
+  prisma: Prisma,
+  job: {
+    organisationId: string;
+    subjectType: ResearchSubjectType;
+    leadId: string | null;
+    companyId: string | null;
+  },
+  fetched: { finalUrl: string; httpStatus: number },
+  providerRunId: string,
+) {
+  const existing = await prisma.researchSource.findFirst({
+    where: {
+      organisationId: job.organisationId,
+      subjectType: job.subjectType,
+      leadId: job.leadId,
+      companyId: job.companyId,
+      url: fetched.finalUrl,
+    },
+  });
+
+  if (existing) {
+    return prisma.researchSource.update({
+      where: { id: existing.id },
+      data: {
+        httpStatus: fetched.httpStatus,
+        fetchedAt: new Date(),
+        researchProviderRunId: providerRunId,
+      },
+    });
+  }
+
+  return prisma.researchSource.create({
+    data: {
+      organisationId: job.organisationId,
+      subjectType: job.subjectType,
+      leadId: job.leadId ?? undefined,
+      companyId: job.companyId ?? undefined,
+      url: fetched.finalUrl,
+      httpStatus: fetched.httpStatus,
+      researchProviderRunId: providerRunId,
+    },
+  });
+}
+
+/** Returns the id of the ResearchSource the WEBSITE provider produced (existing or new), or null if it never succeeded. */
 async function runWebsiteProvider(
   prisma: Prisma,
   job: {
@@ -118,12 +179,17 @@ async function runWebsiteProvider(
     companyId: string | null;
   },
   targetUrl: string | null,
-): Promise<void> {
+): Promise<string | null> {
   const existingRun = await prisma.researchProviderRun.findFirst({
     where: { researchJobId: job.id, provider: "WEBSITE" },
   });
   if (existingRun && (existingRun.status === "SUCCEEDED" || existingRun.status === "FAILED")) {
-    return; // already attempted in a prior run of this job — don't refetch
+    if (existingRun.status === "FAILED") return null;
+    // already attempted in a prior run of this job — don't refetch, just report the source it produced
+    const existingSource = await prisma.researchSource.findFirst({
+      where: { researchProviderRunId: existingRun.id },
+    });
+    return existingSource?.id ?? null;
   }
 
   const run =
@@ -142,17 +208,24 @@ async function runWebsiteProvider(
       where: { id: run.id },
       data: { status: "FAILED", errorMessage: "No website URL on record", completedAt: new Date() },
     });
-    return;
+    return null;
   }
 
   try {
     const fetched = await fetchWebsite(targetUrl);
-    const source = await prisma.researchSource.create({
-      data: {
-        researchProviderRunId: run.id,
-        url: fetched.finalUrl,
-        httpStatus: fetched.httpStatus,
-      },
+    const source = await findOrCreateResearchSource(prisma, job, fetched, run.id);
+
+    // Saved unconditionally on a successful fetch, independent of whether
+    // structured extraction below finds anything — this is what lets
+    // keyword extraction (and any future re-processing) run later without
+    // re-fetching the site. Upserted (not inserted) since the source row
+    // itself is now reused across reruns. See ResearchPageText in
+    // schema.prisma.
+    const visibleText = extractVisibleText(fetched.html);
+    await prisma.researchPageText.upsert({
+      where: { researchSourceId: source.id },
+      create: { researchSourceId: source.id, text: visibleText, charCount: visibleText.length },
+      update: { text: visibleText, charCount: visibleText.length, extractedAt: new Date() },
     });
 
     const jsonLdNodes = extractJsonLd(fetched.html);
@@ -167,16 +240,21 @@ async function runWebsiteProvider(
         : [];
     const candidates = [...jsonLdFacts, ...ogFacts, ...metaFacts];
 
-    const document = await prisma.researchDocument.create({
-      data: {
+    const document = await prisma.researchDocument.upsert({
+      where: { researchSourceId: source.id },
+      create: {
         researchSourceId: source.id,
+        extractionMethod: candidates[0]?.extractionMethod ?? "META_TAG",
+        extractedData: { jsonLd: jsonLdNodes, openGraph, metaTags } as object,
+      },
+      update: {
         extractionMethod: candidates[0]?.extractionMethod ?? "META_TAG",
         extractedData: { jsonLd: jsonLdNodes, openGraph, metaTags } as object,
       },
     });
 
     for (const candidate of candidates) {
-      await upsertFact(prisma, {
+      await upsertResearchFact(prisma, {
         organisationId: job.organisationId,
         subjectType: job.subjectType,
         leadId: job.leadId ?? undefined,
@@ -185,7 +263,11 @@ async function runWebsiteProvider(
         researchDocumentId: document.id,
         sourceUrl: fetched.finalUrl,
         sourceTitle: metaTags.title,
-        candidate,
+        category: candidate.category,
+        value: candidate.value,
+        confidence: candidate.confidence,
+        extractionMethod: candidate.extractionMethod,
+        evidenceExcerpt: candidate.evidenceExcerpt,
       });
     }
 
@@ -193,6 +275,7 @@ async function runWebsiteProvider(
       where: { id: run.id },
       data: { status: "SUCCEEDED", completedAt: new Date() },
     });
+    return source.id;
   } catch (error) {
     const message =
       error instanceof WebsiteFetchError || error instanceof UnsafeUrlError
@@ -204,6 +287,7 @@ async function runWebsiteProvider(
       where: { id: run.id },
       data: { status: "FAILED", errorMessage: message, completedAt: new Date() },
     });
+    return null;
   }
 }
 
@@ -229,19 +313,32 @@ async function recordProviderAvailability(
   });
 }
 
+export interface ProcessResearchJobResult {
+  /** The ResearchSource produced by the WEBSITE provider, if it succeeded — the id keyword extraction should be enqueued against. Null if the fetch failed or there was no website URL on record. */
+  websiteSourceId: string | null;
+}
+
 /**
  * The research job body — idempotent, safe to retry. Each provider run is
  * checkpointed independently (see runWebsiteProvider/recordProviderAvailability),
  * so a retry after a partial failure only redoes the providers that didn't
- * finish, and upsertFact prevents duplicate fact rows from a rerun.
+ * finish, and upsertResearchFact prevents duplicate fact rows from a rerun.
  */
 export async function processResearchJob(
   prisma: Prisma,
   providers: ResearchProviders,
   jobId: string,
-): Promise<void> {
+): Promise<ProcessResearchJobResult> {
   const job = await prisma.researchJob.findUniqueOrThrow({ where: { id: jobId } });
-  if (job.status === "COMPLETED") return;
+  if (job.status === "COMPLETED") {
+    const existingRun = await prisma.researchProviderRun.findFirst({
+      where: { researchJobId: jobId, provider: "WEBSITE", status: "SUCCEEDED" },
+    });
+    const existingSource = existingRun
+      ? await prisma.researchSource.findFirst({ where: { researchProviderRunId: existingRun.id } })
+      : null;
+    return { websiteSourceId: existingSource?.id ?? null };
+  }
 
   await prisma.researchJob.update({
     where: { id: jobId },
@@ -257,7 +354,7 @@ export async function processResearchJob(
     targetUrl = company?.websiteUrl ?? null;
   }
 
-  await runWebsiteProvider(prisma, job, targetUrl);
+  const websiteSourceId = await runWebsiteProvider(prisma, job, targetUrl);
 
   await recordProviderAvailability(prisma, job, "SEARCH", providers.search.isConfigured());
   await recordProviderAvailability(prisma, job, "NEWS", providers.news.isConfigured());
@@ -267,4 +364,6 @@ export async function processResearchJob(
     where: { id: jobId },
     data: { status: "COMPLETED", completedAt: new Date() },
   });
+
+  return { websiteSourceId };
 }

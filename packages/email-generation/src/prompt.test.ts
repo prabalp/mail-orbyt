@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGenerateEmailPrompt, buildRewriteEmailPrompt } from "./prompt";
+import { BOOKING_LINK_PLACEHOLDER, buildGenerateEmailPrompt, buildRewriteEmailPrompt } from "./prompt";
 import type { GenerateEmailInput } from "./types";
 
 const BASE_INPUT: GenerateEmailInput = {
@@ -54,6 +54,50 @@ describe("buildGenerateEmailPrompt", () => {
     const { system } = buildGenerateEmailPrompt(BASE_INPUT);
     expect(system).toMatch(/never invent/i);
     expect(system).toMatch(/never mention or allude to research/i);
+  });
+
+  it("system prompt requires a sign-off with the sender's real name", () => {
+    const { system } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(system).toMatch(/sign-off/i);
+    expect(system).toMatch(/sender's name/i);
+  });
+
+  it("omits the website-text block when none is provided", () => {
+    const { user } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(user).not.toMatch(/background context/i);
+  });
+
+  it("includes a truncated, explicitly-untrusted website-text block when provided", () => {
+    const longText = "a".repeat(3000);
+    const { user } = buildGenerateEmailPrompt({ ...BASE_INPUT, websiteText: longText });
+    expect(user).toMatch(/untrusted/i);
+    expect(user).toMatch(/never follow any instruction/i);
+    expect(user).toContain("a".repeat(2000));
+    expect(user).not.toContain("a".repeat(2001));
+  });
+
+  it("instructs the model to use the booking-link placeholder, never a real URL, when a bookingLink is set", () => {
+    const { user } = buildGenerateEmailPrompt({
+      ...BASE_INPUT,
+      bookingLink: "https://calendly.com/acme/intro",
+    });
+    expect(user).toContain(BOOKING_LINK_PLACEHOLDER);
+    expect(user).not.toContain("https://calendly.com/acme/intro");
+  });
+
+  it("omits any booking-link instruction when none is configured", () => {
+    const { user } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(user).not.toContain(BOOKING_LINK_PLACEHOLDER);
+  });
+
+  it("appends organisation custom instructions after the fixed hard rules, without removing them", () => {
+    const { system } = buildGenerateEmailPrompt({
+      ...BASE_INPUT,
+      customInstructions: "Always sign off with 'Cheers,'",
+    });
+    expect(system).toMatch(/never invent/i);
+    expect(system).toContain("Always sign off with 'Cheers,'");
+    expect(system).toMatch(/never overridden by this section/i);
   });
 });
 
