@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@mail-orbyt/database";
 import { isSuppressed } from "@mail-orbyt/leads";
 import type { AiEmailGenerator } from "@mail-orbyt/email-generation";
-import { resolveInboxSenderName } from "@mail-orbyt/gmail";
+import { resolveDefaultSignatureText, resolveInboxSenderName } from "@mail-orbyt/gmail";
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
 import { pickNextInbox } from "./inbox-rotation";
 import { materializeStepContent } from "./content";
@@ -18,6 +18,8 @@ type Prisma = Pick<
   | "researchSnapshot"
   | "researchSource"
   | "researchPageText"
+  | "signature"
+  | "inbox"
 >;
 
 const MAX_ATTEMPTS = 3;
@@ -146,9 +148,11 @@ export async function processOutboxItem(
       }
     }
 
-    const { senderCompanyName, customInstructions, bookingLink } = await deps.getSenderContext(
-      item.organisationId,
-    );
+    const [{ senderCompanyName, customInstructions, bookingLink }, signatureText] =
+      await Promise.all([
+        deps.getSenderContext(item.organisationId),
+        resolveDefaultSignatureText(prisma, inbox.id),
+      ]);
     const generated = await materializeStepContent(prisma, {
       organisationId: item.organisationId,
       lead: item.lead,
@@ -159,6 +163,7 @@ export async function processOutboxItem(
       aiGenerator: deps.aiGenerator,
       customInstructions,
       bookingLink,
+      signatureText,
     });
     subject = generated.subject;
     body = generated.body;

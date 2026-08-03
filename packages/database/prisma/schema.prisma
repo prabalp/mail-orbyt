@@ -920,12 +920,34 @@ model Inbox {
   campaigns     CampaignInbox[]
   outboxItems   OutboxItem[]
   conversations Conversation[]
+  signatures    Signature[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organisationId, emailAddress])
   @@index([organisationId])
+}
+
+/// A reusable signature block for one inbox. Multiple signatures per inbox
+/// are allowed (e.g. different roles/styles); at most one is marked
+/// isDefault at a time (enforced by signature-service.ts's setDefaultSignature,
+/// not the database) — that's the one appended to every email sent from
+/// this inbox. content is plain text, appended verbatim after the AI's body
+/// by applySignature in packages/email-generation/src/generate.ts.
+model Signature {
+  id        String   @id @default(cuid())
+  inboxId   String
+  label     String
+  content   String
+  isDefault Boolean  @default(false)
+
+  inbox Inbox @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([inboxId])
 }
 
 enum DnsCheckStatus {

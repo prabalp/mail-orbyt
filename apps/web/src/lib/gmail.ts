@@ -4,14 +4,21 @@ import { prisma } from "@mail-orbyt/database";
 import {
   buildAuthorizationUrl,
   connectInbox,
+  createSignature,
+  deleteSignature,
   disconnectInbox,
   exchangeCodeForTokens,
   extractDomain,
   fetchGoogleUserEmail,
   listDomainDnsChecks,
   listInboxes,
+  listSignatures,
   runDomainDnsCheck,
+  setDefaultSignature,
   updateDailySendLimit,
+  updateSignature,
+  type CreateSignatureParams,
+  type UpdateSignatureParams,
 } from "@mail-orbyt/gmail";
 
 const env = loadEnv();
@@ -82,4 +89,41 @@ export async function recheckDomainDns(
   dkimSelector?: string,
 ) {
   return runDomainDnsCheck(prisma, organisationId, domain, dkimSelector);
+}
+
+export async function listInboxSignatures(organisationId: string, inboxId: string) {
+  return listSignatures(prisma, organisationId, inboxId);
+}
+
+export async function createInboxSignature(
+  organisationId: string,
+  inboxId: string,
+  params: CreateSignatureParams,
+) {
+  return createSignature(prisma, organisationId, inboxId, params);
+}
+
+export async function updateInboxSignature(
+  organisationId: string,
+  inboxId: string,
+  signatureId: string,
+  patch: UpdateSignatureParams,
+) {
+  return updateSignature(prisma, organisationId, inboxId, signatureId, patch);
+}
+
+export async function setDefaultInboxSignature(
+  organisationId: string,
+  inboxId: string,
+  signatureId: string,
+) {
+  return setDefaultSignature(prisma, organisationId, inboxId, signatureId);
+}
+
+export async function deleteInboxSignature(
+  organisationId: string,
+  inboxId: string,
+  signatureId: string,
+) {
+  return deleteSignature(prisma, organisationId, inboxId, signatureId);
 }

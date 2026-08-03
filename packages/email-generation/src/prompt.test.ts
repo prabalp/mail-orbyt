@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { BOOKING_LINK_PLACEHOLDER, buildGenerateEmailPrompt, buildRewriteEmailPrompt } from "./prompt";
+import {
+  BOOKING_LINK_PLACEHOLDER,
+  buildGenerateEmailPrompt,
+  buildReviewEmailPrompt,
+  buildRewriteEmailPrompt,
+} from "./prompt";
 import type { GenerateEmailInput } from "./types";
 
 const BASE_INPUT: GenerateEmailInput = {
@@ -56,10 +61,21 @@ describe("buildGenerateEmailPrompt", () => {
     expect(system).toMatch(/never mention or allude to research/i);
   });
 
-  it("system prompt requires a sign-off with the sender's real name", () => {
+  it("system prompt forbids the model from writing its own sign-off/signature", () => {
     const { system } = buildGenerateEmailPrompt(BASE_INPUT);
-    expect(system).toMatch(/sign-off/i);
-    expect(system).toMatch(/sender's name/i);
+    expect(system).toMatch(/do not write any closing sign-off/i);
+    expect(system).toMatch(/appended automatically/i);
+  });
+
+  it("system prompt requires blank-line paragraph breaks", () => {
+    const { system } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(system).toMatch(/blank line/i);
+  });
+
+  it("system prompt requires a professional, non-clickbait subject line", () => {
+    const { system } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(system).toMatch(/clickbait/i);
+    expect(system).toMatch(/spam-trigger words/i);
   });
 
   it("omits the website-text block when none is provided", () => {
@@ -111,5 +127,31 @@ describe("buildRewriteEmailPrompt", () => {
     expect(user).toMatch(/shorter/i);
     expect(user).toContain("Original long body");
     expect(system).toMatch(/do not add any new factual claim/i);
+  });
+
+  it("instructs preserving an existing signature rather than stripping it", () => {
+    const { system } = buildRewriteEmailPrompt({
+      style: "FORMAL",
+      subject: "Hi",
+      body: "Original body\n\nBest,\nAlex",
+    });
+    expect(system).toMatch(/preserve it exactly/i);
+  });
+});
+
+describe("buildReviewEmailPrompt", () => {
+  it("includes the current subject and body for review", () => {
+    const { user } = buildReviewEmailPrompt({
+      subject: "Quick question",
+      body: "Would you be open to a quick call?",
+    });
+    expect(user).toContain("Quick question");
+    expect(user).toContain("Would you be open to a quick call?");
+  });
+
+  it("forbids the reviewer from changing facts, URLs, or an existing signature", () => {
+    const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" });
+    expect(system).toMatch(/do not add, remove, or change any factual claim/i);
+    expect(system).toMatch(/leave it byte-for-byte identical/i);
   });
 });

@@ -29,11 +29,32 @@ describe("generateEmail", () => {
     });
   });
 
-  it("does not double up a signature the model already included", async () => {
-    const generator = fakeGenerator({
-      subject: "Hi",
-      body: "Would you be open to a quick call?\n\nBest,\nAlex",
+  it("uses a custom signatureText instead of the default fallback when provided", async () => {
+    const generator = fakeGenerator({ subject: "Hi", body: "Would you be open to a quick call?" });
+    const result = await generateEmail(generator, {
+      ...BASE_INPUT,
+      signatureText: "Cheers,\nAlex Rivera\nHead of Sales, Mail Orbyt",
     });
+    expect(result.body).toBe(
+      "Would you be open to a quick call?\n\nCheers,\nAlex Rivera\nHead of Sales, Mail Orbyt",
+    );
+  });
+
+  it("applies the review pass's corrected output when the review differs and still validates", async () => {
+    const generator = fakeGenerator(
+      { subject: "Hi", body: "Would you be open to a quick call" },
+      { subject: "Quick intro call?", body: "Would you be open to a quick call?" },
+    );
+    const result = await generateEmail(generator, BASE_INPUT);
+    expect(result.subject).toBe("Quick intro call?");
+    expect(result.body).toBe("Would you be open to a quick call?\n\nBest,\nAlex");
+  });
+
+  it("discards the review pass's output and keeps the original if the review fails validation", async () => {
+    const generator = fakeGenerator(
+      { subject: "Hi", body: "Would you be open to a quick call?" },
+      { subject: "Hi", body: "Reply to me at fake@invented.example" },
+    );
     const result = await generateEmail(generator, BASE_INPUT);
     expect(result.body).toBe("Would you be open to a quick call?\n\nBest,\nAlex");
   });
@@ -45,7 +66,8 @@ describe("generateEmail", () => {
     );
     const result = await generateEmail(generator, BASE_INPUT);
     expect(result.body).toBe("Would you be open to a quick call?\n\nBest,\nAlex");
-    expect(generator.complete).toHaveBeenCalledTimes(2);
+    // 2 generation attempts + 1 review pass call.
+    expect(generator.complete).toHaveBeenCalledTimes(3);
   });
 
   it("throws GeneratedEmailValidationError if every attempt fails validation", async () => {
@@ -75,7 +97,7 @@ describe("generateEmail", () => {
   it("substitutes the booking-link placeholder with the real URL when the model includes it", async () => {
     const generator = fakeGenerator({
       subject: "Hi",
-      body: `Want to chat? Grab a time here: ${BOOKING_LINK_PLACEHOLDER}\n\nBest,\nAlex`,
+      body: `Want to chat? Grab a time here: ${BOOKING_LINK_PLACEHOLDER}`,
     });
     const result = await generateEmail(generator, {
       ...BASE_INPUT,

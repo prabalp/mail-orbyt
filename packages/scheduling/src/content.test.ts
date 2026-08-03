@@ -121,4 +121,31 @@ describe("materializeStepContent", () => {
       }),
     );
   });
+
+  it("passes the sending inbox's signatureText through to generateEmail", async () => {
+    createResearchSnapshotMock.mockResolvedValue({ facts: [] });
+    getLatestPageTextMock.mockResolvedValue(null);
+    generateEmailMock.mockResolvedValue({ subject: "Hi", body: "Body" });
+
+    await materializeStepContent({} as never, {
+      organisationId: "org-1",
+      lead: LEAD,
+      step: {
+        stepType: "INITIAL",
+        useAiGeneration: true,
+        callToActionOverride: null,
+        manualSubject: null,
+        manualBody: null,
+      },
+      senderName: "Alex",
+      senderCompanyName: "Mail Orbyt",
+      aiGenerator: {} as never,
+      signatureText: "Cheers,\nAlex Rivera\nHead of Sales",
+    });
+
+    expect(generateEmailMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ signatureText: "Cheers,\nAlex Rivera\nHead of Sales" }),
+    );
+  });
 });

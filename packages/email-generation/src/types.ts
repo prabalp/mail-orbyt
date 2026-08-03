@@ -46,6 +46,8 @@ export const generateEmailInputSchema = z.object({
   customInstructions: z.string().max(2000).optional(),
   /** Embedded verbatim via deterministic post-generation substitution — the model never writes out the real URL itself. */
   bookingLink: z.string().url().optional(),
+  /** The full signature block to append deterministically after the AI's body (the model is instructed never to write its own sign-off). Falls back to a plain "Best,\n{senderName}" line if omitted. */
+  signatureText: z.string().min(1).optional(),
 });
 export type GenerateEmailInput = z.infer<typeof generateEmailInputSchema>;
 

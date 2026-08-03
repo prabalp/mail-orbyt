@@ -1,5 +1,10 @@
 import type { AiEmailGenerator } from "./client";
-import { BOOKING_LINK_PLACEHOLDER, buildGenerateEmailPrompt, buildRewriteEmailPrompt } from "./prompt";
+import {
+  BOOKING_LINK_PLACEHOLDER,
+  buildGenerateEmailPrompt,
+  buildReviewEmailPrompt,
+  buildRewriteEmailPrompt,
+} from "./prompt";
 import {
   generateEmailInputSchema,
   rewriteEmailInputSchema,
@@ -61,16 +66,39 @@ function applyBookingLink(output: GeneratedEmail, bookingLink: string | undefine
 }
 
 /**
- * Guarantees the email closes with the sender's real name, regardless of
- * whether the model followed the system prompt's sign-off rule — a
- * malformed/missing signature is exactly the kind of thing the model (a
- * black box) can silently drop, so this is checked deterministically rather
- * than trusted.
+ * Appends the closing signature deterministically — the model is instructed
+ * (system prompt rule 9) never to write its own sign-off, so there is no
+ * "already signed?" check to make here; this is the only place a signature
+ * is ever written into the body. `signatureText` is the sending inbox's
+ * configured Signature.content when one exists, otherwise callers pass the
+ * plain "Best,\n{senderName}" fallback.
  */
-function applySignature(output: GeneratedEmail, senderName: string): GeneratedEmail {
-  const alreadySigned = output.body.trimEnd().toLowerCase().endsWith(senderName.toLowerCase());
-  if (alreadySigned) return output;
-  return { ...output, body: `${output.body}\n\nBest,\n${senderName}` };
+function applySignature(output: GeneratedEmail, signatureText: string): GeneratedEmail {
+  return { ...output, body: `${output.body}\n\n${signatureText}` };
+}
+
+/**
+ * Runs the AI's own QA self-review pass over the subject/body — before the
+ * booking link and signature are substituted in, so the same fact/URL
+ * allow-list used for the original generation still applies (the real
+ * booking URL and signature would otherwise trip the URL/email checks,
+ * since neither is in `facts`). A review that fails validation (e.g. the
+ * model "corrected" something into a fact/URL violation) is discarded — the
+ * review pass must never be the thing that introduces a violation, so on
+ * any doubt the pre-review output wins.
+ */
+async function reviewEmail(
+  generator: AiEmailGenerator,
+  output: GeneratedEmail,
+  facts: { category: string; value: string; sourceUrl: string }[],
+): Promise<GeneratedEmail> {
+  try {
+    const reviewed = await generator.complete(buildReviewEmailPrompt(output));
+    assertValidGeneratedEmail(reviewed, facts);
+    return reviewed;
+  } catch {
+    return output;
+  }
 }
 
 /** Generates an initial, follow-up, or close-the-loop email from a bounded set of researched facts. */
@@ -88,7 +116,9 @@ export async function generateEmail(
 
   const prompt = buildGenerateEmailPrompt(parsed);
   const output = await completeWithValidation(generator, prompt, parsed.facts);
-  return applySignature(applyBookingLink(output, parsed.bookingLink), parsed.senderName);
+  const reviewed = await reviewEmail(generator, output, parsed.facts);
+  const signatureText = parsed.signatureText ?? `Best,\n${parsed.senderName}`;
+  return applySignature(applyBookingLink(reviewed, parsed.bookingLink), signatureText);
 }
 
 /** Rewrites an existing email's tone/length without introducing new facts. */

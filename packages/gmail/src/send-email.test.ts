@@ -62,7 +62,11 @@ describe("sendFromInbox", () => {
     expect(decoded).toContain("From: alex@acme.example");
     expect(decoded).toContain("To: prospect@example.com");
     expect(decoded).toContain("Subject: Hi");
+    expect(decoded).toContain("multipart/alternative");
+    expect(decoded).toContain("Content-Type: text/plain");
+    expect(decoded).toContain("Content-Type: text/html");
     expect(decoded).toContain("Would you be open to a quick call?");
+    expect(decoded).toContain("<p style=");
   });
 
   it("throws GmailSendError when the response is missing a thread id", async () => {
@@ -106,5 +110,20 @@ describe("sendFromInbox", () => {
     await expect(
       sendFromInbox(prisma, "inbox-1", { to: "a@b.com", subject: "Hi", body: "Body" }, fetchImpl),
     ).rejects.toBeInstanceOf(GmailSendError);
+  });
+});
+
+describe("textToHtml", () => {
+  it("wraps each blank-line-separated paragraph in its own <p> and converts single breaks to <br>", async () => {
+    const { textToHtml } = await import("./send-email");
+    const html = textToHtml("First paragraph.\n\nSecond line one\nSecond line two.");
+    expect(html).toContain("<p style=\"margin:0 0 1em 0;\">First paragraph.</p>");
+    expect(html).toContain("Second line one<br>Second line two.");
+  });
+
+  it("HTML-escapes special characters", async () => {
+    const { textToHtml } = await import("./send-email");
+    const html = textToHtml("Tom & Jerry <are> \"friends\"");
+    expect(html).toContain("Tom &amp; Jerry &lt;are&gt; &quot;friends&quot;");
   });
 });

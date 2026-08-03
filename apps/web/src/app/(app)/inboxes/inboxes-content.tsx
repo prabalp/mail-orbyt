@@ -8,7 +8,9 @@ import {
   Card,
   EmptyState,
   PageHeader,
+  Select,
   Table,
+  TextArea,
   TextInput,
   useToast,
 } from "@mail-orbyt/design-system";
@@ -22,6 +24,14 @@ interface Inbox {
   status: "CONNECTED" | "REAUTH_REQUIRED" | "DISCONNECTED" | "ERROR";
   dailySendLimit: number;
   createdAt: string;
+}
+
+interface Signature {
+  id: string;
+  inboxId: string;
+  label: string;
+  content: string;
+  isDefault: boolean;
 }
 
 interface DnsCheck {
@@ -57,6 +67,12 @@ export function InboxesContent(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [selectors, setSelectors] = useState<Record<string, string>>({});
 
+  const [signatureInboxId, setSignatureInboxId] = useState<string>("");
+  const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [newSignatureLabel, setNewSignatureLabel] = useState("");
+  const [newSignatureContent, setNewSignatureContent] = useState("");
+  const [savingSignature, setSavingSignature] = useState(false);
+
   const load = useCallback(async () => {
     const response = await fetch(`/api/organisations/${organisationId}/inboxes`);
     if (response.ok) {
@@ -70,6 +86,25 @@ export function InboxesContent(): React.ReactElement {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!signatureInboxId && inboxes.length > 0) setSignatureInboxId(inboxes[0]!.id);
+  }, [inboxes, signatureInboxId]);
+
+  const loadSignatures = useCallback(async () => {
+    if (!signatureInboxId) {
+      setSignatures([]);
+      return;
+    }
+    const response = await fetch(
+      `/api/organisations/${organisationId}/inboxes/${signatureInboxId}/signatures`,
+    );
+    if (response.ok) setSignatures((await response.json()).signatures);
+  }, [organisationId, signatureInboxId]);
+
+  useEffect(() => {
+    void loadSignatures();
+  }, [loadSignatures]);
 
   useEffect(() => {
     const status = searchParams.get("gmailOAuth");
@@ -115,6 +150,52 @@ export function InboxesContent(): React.ReactElement {
     } else {
       toast.show("Could not run DNS check", "error");
     }
+  }
+
+  async function handleAddSignature() {
+    if (!signatureInboxId || !newSignatureLabel || !newSignatureContent) return;
+    setSavingSignature(true);
+    try {
+      const response = await fetch(
+        `/api/organisations/${organisationId}/inboxes/${signatureInboxId}/signatures`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label: newSignatureLabel, content: newSignatureContent }),
+        },
+      );
+      if (response.ok) {
+        setNewSignatureLabel("");
+        setNewSignatureContent("");
+        await loadSignatures();
+      } else {
+        toast.show("Could not save signature", "error");
+      }
+    } finally {
+      setSavingSignature(false);
+    }
+  }
+
+  async function handleSetDefaultSignature(signatureId: string) {
+    const response = await fetch(
+      `/api/organisations/${organisationId}/inboxes/${signatureInboxId}/signatures/${signatureId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      },
+    );
+    if (response.ok) await loadSignatures();
+    else toast.show("Could not set default signature", "error");
+  }
+
+  async function handleDeleteSignature(signatureId: string) {
+    const response = await fetch(
+      `/api/organisations/${organisationId}/inboxes/${signatureInboxId}/signatures/${signatureId}`,
+      { method: "DELETE" },
+    );
+    if (response.ok) await loadSignatures();
+    else toast.show("Could not delete signature", "error");
   }
 
   return (
@@ -226,6 +307,83 @@ export function InboxesContent(): React.ReactElement {
           </ul>
         )}
       </div>
+
+      <Card>
+        <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Signatures</h3>
+        {inboxes.length === 0 ? (
+          <EmptyState
+            title="No inboxes connected"
+            description="Connect an inbox first to add signatures for it."
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <Select
+              label="Inbox"
+              value={signatureInboxId}
+              options={inboxes.map((inbox) => ({ value: inbox.id, label: inbox.emailAddress }))}
+              onChange={(event) => setSignatureInboxId(event.target.value)}
+            />
+
+            {signatures.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {signatures.map((signature) => (
+                  <li key={signature.id} className="rounded-md-md border border-outline/30 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-on-surface">{signature.label}</p>
+                        {signature.isDefault ? <Badge tone="success">Default</Badge> : null}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!signature.isDefault ? (
+                          <Button
+                            variant="text"
+                            onClick={() => handleSetDefaultSignature(signature.id)}
+                          >
+                            Set default
+                          </Button>
+                        ) : null}
+                        <Button variant="text" onClick={() => handleDeleteSignature(signature.id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="mt-2 whitespace-pre-line text-sm text-on-surface-variant">
+                      {signature.content}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState
+                title="No signatures yet"
+                description="Add one below — the default signature is appended to every AI-generated email sent from this inbox."
+              />
+            )}
+
+            <div className="flex flex-col gap-3 border-t border-outline/15 pt-4">
+              <TextInput
+                label="Label"
+                placeholder="e.g. Default, Formal"
+                value={newSignatureLabel}
+                onChange={(event) => setNewSignatureLabel(event.target.value)}
+              />
+              <TextArea
+                label="Signature text"
+                placeholder={"Best,\nAlex Rivera\nHead of Sales, Acme Inc"}
+                value={newSignatureContent}
+                onChange={(event) => setNewSignatureContent(event.target.value)}
+              />
+              <Button
+                loading={savingSignature}
+                disabled={!newSignatureLabel || !newSignatureContent}
+                onClick={handleAddSignature}
+              >
+                Add signature
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

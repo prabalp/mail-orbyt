@@ -1,4 +1,4 @@
-import type { GenerateEmailInput, RewriteEmailInput } from "./types";
+import type { GeneratedEmail, GenerateEmailInput, RewriteEmailInput } from "./types";
 
 /** The model is told to echo this exact token, never a real URL — see applyBookingLink in generate.ts, which is the only place the real link is ever written. */
 export const BOOKING_LINK_PLACEHOLDER = "[[BOOKING_LINK]]";
@@ -13,11 +13,12 @@ Hard rules — never break these:
 2. If no facts are provided, write a generic but relevant email based only on the sender's stated call-to-action — do not fabricate personalization to compensate.
 3. Never mention or allude to research methods, data sources, "I noticed", browsing, or how any fact was obtained.
 4. Never include a URL, phone number, or email address other than ones explicitly given to you (the booking-link placeholder token, if provided below, is not a URL — use it exactly as instructed).
-5. Keep the email short: 2-4 short paragraphs or fewer, no more than ~150 words in the body.
+5. Keep the email short: 2-4 short paragraphs, no more than ~150 words in the body. Separate every paragraph with one fully blank line (i.e. write "\\n\\n" between paragraphs) — never write the body as a single unbroken block of text, and never join unrelated ideas into the same paragraph.
 6. Write in plain text, no markdown, no HTML, no emoji.
 7. Do not make promises, guarantees, discounts, or claims on the sender's behalf that were not given to you.
 8. End the email in a way that supports the stated call-to-action, without being pushy.
-9. Always end the body with a brief sign-off (e.g. "Best," or "Thanks,") on its own line, followed by the sender's name — exactly as given in "Sender:" below — on the next line. Never sign with any other name.`;
+9. Do not write any closing sign-off, "Best,"/"Thanks," line, or signature block of any kind — one will be appended automatically after your response. The body should end right after the last content paragraph.
+10. The subject line must be professional, specific to the stated call-to-action, and roughly 30-55 characters. Never use ALL CAPS, exclamation marks, emoji, or spam-trigger words ("free", "guarantee", "act now", "limited time"). It should read as something a busy professional would plausibly open — clear and credible, never clickbait.`;
 
 function buildSystemPrompt(customInstructions?: string): string {
   if (!customInstructions) return SYSTEM_PREAMBLE;
@@ -104,7 +105,7 @@ export function buildRewriteEmailPrompt(input: RewriteEmailInput): {
 } {
   const system = `${SYSTEM_PREAMBLE}
 
-You are REWRITING an existing email, not writing a new one. Do not add any new factual claim, statistic, name, or detail that isn't already present in the original email. Only adjust tone, length, and structure as instructed.`;
+You are REWRITING an existing email, not writing a new one. Do not add any new factual claim, statistic, name, or detail that isn't already present in the original email. Only adjust tone, length, and structure as instructed. Rule 9 above means don't ADD a new closing/signature — but if the original body already ends with a sign-off or signature block, preserve it exactly, unchanged, in the same position.`;
 
   const user = [
     REWRITE_INSTRUCTIONS[input.style],
@@ -114,4 +115,26 @@ You are REWRITING an existing email, not writing a new one. Do not add any new f
   ].join("\n");
 
   return { system, user };
+}
+
+const REVIEW_SYSTEM_PROMPT = `You are QA-reviewing an outbound sales email draft immediately before it is sent, catching anything that would look unprofessional or poorly formatted to the recipient.
+
+Check for:
+- Grammar, spelling, and punctuation errors.
+- A professional, natural tone throughout.
+- Clean paragraph structure: 2-4 short paragraphs, each separated from the next by one fully blank line ("\\n\\n"). If the body is a single run-on block of text or paragraphs aren't clearly separated, break it up.
+- A subject line that is professional, specific, not clickbait, roughly 30-55 characters, with no ALL CAPS/exclamation marks/emoji/spam words.
+
+Hard constraints — never violate these while "fixing" the draft:
+- Do not add, remove, or change any factual claim, statistic, name, or detail.
+- Do not add, remove, or alter any URL or the "[[BOOKING_LINK]]" placeholder token if present.
+- Do not touch anything after the last content paragraph (e.g. an appended signature block) — leave it byte-for-byte identical, and never add a new one.
+- Do not change the overall length or meaning of the message.
+
+If the draft already meets all the checks above, return it completely unchanged. Otherwise, return a corrected version that fixes only the formatting/grammar/tone issues found.`;
+
+/** Builds the QA self-review pass prompt — see reviewEmail() in generate.ts for how the result is validated and applied. */
+export function buildReviewEmailPrompt(output: GeneratedEmail): { system: string; user: string } {
+  const user = [`Subject: ${output.subject}`, "", `Body:\n${output.body}`].join("\n");
+  return { system: REVIEW_SYSTEM_PROMPT, user };
 }

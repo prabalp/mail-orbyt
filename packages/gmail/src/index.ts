@@ -25,6 +25,16 @@ export {
   type ConnectInboxParams,
 } from "./inbox-service";
 export { runDomainDnsCheck, listDomainDnsChecks } from "./dns-check-service";
+export {
+  listSignatures,
+  createSignature,
+  updateSignature,
+  setDefaultSignature,
+  deleteSignature,
+  resolveDefaultSignatureText,
+  type CreateSignatureParams,
+  type UpdateSignatureParams,
+} from "./signature-service";
 export { sendFromInbox, GmailSendError, type OutboundMessage, type SendResult } from "./send-email";
 export { resolveInboxSenderName } from "./inbox-identity";
 export { fetchThreadMessages, type ThreadMessage } from "./fetch-thread";

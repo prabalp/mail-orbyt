@@ -18,7 +18,8 @@ export class AiNotConfiguredForStepError extends Error {
   }
 }
 
-function applyMergeTokens(
+/** Exported for reuse by test-send (apps/web/src/lib/campaigns.ts), which materializes a manual step's content for a synthetic sample recipient without a real Lead row to attach a research snapshot to. */
+export function applyMergeTokens(
   template: string,
   lead: Pick<Lead, "firstName" | "lastName" | "title">,
 ): string {
@@ -45,6 +46,8 @@ export interface MaterializeContentParams {
   /** Organisation-configured additive tone guidance and booking link — see packages/email-generation's generateEmail. */
   customInstructions?: string;
   bookingLink?: string;
+  /** The sending inbox's configured default signature, if any — see resolveDefaultSignatureText in @mail-orbyt/gmail. Falls back to a plain "Best,\n{senderName}" line when omitted. */
+  signatureText?: string;
 }
 
 /** Produces the subject/body for a step's send — either a manual template with {{firstName}}-style merge tokens, or an AI-generated email built from the lead's current research snapshot. Never both. */
@@ -92,5 +95,6 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
     websiteText: pageText?.text,
     customInstructions: params.customInstructions,
     bookingLink: params.bookingLink,
+    signatureText: params.signatureText,
   });
 }

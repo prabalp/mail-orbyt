@@ -30,6 +30,7 @@ function fakePrisma(item: unknown) {
       update: vi.fn().mockResolvedValue({}),
     },
     campaignStep: { findUnique: vi.fn().mockResolvedValue(null) },
+    signature: { findFirst: vi.fn().mockResolvedValue(null) },
   };
 }
 

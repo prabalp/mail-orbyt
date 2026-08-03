@@ -1,6 +1,7 @@
 import {
   addStep,
   archiveCampaign,
+  CampaignActivationError,
   createCampaign,
   enrollLeads,
   enrollLeadsFromList,
@@ -19,9 +20,9 @@ import {
 } from "@mail-orbyt/campaigns";
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
-import { getAiEmailGenerator, isAiConfigured } from "@mail-orbyt/email-generation";
-import { sendFromInbox } from "@mail-orbyt/gmail";
-import { enqueueDueOutboxItems, processOutboxItem } from "@mail-orbyt/scheduling";
+import { generateEmail, getAiEmailGenerator, isAiConfigured } from "@mail-orbyt/email-generation";
+import { resolveDefaultSignatureText, resolveInboxSenderName, sendFromInbox } from "@mail-orbyt/gmail";
+import { applyMergeTokens, enqueueDueOutboxItems, processOutboxItem } from "@mail-orbyt/scheduling";
 
 export {
   CampaignActivationError,
@@ -168,4 +169,79 @@ export async function sendCampaignNow(organisationId: string, campaignId: string
     failed: results.filter((r) => r?.status === "FAILED").length,
     skipped: results.filter((r) => r?.status?.startsWith("SKIPPED")).length,
   };
+}
+
+/** A generic placeholder recipient for test sends — no real Lead row exists to attach a research snapshot to, so AI generation runs with an empty fact list (the model writes a generic-but-relevant email per prompt rule 2). */
+const SAMPLE_RECIPIENT = { firstName: null, lastName: null, title: null };
+
+/**
+ * Sends the campaign's first step to 1-2 user-supplied addresses, exactly as
+ * it would go out to a real prospect, so the sender can visually confirm
+ * formatting/signature/tone before (or after) the campaign goes live. Unlike
+ * sendCampaignNow, this is always available (not a dev-only shortcut) and
+ * never creates OutboxItem/CampaignEnrollment rows — it never touches real
+ * campaign progress or prospect data.
+ */
+export async function sendTestEmail(organisationId: string, campaignId: string, emails: string[]) {
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    include: {
+      steps: { orderBy: { orderIndex: "asc" }, take: 1 },
+      inboxes: { include: { inbox: true } },
+    },
+  });
+  if (!campaign || campaign.organisationId !== organisationId) return null;
+
+  const step = campaign.steps[0];
+  if (!step) {
+    throw new CampaignActivationError("Add at least one step before sending a test email.");
+  }
+  const inbox = campaign.inboxes.find((entry) => entry.inbox.status === "CONNECTED")?.inbox;
+  if (!inbox) {
+    throw new CampaignActivationError(
+      "Connect at least one inbox to this campaign before sending a test email.",
+    );
+  }
+
+  let subject: string;
+  let body: string;
+
+  if (!step.useAiGeneration) {
+    if (!step.manualSubject || !step.manualBody) {
+      throw new Error("Manual step is missing subject/body.");
+    }
+    subject = applyMergeTokens(step.manualSubject, SAMPLE_RECIPIENT);
+    body = applyMergeTokens(step.manualBody, SAMPLE_RECIPIENT);
+  } else {
+    if (!isAiConfigured()) {
+      throw new Error("This step uses AI generation, but no AI provider is configured.");
+    }
+    const [{ senderCompanyName }, signatureText] = await Promise.all([
+      getSenderContext(organisationId),
+      resolveDefaultSignatureText(prisma, inbox.id),
+    ]);
+    const generated = await generateEmail(getAiEmailGenerator(), {
+      generationType: step.stepType,
+      senderName: resolveInboxSenderName(inbox),
+      senderCompanyName,
+      callToAction: step.callToActionOverride ?? "connect and learn more about your priorities",
+      facts: [],
+      signatureText,
+    });
+    subject = generated.subject;
+    body = generated.body;
+  }
+
+  const results = await Promise.all(
+    emails.map(async (to) => {
+      try {
+        await sendFromInbox(prisma, inbox.id, { to, subject, body });
+        return { email: to, ok: true };
+      } catch (error) {
+        return { email: to, ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }),
+  );
+
+  return { subject, body, results };
 }

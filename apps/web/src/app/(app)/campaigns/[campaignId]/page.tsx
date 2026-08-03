@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -11,10 +11,63 @@ import {
   PageHeader,
   Select,
   TextInput,
+  TimePicker,
   useToast,
 } from "@mail-orbyt/design-system";
 import { ListOrdered, Mails } from "lucide-react";
 import { useOrganisation } from "../../organisation-context";
+
+const DAYS_OF_WEEK: { value: number; label: string }[] = [
+  { value: 0, label: "Sun" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+];
+
+const RECOMMENDED_SCHEDULE = {
+  sendingDaysOfWeek: [1, 2, 3, 4, 5],
+  startMinute: 9 * 60,
+  endMinute: 17 * 60,
+};
+
+const COMMON_TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+];
+
+function minutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+    .toString()
+    .padStart(2, "0");
+  const mins = (minutes % 60).toString().padStart(2, "0");
+  return `${hours}:${mins}`;
+}
+
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(":").map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+}
+
+function recommendedTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
+}
 
 interface Step {
   id: string;
@@ -40,6 +93,10 @@ interface CampaignDetail {
   steps: Step[];
   inboxes: { inboxId: string; inbox: Inbox }[];
   enrollments: { status: string }[];
+  timezone: string;
+  sendingDaysOfWeek: number[];
+  sendingWindowStartMinute: number;
+  sendingWindowEndMinute: number;
 }
 
 interface Enrollment {
@@ -75,6 +132,24 @@ export default function CampaignDetailPage(): React.ReactElement {
   const [enrolling, setEnrolling] = useState(false);
   const [sendingNow, setSendingNow] = useState(false);
 
+  const [scheduleDays, setScheduleDays] = useState<Set<number>>(
+    new Set(RECOMMENDED_SCHEDULE.sendingDaysOfWeek),
+  );
+  const [scheduleStart, setScheduleStart] = useState(minutesToTime(RECOMMENDED_SCHEDULE.startMinute));
+  const [scheduleEnd, setScheduleEnd] = useState(minutesToTime(RECOMMENDED_SCHEDULE.endMinute));
+  const [scheduleTimezone, setScheduleTimezone] = useState(recommendedTimezone());
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const scheduleInitialized = useRef(false);
+
+  const [testEmail1, setTestEmail1] = useState("");
+  const [testEmail2, setTestEmail2] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    subject: string;
+    body: string;
+    results: { email: string; ok: boolean; error?: string }[];
+  } | null>(null);
+
   const load = useCallback(async () => {
     const [campaignRes, enrollmentsRes, inboxesRes] = await Promise.all([
       fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`),
@@ -90,6 +165,77 @@ export default function CampaignDetailPage(): React.ReactElement {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!campaign || scheduleInitialized.current) return;
+    scheduleInitialized.current = true;
+    setScheduleDays(new Set(campaign.sendingDaysOfWeek));
+    setScheduleStart(minutesToTime(campaign.sendingWindowStartMinute));
+    setScheduleEnd(minutesToTime(campaign.sendingWindowEndMinute));
+    setScheduleTimezone(campaign.timezone);
+  }, [campaign]);
+
+  function handleUseRecommendedSchedule() {
+    setScheduleDays(new Set(RECOMMENDED_SCHEDULE.sendingDaysOfWeek));
+    setScheduleStart(minutesToTime(RECOMMENDED_SCHEDULE.startMinute));
+    setScheduleEnd(minutesToTime(RECOMMENDED_SCHEDULE.endMinute));
+    setScheduleTimezone(recommendedTimezone());
+  }
+
+  async function handleSaveSchedule() {
+    setSavingSchedule(true);
+    try {
+      const response = await fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timezone: scheduleTimezone,
+          sendingDaysOfWeek: [...scheduleDays].sort((a, b) => a - b),
+          sendingWindowStartMinute: timeToMinutes(scheduleStart),
+          sendingWindowEndMinute: timeToMinutes(scheduleEnd),
+        }),
+      });
+      if (response.ok) {
+        toast.show("Sending schedule saved", "success");
+        await load();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not save sending schedule", "error");
+      }
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  async function handleSendTest() {
+    const emails = [testEmail1, testEmail2].map((e) => e.trim()).filter(Boolean);
+    if (emails.length === 0) return;
+    setSendingTest(true);
+    setTestResult(null);
+    try {
+      const response = await fetch(
+        `/api/organisations/${organisationId}/campaigns/${campaignId}/send-test`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emails }),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        setTestResult(data);
+        const failed = data.results.filter((r: { ok: boolean }) => !r.ok).length;
+        toast.show(
+          failed ? `Sent with ${failed} failure(s)` : "Test email sent",
+          failed ? "error" : "success",
+        );
+      } else {
+        toast.show(data.error ?? "Could not send test email", "error");
+      }
+    } finally {
+      setSendingTest(false);
+    }
+  }
 
   async function handleAddStep() {
     setAddingStep(true);
@@ -271,6 +417,98 @@ export default function CampaignDetailPage(): React.ReactElement {
           </div>
         }
       />
+
+      <Card>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-on-surface-variant">Sending schedule</h3>
+          <Button variant="text" onClick={handleUseRecommendedSchedule}>
+            Use recommended
+          </Button>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-3">
+            {DAYS_OF_WEEK.map((day) => (
+              <Checkbox
+                key={day.value}
+                label={day.label}
+                checked={scheduleDays.has(day.value)}
+                onChange={(event) => {
+                  setScheduleDays((prev) => {
+                    const next = new Set(prev);
+                    if (event.target.checked) next.add(day.value);
+                    else next.delete(day.value);
+                    return next;
+                  });
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <TimePicker label="Start" value={scheduleStart} onChange={(v) => setScheduleStart(v ?? scheduleStart)} />
+            <TimePicker label="End" value={scheduleEnd} onChange={(v) => setScheduleEnd(v ?? scheduleEnd)} />
+            <Select
+              label="Timezone"
+              value={scheduleTimezone}
+              options={COMMON_TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+              onChange={(event) => setScheduleTimezone(event.target.value)}
+            />
+            <Button loading={savingSchedule} onClick={handleSaveSchedule}>
+              Save schedule
+            </Button>
+          </div>
+          <p className="text-sm text-on-surface-variant">
+            Emails for this campaign only send on the selected days, within this time window, in
+            the chosen timezone. Recommended default: weekdays, 9:00–17:00, your local timezone —
+            adjust as needed before or after going live.
+          </p>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Send test email</h3>
+        <p className="mb-4 text-sm text-on-surface-variant">
+          Sends this campaign&apos;s first step to 1-2 addresses you control — exactly what a real
+          prospect would receive — so you can check formatting, signature, and tone before going
+          live. This never enrolls a real lead or affects campaign progress.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <TextInput
+            label="Test email 1"
+            type="email"
+            value={testEmail1}
+            onChange={(event) => setTestEmail1(event.target.value)}
+          />
+          <TextInput
+            label="Test email 2 (optional)"
+            type="email"
+            value={testEmail2}
+            onChange={(event) => setTestEmail2(event.target.value)}
+          />
+          <Button loading={sendingTest} disabled={!testEmail1.trim()} onClick={handleSendTest}>
+            Send test
+          </Button>
+        </div>
+
+        {testResult ? (
+          <div className="mt-4 flex flex-col gap-3 border-t border-outline/15 pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {testResult.results.map((result) => (
+                <Badge key={result.email} tone={result.ok ? "success" : "error"}>
+                  {result.email}: {result.ok ? "sent" : result.error ?? "failed"}
+                </Badge>
+              ))}
+            </div>
+            <div className="rounded-md-md border border-outline/30 p-3">
+              <p className="text-sm font-medium text-on-surface">Subject: {testResult.subject}</p>
+              <p className="mt-2 whitespace-pre-line text-sm text-on-surface-variant">
+                {testResult.body}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </Card>
 
       <Card>
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sequence steps</h3>

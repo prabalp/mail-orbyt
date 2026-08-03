@@ -7,6 +7,7 @@ export { pickNextInbox } from "./inbox-rotation";
 export { scheduleNextStepForEnrollment } from "./enrollment-progression";
 export {
   materializeStepContent,
+  applyMergeTokens,
   AiNotConfiguredForStepError,
   type MaterializeContentParams,
 } from "./content";
