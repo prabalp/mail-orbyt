@@ -1,6 +1,11 @@
 import { hasPermission } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
 import { PageHeader } from "@mail-orbyt/design-system";
+import {
+  DEFAULT_GENERATION_SYSTEM_PROMPT,
+  DEFAULT_REVIEW_SYSTEM_PROMPT,
+  DEFAULT_REWRITE_SYSTEM_PROMPT,
+} from "@mail-orbyt/email-generation";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getCurrentOrganisation } from "@/lib/current-organisation";
@@ -30,6 +35,12 @@ export default async function EmailTemplatePage(): Promise<React.ReactElement> {
         canManage={hasPermission(organisation.role, "campaigns:manage")}
         emailPromptInstructions={org.emailPromptInstructions ?? ""}
         calendlyUrl={org.calendlyUrl ?? ""}
+        generationSystemPrompt={org.generationSystemPrompt ?? DEFAULT_GENERATION_SYSTEM_PROMPT}
+        reviewSystemPrompt={org.reviewSystemPrompt ?? DEFAULT_REVIEW_SYSTEM_PROMPT}
+        rewriteSystemPrompt={org.rewriteSystemPrompt ?? DEFAULT_REWRITE_SYSTEM_PROMPT}
+        defaultGenerationSystemPrompt={DEFAULT_GENERATION_SYSTEM_PROMPT}
+        defaultReviewSystemPrompt={DEFAULT_REVIEW_SYSTEM_PROMPT}
+        defaultRewriteSystemPrompt={DEFAULT_REWRITE_SYSTEM_PROMPT}
       />
     </div>
   );

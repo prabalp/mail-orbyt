@@ -46,6 +46,9 @@ async function loadSenderContext(organisationId: string, createdByUserId: string
     senderName: inbox ? resolveInboxSenderName(inbox) : (user.name ?? user.email),
     customInstructions: organisation.emailPromptInstructions ?? undefined,
     bookingLink: organisation.calendlyUrl ?? undefined,
+    generationSystemPromptOverride: organisation.generationSystemPrompt ?? undefined,
+    reviewSystemPromptOverride: organisation.reviewSystemPrompt ?? undefined,
+    rewriteSystemPromptOverride: organisation.rewriteSystemPrompt ?? undefined,
   };
 }
 
@@ -72,8 +75,18 @@ export async function generateDraft(params: GenerateDraftParams) {
     priorEmail = { subject: basedOn.subject, body: basedOn.body };
   }
 
-  const [snapshot, pageText, { senderCompanyName, senderName, customInstructions, bookingLink }] =
-    await Promise.all([
+  const [
+    snapshot,
+    pageText,
+    {
+      senderCompanyName,
+      senderName,
+      customInstructions,
+      bookingLink,
+      generationSystemPromptOverride,
+      reviewSystemPromptOverride,
+    },
+  ] = await Promise.all([
       createResearchSnapshot(prisma, {
         organisationId: params.organisationId,
         subjectType: "LEAD",
@@ -102,6 +115,8 @@ export async function generateDraft(params: GenerateDraftParams) {
     websiteText: pageText?.text,
     customInstructions,
     bookingLink,
+    generationSystemPromptOverride,
+    reviewSystemPromptOverride,
   });
 
   return prisma.emailDraft.create({
@@ -132,11 +147,16 @@ export async function rewriteDraft(params: RewriteDraftParams) {
     throw new Error("Draft does not belong to this organisation.");
   }
 
+  const organisation = await prisma.organisation.findUniqueOrThrow({
+    where: { id: params.organisationId },
+  });
+
   const generator = getAiEmailGenerator();
   const rewritten = await rewriteEmail(generator, {
     style: params.style,
     subject: original.subject,
     body: original.body,
+    rewriteSystemPromptOverride: organisation.rewriteSystemPrompt ?? undefined,
   });
 
   return prisma.emailDraft.create({

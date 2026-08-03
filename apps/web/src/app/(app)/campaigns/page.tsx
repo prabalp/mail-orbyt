@@ -39,6 +39,7 @@ export default function CampaignsPage(): React.ReactElement {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/organisations/${organisationId}/campaigns`);
@@ -70,6 +71,28 @@ export default function CampaignsPage(): React.ReactElement {
       }
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDelete(campaign: Campaign) {
+    const confirmed = window.confirm(
+      `Delete "${campaign.name}"? This stops all sending and removes it from this list.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(campaign.id);
+    try {
+      const response = await fetch(`/api/organisations/${organisationId}/campaigns/${campaign.id}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        toast.show("Campaign deleted", "success");
+        await load();
+      } else {
+        toast.show("Could not delete campaign", "error");
+      }
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -105,6 +128,19 @@ export default function CampaignsPage(): React.ReactElement {
                 header: "Status",
                 render: (campaign: Campaign) => (
                   <Badge tone={STATUS_TONE[campaign.status]}>{campaign.status}</Badge>
+                ),
+              },
+              {
+                key: "actions",
+                header: "",
+                render: (campaign: Campaign) => (
+                  <Button
+                    variant="text"
+                    loading={deletingId === campaign.id}
+                    onClick={() => handleDelete(campaign)}
+                  >
+                    Delete
+                  </Button>
                 ),
               },
             ]}

@@ -4,6 +4,9 @@ import {
   buildGenerateEmailPrompt,
   buildReviewEmailPrompt,
   buildRewriteEmailPrompt,
+  DEFAULT_GENERATION_SYSTEM_PROMPT,
+  DEFAULT_REVIEW_SYSTEM_PROMPT,
+  DEFAULT_REWRITE_SYSTEM_PROMPT,
 } from "./prompt";
 import type { GenerateEmailInput } from "./types";
 
@@ -72,6 +75,12 @@ describe("buildGenerateEmailPrompt", () => {
     expect(system).toMatch(/blank line/i);
   });
 
+  it("system prompt requires an opening greeting", () => {
+    const { system } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(system).toMatch(/always start the body with a short greeting/i);
+    expect(system).toMatch(/hi \{firstname\}/i);
+  });
+
   it("system prompt requires a professional, non-clickbait subject line", () => {
     const { system } = buildGenerateEmailPrompt(BASE_INPUT);
     expect(system).toMatch(/clickbait/i);
@@ -115,6 +124,22 @@ describe("buildGenerateEmailPrompt", () => {
     expect(system).toContain("Always sign off with 'Cheers,'");
     expect(system).toMatch(/never overridden by this section/i);
   });
+
+  it("uses the default generation system prompt when no override is given", () => {
+    const { system } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(system).toBe(DEFAULT_GENERATION_SYSTEM_PROMPT);
+  });
+
+  it("uses a custom generationSystemPromptOverride as the base instead of the default", () => {
+    const { system } = buildGenerateEmailPrompt({
+      ...BASE_INPUT,
+      generationSystemPromptOverride: "Custom base rules only.",
+      customInstructions: "Extra tone guidance.",
+    });
+    expect(system).toContain("Custom base rules only.");
+    expect(system).toContain("Extra tone guidance.");
+    expect(system).not.toContain(DEFAULT_GENERATION_SYSTEM_PROMPT);
+  });
 });
 
 describe("buildRewriteEmailPrompt", () => {
@@ -137,6 +162,21 @@ describe("buildRewriteEmailPrompt", () => {
     });
     expect(system).toMatch(/preserve it exactly/i);
   });
+
+  it("uses the default system prompt when no override is given", () => {
+    const { system } = buildRewriteEmailPrompt({ style: "SHORTER", subject: "Hi", body: "Body" });
+    expect(system).toBe(DEFAULT_REWRITE_SYSTEM_PROMPT);
+  });
+
+  it("uses a custom rewriteSystemPromptOverride instead of the default when given", () => {
+    const { system } = buildRewriteEmailPrompt({
+      style: "SHORTER",
+      subject: "Hi",
+      body: "Body",
+      rewriteSystemPromptOverride: "Custom rewrite rules only.",
+    });
+    expect(system).toBe("Custom rewrite rules only.");
+  });
 });
 
 describe("buildReviewEmailPrompt", () => {
@@ -153,5 +193,21 @@ describe("buildReviewEmailPrompt", () => {
     const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" });
     expect(system).toMatch(/do not add, remove, or change any factual claim/i);
     expect(system).toMatch(/leave it byte-for-byte identical/i);
+  });
+
+  it("checks for a missing opening greeting without inventing a name", () => {
+    const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" });
+    expect(system).toMatch(/opens with a greeting line/i);
+    expect(system).toMatch(/do not invent a name/i);
+  });
+
+  it("uses the default review system prompt when no override is given", () => {
+    const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" });
+    expect(system).toBe(DEFAULT_REVIEW_SYSTEM_PROMPT);
+  });
+
+  it("uses a custom reviewSystemPromptOverride instead of the default when given", () => {
+    const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" }, "Custom review rules.");
+    expect(system).toBe("Custom review rules.");
   });
 });

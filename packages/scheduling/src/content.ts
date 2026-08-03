@@ -48,6 +48,9 @@ export interface MaterializeContentParams {
   bookingLink?: string;
   /** The sending inbox's configured default signature, if any — see resolveDefaultSignatureText in @mail-orbyt/gmail. Falls back to a plain "Best,\n{senderName}" line when omitted. */
   signatureText?: string;
+  /** Org-configurable full overrides of the generation/review system prompts (Settings) — see @mail-orbyt/email-generation's DEFAULT_GENERATION_SYSTEM_PROMPT/DEFAULT_REVIEW_SYSTEM_PROMPT. */
+  generationSystemPromptOverride?: string;
+  reviewSystemPromptOverride?: string;
 }
 
 /** Produces the subject/body for a step's send — either a manual template with {{firstName}}-style merge tokens, or an AI-generated email built from the lead's current research snapshot. Never both. */
@@ -96,5 +99,7 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
     customInstructions: params.customInstructions,
     bookingLink: params.bookingLink,
     signatureText: params.signatureText,
+    generationSystemPromptOverride: params.generationSystemPromptOverride,
+    reviewSystemPromptOverride: params.reviewSystemPromptOverride,
   });
 }

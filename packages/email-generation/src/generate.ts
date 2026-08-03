@@ -91,9 +91,10 @@ async function reviewEmail(
   generator: AiEmailGenerator,
   output: GeneratedEmail,
   facts: { category: string; value: string; sourceUrl: string }[],
+  reviewSystemPromptOverride: string | undefined,
 ): Promise<GeneratedEmail> {
   try {
-    const reviewed = await generator.complete(buildReviewEmailPrompt(output));
+    const reviewed = await generator.complete(buildReviewEmailPrompt(output, reviewSystemPromptOverride));
     assertValidGeneratedEmail(reviewed, facts);
     return reviewed;
   } catch {
@@ -116,7 +117,12 @@ export async function generateEmail(
 
   const prompt = buildGenerateEmailPrompt(parsed);
   const output = await completeWithValidation(generator, prompt, parsed.facts);
-  const reviewed = await reviewEmail(generator, output, parsed.facts);
+  const reviewed = await reviewEmail(
+    generator,
+    output,
+    parsed.facts,
+    parsed.reviewSystemPromptOverride,
+  );
   const signatureText = parsed.signatureText ?? `Best,\n${parsed.senderName}`;
   return applySignature(applyBookingLink(reviewed, parsed.bookingLink), signatureText);
 }

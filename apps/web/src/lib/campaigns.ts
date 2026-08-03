@@ -128,7 +128,14 @@ async function getSenderContext(organisationId: string) {
   const organisation = await prisma.organisation.findUniqueOrThrow({
     where: { id: organisationId },
   });
-  return { senderName: organisation.name, senderCompanyName: organisation.name };
+  return {
+    senderName: organisation.name,
+    senderCompanyName: organisation.name,
+    customInstructions: organisation.emailPromptInstructions ?? undefined,
+    bookingLink: organisation.calendlyUrl ?? undefined,
+    generationSystemPromptOverride: organisation.generationSystemPrompt ?? undefined,
+    reviewSystemPromptOverride: organisation.reviewSystemPrompt ?? undefined,
+  };
 }
 
 /**
@@ -216,7 +223,10 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     if (!isAiConfigured()) {
       throw new Error("This step uses AI generation, but no AI provider is configured.");
     }
-    const [{ senderCompanyName }, signatureText] = await Promise.all([
+    const [
+      { senderCompanyName, customInstructions, bookingLink, generationSystemPromptOverride, reviewSystemPromptOverride },
+      signatureText,
+    ] = await Promise.all([
       getSenderContext(organisationId),
       resolveDefaultSignatureText(prisma, inbox.id),
     ]);
@@ -227,6 +237,10 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
       callToAction: step.callToActionOverride ?? "connect and learn more about your priorities",
       facts: [],
       signatureText,
+      customInstructions,
+      bookingLink,
+      generationSystemPromptOverride,
+      reviewSystemPromptOverride,
     });
     subject = generated.subject;
     body = generated.body;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Badge,
@@ -14,8 +14,34 @@ import {
   TimePicker,
   useToast,
 } from "@mail-orbyt/design-system";
-import { ListOrdered, Mails } from "lucide-react";
+import { ChevronDown, ChevronRight, ListOrdered, Mails } from "lucide-react";
 import { useOrganisation } from "../../organisation-context";
+
+function CollapsibleCard({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+        aria-expanded={open}
+      >
+        <h3 className="text-sm font-medium text-on-surface-variant">{title}</h3>
+        {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+      </button>
+      {open ? <div className="mt-4">{children}</div> : null}
+    </Card>
+  );
+}
 
 const DAYS_OF_WEEK: { value: number; label: string }[] = [
   { value: 0, label: "Sun" },
@@ -115,12 +141,14 @@ interface LeadSearchResult {
 export default function CampaignDetailPage(): React.ReactElement {
   const { campaignId } = useParams<{ campaignId: string }>();
   const { organisationId } = useOrganisation();
+  const router = useRouter();
   const toast = useToast();
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [allInboxes, setAllInboxes] = useState<Inbox[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   const [newStepType, setNewStepType] = useState<Step["stepType"]>("INITIAL");
   const [newCallToAction, setNewCallToAction] = useState("book a 15 minute intro call");
@@ -322,6 +350,30 @@ export default function CampaignDetailPage(): React.ReactElement {
     }
   }
 
+  async function handleDeleteCampaign() {
+    if (!campaign) return;
+    const confirmed = window.confirm(
+      `Delete "${campaign.name}"? This stops all sending and removes it from your campaign list. This cannot be undone from the UI.`,
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        toast.show("Campaign deleted", "success");
+        router.push("/campaigns");
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not delete campaign", "error");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function handleSendNow() {
     setSendingNow(true);
     try {
@@ -414,13 +466,15 @@ export default function CampaignDetailPage(): React.ReactElement {
                 handleStatusChange(event.target.value as CampaignDetail["status"])
               }
             />
+            <Button variant="outlined" loading={deleting} onClick={handleDeleteCampaign}>
+              Delete campaign
+            </Button>
           </div>
         }
       />
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-on-surface-variant">Sending schedule</h3>
+      <CollapsibleCard title="Sending schedule">
+        <div className="mb-4 flex justify-end">
           <Button variant="text" onClick={handleUseRecommendedSchedule}>
             Use recommended
           </Button>
@@ -464,10 +518,9 @@ export default function CampaignDetailPage(): React.ReactElement {
             adjust as needed before or after going live.
           </p>
         </div>
-      </Card>
+      </CollapsibleCard>
 
-      <Card>
-        <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Send test email</h3>
+      <CollapsibleCard title="Send test email">
         <p className="mb-4 text-sm text-on-surface-variant">
           Sends this campaign&apos;s first step to 1-2 addresses you control — exactly what a real
           prospect would receive — so you can check formatting, signature, and tone before going
@@ -508,7 +561,7 @@ export default function CampaignDetailPage(): React.ReactElement {
             </div>
           </div>
         ) : null}
-      </Card>
+      </CollapsibleCard>
 
       <Card>
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sequence steps</h3>

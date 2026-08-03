@@ -48,6 +48,10 @@ export const generateEmailInputSchema = z.object({
   bookingLink: z.string().url().optional(),
   /** The full signature block to append deterministically after the AI's body (the model is instructed never to write its own sign-off). Falls back to a plain "Best,\n{senderName}" line if omitted. */
   signatureText: z.string().min(1).optional(),
+  /** Org-configurable full override of the base generation system prompt (Settings). Falls back to DEFAULT_GENERATION_SYSTEM_PROMPT when omitted/blank. */
+  generationSystemPromptOverride: z.string().max(8000).optional(),
+  /** Org-configurable full override of the QA self-review system prompt (Settings). Falls back to DEFAULT_REVIEW_SYSTEM_PROMPT when omitted/blank. */
+  reviewSystemPromptOverride: z.string().max(8000).optional(),
 });
 export type GenerateEmailInput = z.infer<typeof generateEmailInputSchema>;
 
@@ -55,6 +59,8 @@ export const rewriteEmailInputSchema = z.object({
   style: z.enum(REWRITE_STYLES),
   subject: z.string().min(1),
   body: z.string().min(1),
+  /** Org-configurable full override of the rewrite system prompt (Settings). Falls back to DEFAULT_REWRITE_SYSTEM_PROMPT when omitted/blank. */
+  rewriteSystemPromptOverride: z.string().max(8000).optional(),
 });
 export type RewriteEmailInput = z.infer<typeof rewriteEmailInputSchema>;
 

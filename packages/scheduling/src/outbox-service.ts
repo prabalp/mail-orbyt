@@ -60,6 +60,8 @@ export interface ProcessOutboxItemDeps {
     senderCompanyName: string;
     customInstructions?: string;
     bookingLink?: string;
+    generationSystemPromptOverride?: string;
+    reviewSystemPromptOverride?: string;
   }>;
   emergencyStop: boolean;
   now?: Date;
@@ -148,11 +150,13 @@ export async function processOutboxItem(
       }
     }
 
-    const [{ senderCompanyName, customInstructions, bookingLink }, signatureText] =
-      await Promise.all([
-        deps.getSenderContext(item.organisationId),
-        resolveDefaultSignatureText(prisma, inbox.id),
-      ]);
+    const [
+      { senderCompanyName, customInstructions, bookingLink, generationSystemPromptOverride, reviewSystemPromptOverride },
+      signatureText,
+    ] = await Promise.all([
+      deps.getSenderContext(item.organisationId),
+      resolveDefaultSignatureText(prisma, inbox.id),
+    ]);
     const generated = await materializeStepContent(prisma, {
       organisationId: item.organisationId,
       lead: item.lead,
@@ -164,6 +168,8 @@ export async function processOutboxItem(
       customInstructions,
       bookingLink,
       signatureText,
+      generationSystemPromptOverride,
+      reviewSystemPromptOverride,
     });
     subject = generated.subject;
     body = generated.body;

@@ -8,6 +8,12 @@ export interface EmailTemplateClientProps {
   canManage: boolean;
   emailPromptInstructions: string;
   calendlyUrl: string;
+  generationSystemPrompt: string;
+  reviewSystemPrompt: string;
+  rewriteSystemPrompt: string;
+  defaultGenerationSystemPrompt: string;
+  defaultReviewSystemPrompt: string;
+  defaultRewriteSystemPrompt: string;
 }
 
 export function EmailTemplateClient({
@@ -15,10 +21,19 @@ export function EmailTemplateClient({
   canManage,
   emailPromptInstructions,
   calendlyUrl,
+  generationSystemPrompt,
+  reviewSystemPrompt,
+  rewriteSystemPrompt,
+  defaultGenerationSystemPrompt,
+  defaultReviewSystemPrompt,
+  defaultRewriteSystemPrompt,
 }: EmailTemplateClientProps): React.ReactElement {
   const toast = useToast();
   const [instructions, setInstructions] = useState(emailPromptInstructions);
   const [link, setLink] = useState(calendlyUrl);
+  const [generationPrompt, setGenerationPrompt] = useState(generationSystemPrompt);
+  const [reviewPrompt, setReviewPrompt] = useState(reviewSystemPrompt);
+  const [rewritePrompt, setRewritePrompt] = useState(rewriteSystemPrompt);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<{ system: string; user: string } | null>(null);
@@ -31,7 +46,13 @@ export function EmailTemplateClient({
       const response = await fetch(`/api/organisations/${organisationId}/settings/email-template`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailPromptInstructions: instructions, calendlyUrl: link }),
+        body: JSON.stringify({
+          emailPromptInstructions: instructions,
+          calendlyUrl: link,
+          generationSystemPrompt: generationPrompt,
+          reviewSystemPrompt: reviewPrompt,
+          rewriteSystemPrompt: rewritePrompt,
+        }),
       });
       if (response.ok) {
         toast.show("Email template settings saved", "success");
@@ -52,7 +73,11 @@ export function EmailTemplateClient({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customInstructions: instructions, calendlyUrl: link }),
+          body: JSON.stringify({
+            customInstructions: instructions,
+            calendlyUrl: link,
+            generationSystemPrompt: generationPrompt,
+          }),
         },
       );
       if (response.ok) {
@@ -93,6 +118,91 @@ export function EmailTemplateClient({
           disabled={!canManage}
           placeholder="https://calendly.com/your-name/intro-call"
         />
+
+        <div className="flex flex-col gap-4 border-t border-outline/20 pt-4">
+          <div>
+            <h3 className="text-sm font-medium text-on-surface">System prompts</h3>
+            <p className="text-xs text-on-surface-variant">
+              These are the exact instructions sent to the AI for each step. Editing them replaces
+              the built-in safety rules (never invent facts, no real URLs, plain-text formatting,
+              etc.) entirely — if you loosen or remove those, generated emails may start failing
+              the app&apos;s automatic fact/URL validation instead of sending. &quot;Reset to
+              default&quot; restores the original, tested wording.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-on-surface-variant">
+                Generation system prompt
+              </span>
+              <Button
+                variant="text"
+                disabled={!canManage}
+                onClick={() => setGenerationPrompt(defaultGenerationSystemPrompt)}
+              >
+                Reset to default
+              </Button>
+            </div>
+            <TextArea
+              label="Generation system prompt"
+              hideLabel
+              rows={10}
+              value={generationPrompt}
+              onChange={(e) => setGenerationPrompt(e.target.value)}
+              disabled={!canManage}
+              helperText="Used every time the AI drafts a new email (first email, follow-up, or close-the-loop)."
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-on-surface-variant">
+                QA review system prompt
+              </span>
+              <Button
+                variant="text"
+                disabled={!canManage}
+                onClick={() => setReviewPrompt(defaultReviewSystemPrompt)}
+              >
+                Reset to default
+              </Button>
+            </div>
+            <TextArea
+              label="QA review system prompt"
+              hideLabel
+              rows={10}
+              value={reviewPrompt}
+              onChange={(e) => setReviewPrompt(e.target.value)}
+              disabled={!canManage}
+              helperText="Used for the automatic self-review pass that checks grammar, tone, and formatting before every generated email is finalized."
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-on-surface-variant">
+                Rewrite system prompt
+              </span>
+              <Button
+                variant="text"
+                disabled={!canManage}
+                onClick={() => setRewritePrompt(defaultRewriteSystemPrompt)}
+              >
+                Reset to default
+              </Button>
+            </div>
+            <TextArea
+              label="Rewrite system prompt"
+              hideLabel
+              rows={10}
+              value={rewritePrompt}
+              onChange={(e) => setRewritePrompt(e.target.value)}
+              disabled={!canManage}
+              helperText="Used when a user asks the AI to rewrite an existing draft (shorter, more formal, more direct)."
+            />
+          </div>
+        </div>
 
         {canManage ? (
           <div className="flex gap-2">

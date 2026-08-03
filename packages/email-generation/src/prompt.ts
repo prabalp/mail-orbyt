@@ -6,7 +6,13 @@ export const BOOKING_LINK_PLACEHOLDER = "[[BOOKING_LINK]]";
 /** Prompt-injection surface control: the website-text block is capped here regardless of how much the caller passes in (types.ts's schema cap is a looser outer bound). */
 const WEBSITE_TEXT_PROMPT_CHARS = 2000;
 
-const SYSTEM_PREAMBLE = `You write short, personalized outbound sales emails.
+/**
+ * The default generation system prompt — organisations can override this
+ * entirely in Settings (Organisation.generationSystemPrompt); a null/empty
+ * override falls back to this constant. Exported so the Settings UI can
+ * pre-fill the editor and offer "reset to default".
+ */
+export const DEFAULT_GENERATION_SYSTEM_PROMPT = `You write short, personalized outbound sales emails.
 
 Hard rules — never break these:
 1. Use ONLY the facts explicitly provided to you below. Never invent, assume, guess, or infer any fact about the recipient, their company, or anything else not given to you.
@@ -18,11 +24,12 @@ Hard rules — never break these:
 7. Do not make promises, guarantees, discounts, or claims on the sender's behalf that were not given to you.
 8. End the email in a way that supports the stated call-to-action, without being pushy.
 9. Do not write any closing sign-off, "Best,"/"Thanks," line, or signature block of any kind — one will be appended automatically after your response. The body should end right after the last content paragraph.
-10. The subject line must be professional, specific to the stated call-to-action, and roughly 30-55 characters. Never use ALL CAPS, exclamation marks, emoji, or spam-trigger words ("free", "guarantee", "act now", "limited time"). It should read as something a busy professional would plausibly open — clear and credible, never clickbait.`;
+10. The subject line must be professional, specific to the stated call-to-action, and roughly 30-55 characters. Never use ALL CAPS, exclamation marks, emoji, or spam-trigger words ("free", "guarantee", "act now", "limited time"). It should read as something a busy professional would plausibly open — clear and credible, never clickbait.
+11. Always start the body with a short greeting on its own line, followed by a blank line, before the first paragraph: "Hi {firstName}," if a recipient first name is given in "Recipient:" below, otherwise a generic "Hi there,". Never skip this opening greeting and never invent a name that wasn't given to you.`;
 
-function buildSystemPrompt(customInstructions?: string): string {
-  if (!customInstructions) return SYSTEM_PREAMBLE;
-  return `${SYSTEM_PREAMBLE}
+function buildSystemPrompt(basePrompt: string, customInstructions?: string): string {
+  if (!customInstructions) return basePrompt;
+  return `${basePrompt}
 
 Additional organisation style guidance (tone/voice preferences only — the hard rules above always take priority and are never overridden by this section):
 ${customInstructions}`;
@@ -87,7 +94,8 @@ export function buildGenerateEmailPrompt(input: GenerateEmailInput): {
     lines.push("", "This is the FIRST email in the sequence to this recipient.");
   }
 
-  return { system: buildSystemPrompt(input.customInstructions), user: lines.join("\n") };
+  const base = input.generationSystemPromptOverride?.trim() || DEFAULT_GENERATION_SYSTEM_PROMPT;
+  return { system: buildSystemPrompt(base, input.customInstructions), user: lines.join("\n") };
 }
 
 const REWRITE_INSTRUCTIONS: Record<RewriteEmailInput["style"], string> = {
@@ -99,13 +107,16 @@ const REWRITE_INSTRUCTIONS: Record<RewriteEmailInput["style"], string> = {
     "Rewrite this email to be more direct and to the point — lead with the ask, cut any hedging or throat-clearing.",
 };
 
+/** The default rewrite system prompt — see DEFAULT_GENERATION_SYSTEM_PROMPT for the override mechanism (Organisation.rewriteSystemPrompt). */
+export const DEFAULT_REWRITE_SYSTEM_PROMPT = `${DEFAULT_GENERATION_SYSTEM_PROMPT}
+
+You are REWRITING an existing email, not writing a new one. Do not add any new factual claim, statistic, name, or detail that isn't already present in the original email. Only adjust tone, length, and structure as instructed. Rule 9 above means don't ADD a new closing/signature — but if the original body already ends with a sign-off or signature block, preserve it exactly, unchanged, in the same position.`;
+
 export function buildRewriteEmailPrompt(input: RewriteEmailInput): {
   system: string;
   user: string;
 } {
-  const system = `${SYSTEM_PREAMBLE}
-
-You are REWRITING an existing email, not writing a new one. Do not add any new factual claim, statistic, name, or detail that isn't already present in the original email. Only adjust tone, length, and structure as instructed. Rule 9 above means don't ADD a new closing/signature — but if the original body already ends with a sign-off or signature block, preserve it exactly, unchanged, in the same position.`;
+  const system = input.rewriteSystemPromptOverride?.trim() || DEFAULT_REWRITE_SYSTEM_PROMPT;
 
   const user = [
     REWRITE_INSTRUCTIONS[input.style],
@@ -117,11 +128,13 @@ You are REWRITING an existing email, not writing a new one. Do not add any new f
   return { system, user };
 }
 
-const REVIEW_SYSTEM_PROMPT = `You are QA-reviewing an outbound sales email draft immediately before it is sent, catching anything that would look unprofessional or poorly formatted to the recipient.
+/** The default QA review system prompt — see DEFAULT_GENERATION_SYSTEM_PROMPT for the override mechanism (Organisation.reviewSystemPrompt). */
+export const DEFAULT_REVIEW_SYSTEM_PROMPT = `You are QA-reviewing an outbound sales email draft immediately before it is sent, catching anything that would look unprofessional or poorly formatted to the recipient.
 
 Check for:
 - Grammar, spelling, and punctuation errors.
 - A professional, natural tone throughout.
+- The body opens with a greeting line ("Hi {name}," or "Hi there,") followed by a blank line before the first paragraph. If the greeting is missing entirely, add a generic "Hi there," greeting — do not invent a name that isn't already present elsewhere in the draft.
 - Clean paragraph structure: 2-4 short paragraphs, each separated from the next by one fully blank line ("\\n\\n"). If the body is a single run-on block of text or paragraphs aren't clearly separated, break it up.
 - A subject line that is professional, specific, not clickbait, roughly 30-55 characters, with no ALL CAPS/exclamation marks/emoji/spam words.
 
@@ -134,7 +147,10 @@ Hard constraints — never violate these while "fixing" the draft:
 If the draft already meets all the checks above, return it completely unchanged. Otherwise, return a corrected version that fixes only the formatting/grammar/tone issues found.`;
 
 /** Builds the QA self-review pass prompt — see reviewEmail() in generate.ts for how the result is validated and applied. */
-export function buildReviewEmailPrompt(output: GeneratedEmail): { system: string; user: string } {
+export function buildReviewEmailPrompt(
+  output: GeneratedEmail,
+  reviewSystemPromptOverride?: string,
+): { system: string; user: string } {
   const user = [`Subject: ${output.subject}`, "", `Body:\n${output.body}`].join("\n");
-  return { system: REVIEW_SYSTEM_PROMPT, user };
+  return { system: reviewSystemPromptOverride?.trim() || DEFAULT_REVIEW_SYSTEM_PROMPT, user };
 }

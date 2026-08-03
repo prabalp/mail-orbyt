@@ -23,4 +23,11 @@ export {
 export type { AiEmailGenerator } from "./client";
 export { generateEmail, rewriteEmail, GeneratedEmailValidationError } from "./generate";
 export { validateGeneratedEmail, assertValidGeneratedEmail } from "./validator";
-export { buildGenerateEmailPrompt, buildRewriteEmailPrompt } from "./prompt";
+export {
+  buildGenerateEmailPrompt,
+  buildRewriteEmailPrompt,
+  buildReviewEmailPrompt,
+  DEFAULT_GENERATION_SYSTEM_PROMPT,
+  DEFAULT_REVIEW_SYSTEM_PROMPT,
+  DEFAULT_REWRITE_SYSTEM_PROMPT,
+} from "./prompt";

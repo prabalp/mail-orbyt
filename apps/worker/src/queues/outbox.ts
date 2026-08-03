@@ -17,6 +17,8 @@ async function getSenderContext(prisma: PrismaClient, organisationId: string) {
     senderCompanyName: organisation.name,
     customInstructions: organisation.emailPromptInstructions ?? undefined,
     bookingLink: organisation.calendlyUrl ?? undefined,
+    generationSystemPromptOverride: organisation.generationSystemPrompt ?? undefined,
+    reviewSystemPromptOverride: organisation.reviewSystemPrompt ?? undefined,
   };
 }
 

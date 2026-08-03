@@ -167,6 +167,15 @@ model Organisation {
   /// Booking link embedded verbatim (via deterministic substitution, never
   /// model-generated) into every AI-drafted email's call to action.
   calendlyUrl             String?
+  /// Full override of the base system prompt sent to the model for each AI
+  /// step, editable in Settings. Null means "use the package default" (see
+  /// DEFAULT_GENERATION_SYSTEM_PROMPT / DEFAULT_REVIEW_SYSTEM_PROMPT /
+  /// DEFAULT_REWRITE_SYSTEM_PROMPT in packages/email-generation/src/prompt.ts).
+  /// emailPromptInstructions above is still appended on top of whichever
+  /// generation prompt (default or override) is active.
+  generationSystemPrompt String? @db.Text
+  reviewSystemPrompt     String? @db.Text
+  rewriteSystemPrompt    String? @db.Text
 
   memberships        OrganisationMembership[]
   invitations        Invitation[]
