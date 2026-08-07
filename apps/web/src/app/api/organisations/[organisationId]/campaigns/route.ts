@@ -16,6 +16,7 @@ const createSchema = z.object({
   sendingDaysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
   sendingWindowStartMinute: z.number().int().min(0).max(1439).optional(),
   sendingWindowEndMinute: z.number().int().min(0).max(1439).optional(),
+  inboxCooldownMinutes: z.number().int().min(0).max(180).optional(),
 });
 
 export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {

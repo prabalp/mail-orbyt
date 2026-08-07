@@ -918,6 +918,13 @@ model Inbox {
   provider              InboxProvider @default(GOOGLE)
   status                InboxStatus   @default(CONNECTED)
   dailySendLimit        Int           @default(30)
+  /// Set when this inbox reserves its next send slot, to the moment it may
+  /// send again (last claim + the campaign's inboxCooldownMinutes). Lives on
+  /// the inbox rather than the campaign because the throttle protects the
+  /// INBOX's reputation — an inbox in two campaigns is still one mailbox —
+  /// and because a conditional UPDATE on this column is what makes the
+  /// claim atomic across concurrent outbox workers. Null means never sent.
+  sendCooldownUntil     DateTime?
   encryptedAccessToken  String
   encryptedRefreshToken String
   tokenExpiresAt        DateTime
@@ -1017,6 +1024,11 @@ model Campaign {
   sendingDaysOfWeek        Int[]          @default([1, 2, 3, 4, 5])
   sendingWindowStartMinute Int            @default(540)
   sendingWindowEndMinute   Int            @default(1020)
+  /// Minimum gap between two sends from the SAME inbox, for inbox health —
+  /// without it a whole batch of due items leaves one mailbox in seconds,
+  /// which is what spam filters look for. Enforced per inbox, so a pool of
+  /// N inboxes still sends N emails concurrently. 0 disables the throttle.
+  inboxCooldownMinutes     Int            @default(3)
   createdByUserId          String
 
   organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)

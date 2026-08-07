@@ -175,6 +175,11 @@ export async function sendCampaignNow(organisationId: string, campaignId: string
     sent: results.filter((r) => r?.status === "SENT").length,
     failed: results.filter((r) => r?.status === "FAILED").length,
     skipped: results.filter((r) => r?.status?.startsWith("SKIPPED")).length,
+    // Still SCHEDULED after processing: waiting on the campaign's per-inbox
+    // cooldown (or an exhausted pool). Reported explicitly because otherwise
+    // these items appear in `considered` and nowhere else, which reads like
+    // sends vanishing rather than the throttle doing its job.
+    deferred: results.filter((r) => r?.status === "SCHEDULED").length,
   };
 }
 

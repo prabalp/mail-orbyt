@@ -57,7 +57,14 @@ const RECOMMENDED_SCHEDULE = {
   sendingDaysOfWeek: [1, 2, 3, 4, 5],
   startMinute: 9 * 60,
   endMinute: 17 * 60,
+  inboxCooldownMinutes: 3,
 };
+
+/** Per-inbox gap options. Off is offered because a one-off internal blast is a legitimate (if unhealthy) choice. */
+const COOLDOWN_OPTIONS = [0, 1, 2, 3, 5, 10, 15, 30, 60].map((minutes) => ({
+  value: String(minutes),
+  label: minutes === 0 ? "Off — send as fast as possible" : `${minutes} min`,
+}));
 
 const COMMON_TIMEZONES = [
   "UTC",
@@ -123,6 +130,7 @@ interface CampaignDetail {
   sendingDaysOfWeek: number[];
   sendingWindowStartMinute: number;
   sendingWindowEndMinute: number;
+  inboxCooldownMinutes: number;
 }
 
 interface Enrollment {
@@ -163,9 +171,14 @@ export default function CampaignDetailPage(): React.ReactElement {
   const [scheduleDays, setScheduleDays] = useState<Set<number>>(
     new Set(RECOMMENDED_SCHEDULE.sendingDaysOfWeek),
   );
-  const [scheduleStart, setScheduleStart] = useState(minutesToTime(RECOMMENDED_SCHEDULE.startMinute));
+  const [scheduleStart, setScheduleStart] = useState(
+    minutesToTime(RECOMMENDED_SCHEDULE.startMinute),
+  );
   const [scheduleEnd, setScheduleEnd] = useState(minutesToTime(RECOMMENDED_SCHEDULE.endMinute));
   const [scheduleTimezone, setScheduleTimezone] = useState(recommendedTimezone());
+  const [scheduleCooldown, setScheduleCooldown] = useState(
+    String(RECOMMENDED_SCHEDULE.inboxCooldownMinutes),
+  );
   const [savingSchedule, setSavingSchedule] = useState(false);
   const scheduleInitialized = useRef(false);
 
@@ -201,6 +214,7 @@ export default function CampaignDetailPage(): React.ReactElement {
     setScheduleStart(minutesToTime(campaign.sendingWindowStartMinute));
     setScheduleEnd(minutesToTime(campaign.sendingWindowEndMinute));
     setScheduleTimezone(campaign.timezone);
+    setScheduleCooldown(String(campaign.inboxCooldownMinutes));
   }, [campaign]);
 
   function handleUseRecommendedSchedule() {
@@ -208,6 +222,7 @@ export default function CampaignDetailPage(): React.ReactElement {
     setScheduleStart(minutesToTime(RECOMMENDED_SCHEDULE.startMinute));
     setScheduleEnd(minutesToTime(RECOMMENDED_SCHEDULE.endMinute));
     setScheduleTimezone(recommendedTimezone());
+    setScheduleCooldown(String(RECOMMENDED_SCHEDULE.inboxCooldownMinutes));
   }
 
   async function handleSaveSchedule() {
@@ -221,6 +236,7 @@ export default function CampaignDetailPage(): React.ReactElement {
           sendingDaysOfWeek: [...scheduleDays].sort((a, b) => a - b),
           sendingWindowStartMinute: timeToMinutes(scheduleStart),
           sendingWindowEndMinute: timeToMinutes(scheduleEnd),
+          inboxCooldownMinutes: Number(scheduleCooldown),
         }),
       });
       if (response.ok) {
@@ -384,7 +400,7 @@ export default function CampaignDetailPage(): React.ReactElement {
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
         toast.show(
-          `Considered ${data.considered}, sent ${data.sent}, failed ${data.failed}, skipped ${data.skipped}`,
+          `Considered ${data.considered}, sent ${data.sent}, failed ${data.failed}, skipped ${data.skipped}, waiting on inbox cooldown ${data.deferred}`,
           data.failed ? "error" : "success",
         );
         await load();
@@ -500,22 +516,42 @@ export default function CampaignDetailPage(): React.ReactElement {
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
-            <TimePicker label="Start" value={scheduleStart} onChange={(v) => setScheduleStart(v ?? scheduleStart)} />
-            <TimePicker label="End" value={scheduleEnd} onChange={(v) => setScheduleEnd(v ?? scheduleEnd)} />
+            <TimePicker
+              label="Start"
+              value={scheduleStart}
+              onChange={(v) => setScheduleStart(v ?? scheduleStart)}
+            />
+            <TimePicker
+              label="End"
+              value={scheduleEnd}
+              onChange={(v) => setScheduleEnd(v ?? scheduleEnd)}
+            />
             <Select
               label="Timezone"
               value={scheduleTimezone}
               options={COMMON_TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
               onChange={(event) => setScheduleTimezone(event.target.value)}
             />
+            <Select
+              label="Gap between sends (per inbox)"
+              value={scheduleCooldown}
+              options={COOLDOWN_OPTIONS}
+              onChange={(event) => setScheduleCooldown(event.target.value)}
+            />
             <Button loading={savingSchedule} onClick={handleSaveSchedule}>
               Save schedule
             </Button>
           </div>
           <p className="text-sm text-on-surface-variant">
-            Emails for this campaign only send on the selected days, within this time window, in
-            the chosen timezone. Recommended default: weekdays, 9:00–17:00, your local timezone —
-            adjust as needed before or after going live.
+            Emails for this campaign only send on the selected days, within this time window, in the
+            chosen timezone. Recommended default: weekdays, 9:00–17:00, your local timezone — adjust
+            as needed before or after going live.
+          </p>
+          <p className="text-sm text-on-surface-variant">
+            The gap applies to each inbox separately — one inbox waits that long between its own
+            emails instead of sending a whole batch at once, which is what mailbox providers treat
+            as spam. Inboxes don&apos;t wait on each other: with three inboxes in the pool and a 3
+            min gap, roughly three emails go out every 3 minutes, one from each.
           </p>
         </div>
       </CollapsibleCard>
@@ -549,7 +585,7 @@ export default function CampaignDetailPage(): React.ReactElement {
             <div className="flex flex-wrap items-center gap-2">
               {testResult.results.map((result) => (
                 <Badge key={result.email} tone={result.ok ? "success" : "error"}>
-                  {result.email}: {result.ok ? "sent" : result.error ?? "failed"}
+                  {result.email}: {result.ok ? "sent" : (result.error ?? "failed")}
                 </Badge>
               ))}
             </div>

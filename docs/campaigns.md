@@ -10,8 +10,10 @@ scheduler/outbox is what will actually pick up enrollments and send.
 
 - **Campaign** — name, status, timezone, and a sending window
   (`sendingDaysOfWeek`, `sendingWindowStartMinute/EndMinute` in minutes since
-  midnight, in the campaign's own timezone). Phase 8's scheduler owns
-  converting these into actual send times.
+  midnight, in the campaign's own timezone), plus `inboxCooldownMinutes` —
+  the minimum gap between two sends from the same inbox. Phase 8's scheduler
+  owns converting all of these into actual send times; see
+  docs/scheduling-sending.md for how the per-inbox throttle is enforced.
 - **CampaignStep** — one step in the sequence, ordered by `orderIndex`
   (kept contiguous — see below), typed `INITIAL`/`FOLLOW_UP`/
   `CLOSE_THE_LOOP`, with `delayDays` since the previous step. Each step is

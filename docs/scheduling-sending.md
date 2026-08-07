@@ -49,6 +49,47 @@ round-robin rotation without a separate cursor. If every inbox in the pool
 is disconnected or at its daily limit, the item is deferred (rescheduled
 +1h) rather than forced through an over-limit inbox.
 
+## Per-inbox send cooldown
+
+Without a throttle, a tick that finds 200 due items hands them all to the
+outbox workers at once and one mailbox emits 200 emails in under a minute —
+the single clearest spam signal a provider can see. `Campaign.inboxCooldownMinutes`
+(default 3, configurable per campaign alongside the sending window, `0`
+disables it) is the minimum gap between two sends **from the same inbox**.
+It is deliberately per inbox and not per campaign: with three inboxes in the
+pool and a 3-minute cooldown, three emails still go out at the same instant
+— one from each — they just can't each go twice. Throughput scales with the
+number of mailboxes, which is also how the reputation risk actually scales.
+
+The state lives on `Inbox.sendCooldownUntil` rather than being derived from
+the last `OutboxItem.sentAt`, for two reasons:
+
+- **It's a property of the mailbox, not the campaign.** An inbox shared by
+  two campaigns is still one mailbox, and one campaign's cooldown must block
+  the other's sends from it.
+- **It makes the claim atomic.** `pickNextInbox` doesn't read-then-check; it
+  _claims_ the slot with a conditional `UPDATE ... WHERE id = ? AND
+(sendCooldownUntil IS NULL OR sendCooldownUntil <= now)` and only uses the
+  inbox if that update matched a row. With four concurrent outbox workers
+  (and multiple worker processes), a read-then-check would let all four
+  through the same open window; a compare-and-set in Postgres produces
+  exactly one winner and the losers move on to the next inbox in the pool.
+
+The claim is written at PICK time, then re-anchored to the actual send time
+by `markInboxSent` once the provider accepts the message — otherwise slow AI
+generation or a slow Gmail call would be spent from inside the inbox's own
+cooldown, making the real gap between two emails shorter than configured. A
+send that fails keeps its claim: a failure may still have reached the
+provider, and the 5-minute retry backoff outlasts a typical cooldown anyway.
+
+An item blocked only by a cooldown isn't retried blindly — `pickNextInbox`
+returns `availableAt` (the earliest moment any under-limit inbox frees up)
+and the item is rescheduled for exactly then, run back through
+`nextSendableTime` in case the wait pushes it past the end of the day's
+window. That's distinct from the +1h deferral, which is for a pool with
+nothing sendable in it at all (empty, all disconnected, or all at their
+daily limit) and therefore no known "available at" moment.
+
 ## Safety checks re-run at send time
 
 Two checks that matter most are re-verified in `processOutboxItem` itself,
@@ -107,9 +148,12 @@ retryable attempt, exactly the expected behavior for an invalid credential.
 
 ## Verification
 
-- **Unit tests**: `packages/scheduling` (31 tests) — sending-window
+- **Unit tests**: `packages/scheduling` (42 tests) — sending-window
   timezone/DST math against real `Intl` behavior, inbox rotation
-  round-robin and limit enforcement, enrollment progression (idempotent
+  round-robin and limit enforcement, the per-inbox cooldown (slot claimed on
+  pick, disabled at `0`, a cooling inbox skipped in favor of a free one,
+  losing a claim race falling through to the next inbox, and never
+  rescheduling into the past), enrollment progression (idempotent
   scheduling, completion when no next step), content materialization
   (merge tokens, AI-not-configured error), and the full
   `processOutboxItem` state machine (no-op on non-SCHEDULED, emergency
@@ -117,11 +161,15 @@ retryable attempt, exactly the expected behavior for an invalid credential.
   `packages/gmail`'s `send-email.test.ts` (2 tests) covers the Gmail send
   API call and RFC 2822/base64url encoding, mocked at the `fetch` boundary.
   `packages/config`'s regression tests for the boolean-coercion bug.
-- **Integration tests** (`tests/integration/outbox.test.ts`, 2 tests): the
+- **Integration tests** (`tests/integration/outbox.test.ts`, 3 tests): the
   full pipeline — campaign, steps, inbox, enrollment — against real
   Postgres, proving a two-step manual sequence sends both steps in order,
   advances and completes the enrollment, and that reprocessing the same
-  `OutboxItem` never double-sends.
+  `OutboxItem` never double-sends. The third test enrolls three leads
+  against a two-inbox pool with a 3-minute cooldown and asserts the shape
+  the throttle is supposed to have: exactly two sends, one per inbox, with
+  the third item deferred to a future `scheduledFor` and no inbox
+  assigned.
 - **Live verification** with a real running worker process against real
   Postgres/Redis: seeded a real campaign/inbox/enrollment, watched the
   scheduler tick pick it up and the outbox worker process it — first

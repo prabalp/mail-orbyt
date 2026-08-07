@@ -3,8 +3,9 @@ import { isSuppressed } from "@mail-orbyt/leads";
 import type { AiEmailGenerator } from "@mail-orbyt/email-generation";
 import { resolveDefaultSignatureText, resolveInboxSenderName } from "@mail-orbyt/gmail";
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
-import { pickNextInbox } from "./inbox-rotation";
+import { markInboxSent, pickNextInbox } from "./inbox-rotation";
 import { materializeStepContent } from "./content";
+import { nextSendableTime } from "./sending-window";
 
 type Prisma = Pick<
   PrismaClient,
@@ -113,11 +114,21 @@ export async function processOutboxItem(
     });
   }
 
-  const inbox = await pickNextInbox(prisma, item.campaignId, deps.now ?? new Date());
+  const now = deps.now ?? new Date();
+  const cooldownMinutes = item.campaign.inboxCooldownMinutes;
+  const selection = await pickNextInbox(prisma, item.campaignId, now, cooldownMinutes);
+  const inbox = selection.inbox;
   if (!inbox) {
+    // A cooldown is a known-short wait, so reschedule for the moment it
+    // lifts (clamped back into the campaign's sending window, in case the
+    // gap pushes past the end of the day). Anything else — no pool, all
+    // disconnected, daily limits reached — has no such known end.
+    const deferUntil = selection.availableAt
+      ? nextSendableTime(item.campaign, selection.availableAt)
+      : new Date(now.getTime() + DEFER_WHEN_NO_INBOX_MS);
     return prisma.outboxItem.update({
       where: { id: item.id },
-      data: { scheduledFor: new Date((deps.now ?? new Date()).getTime() + DEFER_WHEN_NO_INBOX_MS) },
+      data: { scheduledFor: deferUntil },
     });
   }
 
@@ -151,7 +162,13 @@ export async function processOutboxItem(
     }
 
     const [
-      { senderCompanyName, customInstructions, bookingLink, generationSystemPromptOverride, reviewSystemPromptOverride },
+      {
+        senderCompanyName,
+        customInstructions,
+        bookingLink,
+        generationSystemPromptOverride,
+        reviewSystemPromptOverride,
+      },
       signatureText,
     ] = await Promise.all([
       deps.getSenderContext(item.organisationId),
@@ -184,6 +201,15 @@ export async function processOutboxItem(
   try {
     const result = await deps.sendEmail(inbox.id, { to: item.lead.email, subject, body });
     const sentAt = deps.now ?? new Date();
+    // Deliberately swallowed: the email is already gone, so letting this
+    // throw into the catch below would mark a completed send as retryable
+    // and double-send it. The claim pickNextInbox already wrote stands as a
+    // slightly-early approximation if this re-anchoring fails.
+    try {
+      await markInboxSent(prisma, inbox.id, sentAt, cooldownMinutes);
+    } catch {
+      // ignored
+    }
 
     const [updatedItem] = await Promise.all([
       prisma.outboxItem.update({
@@ -204,6 +230,9 @@ export async function processOutboxItem(
     await scheduleNextStepForEnrollment(prisma, item.enrollmentId);
     return updatedItem;
   } catch (error) {
+    // The cooldown claim is intentionally left in place on failure: a failed
+    // send may still have reached the provider, and the retry is RETRY_BACKOFF_MS
+    // out anyway, so the claim expires on its own well before then.
     const attempts = item.attempts + 1;
     const terminal = attempts >= MAX_ATTEMPTS;
     return prisma.outboxItem.update({
@@ -212,9 +241,7 @@ export async function processOutboxItem(
         status: terminal ? "FAILED" : "SCHEDULED",
         attempts,
         lastError: error instanceof Error ? error.message : String(error),
-        scheduledFor: terminal
-          ? item.scheduledFor
-          : new Date((deps.now ?? new Date()).getTime() + RETRY_BACKOFF_MS),
+        scheduledFor: terminal ? item.scheduledFor : new Date(now.getTime() + RETRY_BACKOFF_MS),
       },
     });
   }

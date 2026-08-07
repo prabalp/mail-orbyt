@@ -4,7 +4,11 @@ const isSuppressedMock = vi.fn();
 vi.mock("@mail-orbyt/leads", () => ({ isSuppressed: isSuppressedMock }));
 
 const pickNextInboxMock = vi.fn();
-vi.mock("./inbox-rotation", () => ({ pickNextInbox: pickNextInboxMock }));
+const markInboxSentMock = vi.fn();
+vi.mock("./inbox-rotation", () => ({
+  pickNextInbox: pickNextInboxMock,
+  markInboxSent: markInboxSentMock,
+}));
 
 const scheduleNextStepMock = vi.fn();
 vi.mock("./enrollment-progression", () => ({
@@ -31,6 +35,7 @@ function fakePrisma(item: unknown) {
     },
     campaignStep: { findUnique: vi.fn().mockResolvedValue(null) },
     signature: { findFirst: vi.fn().mockResolvedValue(null) },
+    inbox: { update: vi.fn().mockResolvedValue({}) },
   };
 }
 
@@ -46,7 +51,14 @@ const BASE_ITEM = {
   body: null,
   scheduledFor: NOW,
   lead: { id: "lead-1", email: "prospect@example.com", firstName: "Jamie" },
-  campaign: { id: "campaign-1" },
+  campaign: {
+    id: "campaign-1",
+    timezone: "UTC",
+    sendingDaysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    sendingWindowStartMinute: 0,
+    sendingWindowEndMinute: 1439,
+    inboxCooldownMinutes: 3,
+  },
   campaignStep: { id: "step-1", orderIndex: 0 },
   enrollment: { id: "enrollment-1" },
 };
@@ -98,16 +110,47 @@ describe("processOutboxItem", () => {
 
   it("defers the item (reschedules, stays SCHEDULED) when no inbox is available", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
-    pickNextInboxMock.mockResolvedValueOnce(null);
+    pickNextInboxMock.mockResolvedValueOnce({ inbox: null });
     const prisma = fakePrisma({ ...BASE_ITEM });
     const result = await processOutboxItem(prisma, BASE_DEPS, "outbox-1");
     expect(result?.status).toBe("SCHEDULED");
     expect(result?.scheduledFor.getTime()).toBeGreaterThan(NOW.getTime());
   });
 
+  it("reschedules to the moment the inbox cooldown lifts, rather than the flat no-inbox deferral", async () => {
+    isSuppressedMock.mockResolvedValueOnce(false);
+    const availableAt = new Date(NOW.getTime() + 3 * 60_000);
+    pickNextInboxMock.mockResolvedValueOnce({ inbox: null, availableAt });
+    const prisma = fakePrisma({ ...BASE_ITEM });
+    const result = await processOutboxItem(prisma, BASE_DEPS, "outbox-1");
+    expect(result?.status).toBe("SCHEDULED");
+    expect(result?.scheduledFor.getTime()).toBe(availableAt.getTime());
+    expect(BASE_DEPS.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("passes the campaign's configured cooldown to inbox selection and re-anchors it to the real send time", async () => {
+    isSuppressedMock.mockResolvedValueOnce(false);
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
+    materializeStepContentMock.mockResolvedValueOnce({ subject: "Hi", body: "Body" });
+    const sendEmail = vi.fn().mockResolvedValueOnce({ messageId: "m", threadId: "t" });
+
+    const prisma = fakePrisma({
+      ...BASE_ITEM,
+      campaign: { ...BASE_ITEM.campaign, inboxCooldownMinutes: 5 },
+    });
+    await processOutboxItem(prisma, { ...BASE_DEPS, sendEmail }, "outbox-1");
+
+    expect(pickNextInboxMock).toHaveBeenCalledWith(prisma, "campaign-1", NOW, 5);
+    expect(markInboxSentMock).toHaveBeenCalledWith(prisma, "inbox-1", NOW, 5);
+  });
+
   it("sends successfully: materializes content, sends, marks SENT, advances the enrollment, schedules the next step", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
-    pickNextInboxMock.mockResolvedValueOnce({ id: "inbox-1", emailAddress: "alex@acme.example" });
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
     materializeStepContentMock.mockResolvedValueOnce({
       subject: "Hi",
       body: "Would you be open to a call?",
@@ -136,7 +179,9 @@ describe("processOutboxItem", () => {
 
   it("retries (stays SCHEDULED) on a send failure below the max attempt count", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
-    pickNextInboxMock.mockResolvedValueOnce({ id: "inbox-1", emailAddress: "alex@acme.example" });
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
     materializeStepContentMock.mockResolvedValueOnce({ subject: "Hi", body: "Body" });
     const sendEmail = vi.fn().mockRejectedValueOnce(new Error("network error"));
 
@@ -150,7 +195,9 @@ describe("processOutboxItem", () => {
 
   it("marks the item FAILED (terminal) once max attempts is reached", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
-    pickNextInboxMock.mockResolvedValueOnce({ id: "inbox-1", emailAddress: "alex@acme.example" });
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
     materializeStepContentMock.mockResolvedValueOnce({ subject: "Hi", body: "Body" });
     const sendEmail = vi.fn().mockRejectedValueOnce(new Error("network error"));
 

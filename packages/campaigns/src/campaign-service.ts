@@ -10,6 +10,7 @@ export interface CreateCampaignParams {
   sendingDaysOfWeek?: number[];
   sendingWindowStartMinute?: number;
   sendingWindowEndMinute?: number;
+  inboxCooldownMinutes?: number;
   createdByUserId: string;
 }
 
@@ -23,6 +24,7 @@ export async function createCampaign(prisma: Prisma, params: CreateCampaignParam
       sendingDaysOfWeek: params.sendingDaysOfWeek,
       sendingWindowStartMinute: params.sendingWindowStartMinute,
       sendingWindowEndMinute: params.sendingWindowEndMinute,
+      inboxCooldownMinutes: params.inboxCooldownMinutes,
       createdByUserId: params.createdByUserId,
     },
   });
@@ -61,6 +63,7 @@ export interface UpdateCampaignParams {
   sendingDaysOfWeek?: number[];
   sendingWindowStartMinute?: number;
   sendingWindowEndMinute?: number;
+  inboxCooldownMinutes?: number;
   status?: CampaignStatus;
 }
 

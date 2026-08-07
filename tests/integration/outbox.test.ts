@@ -22,6 +22,10 @@ const ALWAYS_OPEN_WINDOW = {
   sendingDaysOfWeek: [0, 1, 2, 3, 4, 5, 6],
   sendingWindowStartMinute: 0,
   sendingWindowEndMinute: 1440,
+  // Cooldown off: these tests send several emails from one inbox back to
+  // back, which the default per-inbox throttle would (correctly) defer.
+  // The throttle has its own test in tests/integration/outbox.test.ts.
+  inboxCooldownMinutes: 0,
 };
 
 describe("outbox pipeline (end to end against real Postgres)", () => {
@@ -247,5 +251,116 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
     await processOutboxItem(prisma, deps, item.id); // reprocess the same item
 
     expect(sendCount).toBe(1);
+  });
+
+  it("throttles per inbox: two inboxes send at once, but neither sends twice inside the cooldown", async () => {
+    const org = await prisma.organisation.create({
+      data: { name: "Outbox Test Org 3", slug: uniqueSlug() },
+    });
+    createdOrgIds.push(org.id);
+
+    const inboxes = await Promise.all(
+      ["a", "b"].map((suffix) =>
+        prisma.inbox.create({
+          data: {
+            organisationId: org.id,
+            emailAddress: `sender3${suffix}-${randomBytes(4).toString("hex")}@acme.example`,
+            status: "CONNECTED",
+            dailySendLimit: 30,
+            connectedByUserId: "seed-user",
+            encryptedAccessToken: encryptToken("fake-access-token"),
+            encryptedRefreshToken: encryptToken("fake-refresh-token"),
+            tokenExpiresAt: new Date(Date.now() + 3600_000),
+          },
+        }),
+      ),
+    );
+
+    const campaign = await createCampaign(prisma, {
+      organisationId: org.id,
+      name: "Outbox Test Campaign 3",
+      createdByUserId: "seed-user",
+      ...ALWAYS_OPEN_WINDOW,
+      inboxCooldownMinutes: 3,
+    });
+    await prisma.campaignInbox.createMany({
+      data: inboxes.map((inbox) => ({ campaignId: campaign.id, inboxId: inbox.id })),
+    });
+    await prisma.campaignStep.create({
+      data: {
+        campaignId: campaign.id,
+        orderIndex: 0,
+        stepType: "INITIAL",
+        delayDays: 0,
+        useAiGeneration: false,
+        manualSubject: "Hi",
+        manualBody: "Body",
+      },
+    });
+    await updateCampaign(prisma, org.id, campaign.id, { status: "ACTIVE" });
+
+    const leads = await Promise.all(
+      ["one", "two", "three"].map((name) =>
+        prisma.lead.create({
+          data: {
+            organisationId: org.id,
+            firstName: name,
+            email: `${name}-${randomBytes(4).toString("hex")}@example.com`,
+          },
+        }),
+      ),
+    );
+    await enrollLeads(
+      prisma,
+      org.id,
+      campaign.id,
+      leads.map((lead) => lead.id),
+    );
+    await enqueueDueOutboxItems(prisma);
+
+    const sentFromInboxIds: string[] = [];
+    const deps = {
+      aiGenerator: undefined,
+      sendEmail: async (inboxId: string) => {
+        sentFromInboxIds.push(inboxId);
+        return {
+          messageId: `fake-message-${sentFromInboxIds.length}`,
+          threadId: `fake-thread-${sentFromInboxIds.length}`,
+        };
+      },
+      getSenderContext: async () => ({ senderName: "Alex", senderCompanyName: "Mail Orbyt" }),
+      emergencyStop: false,
+    };
+
+    // All three items are due at once — exactly the "blast" case. Each
+    // inbox may take one of them; the third has nowhere to go until a
+    // cooldown lifts.
+    const items = await prisma.outboxItem.findMany({
+      where: { campaignId: campaign.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(items).toHaveLength(3);
+    const processed = [];
+    for (const item of items) {
+      processed.push(await processOutboxItem(prisma, deps, item.id));
+    }
+
+    expect(processed.filter((item) => item?.status === "SENT")).toHaveLength(2);
+    expect(new Set(sentFromInboxIds).size).toBe(2);
+
+    const deferred = processed.find((item) => item?.status === "SCHEDULED");
+    expect(deferred).toBeDefined();
+    expect(deferred!.scheduledFor.getTime()).toBeGreaterThan(Date.now());
+    expect(deferred!.inboxId).toBeNull();
+
+    // The claim is on the inbox rows themselves, which is what holds the
+    // throttle across separate worker processes.
+    const claimed = await prisma.inbox.findMany({
+      where: { id: { in: inboxes.map((inbox) => inbox.id) } },
+      select: { sendCooldownUntil: true },
+    });
+    for (const inbox of claimed) {
+      expect(inbox.sendCooldownUntil!.getTime()).toBeGreaterThan(Date.now());
+    }
   });
 });

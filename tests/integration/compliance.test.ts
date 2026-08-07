@@ -22,6 +22,10 @@ const ALWAYS_OPEN_WINDOW = {
   sendingDaysOfWeek: [0, 1, 2, 3, 4, 5, 6],
   sendingWindowStartMinute: 0,
   sendingWindowEndMinute: 1440,
+  // Cooldown off: these tests send several emails from one inbox back to
+  // back, which the default per-inbox throttle would (correctly) defer.
+  // The throttle has its own test in tests/integration/outbox.test.ts.
+  inboxCooldownMinutes: 0,
 };
 
 describe("compliance (end to end against real Postgres)", () => {
