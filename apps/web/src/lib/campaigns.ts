@@ -242,7 +242,9 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
       callToAction: step.callToActionOverride ?? "connect and learn more about your priorities",
       facts: [],
       signatureText,
-      customInstructions,
+      // Mirrors processOutboxItem: the campaign's own instructions replace the
+      // organisation's, so a test send previews the campaign's real voice.
+      customInstructions: campaign.emailPromptInstructions?.trim() || customInstructions,
       bookingLink,
       generationSystemPromptOverride,
       reviewSystemPromptOverride,

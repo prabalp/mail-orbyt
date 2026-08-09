@@ -182,7 +182,10 @@ export async function processOutboxItem(
       senderCompanyName,
       priorEmail,
       aiGenerator: deps.aiGenerator,
-      customInstructions,
+      // A campaign's own tone/style instructions replace the organisation's
+      // rather than stacking with them — two sets of voice guidance in one
+      // prompt contradict each other as often as they compose.
+      customInstructions: item.campaign.emailPromptInstructions?.trim() || customInstructions,
       bookingLink,
       signatureText,
       generationSystemPromptOverride,

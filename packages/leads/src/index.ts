@@ -30,9 +30,20 @@ export {
   getLead,
   archiveLeads,
   unarchiveLeads,
+  listLeadIdsMatching,
+  buildLeadWhere,
+  type LeadFilter,
   type ListLeadsParams,
   type ListLeadsResult,
 } from "./leads-service";
+export {
+  listLeadLists,
+  createOrGetLeadList,
+  addLeadsToList,
+  deleteLeadList,
+  type LeadListSummary,
+} from "./lead-lists";
+export { listLeadEmailHistory, type LeadEmailHistoryEntry } from "./email-history";
 export {
   listCompanies,
   getCompany,

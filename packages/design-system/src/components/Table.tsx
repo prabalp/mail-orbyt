@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "../cn";
 
 export interface TableColumn<T> {
@@ -16,6 +18,13 @@ export interface TableProps<T> {
   onRowClick?: (row: T) => void;
   selectedKeys?: Set<string>;
   onSelectRow?: (key: string, selected: boolean) => void;
+  /**
+   * Enables the header checkbox, which selects or clears every row currently
+   * rendered. Selecting beyond the visible page is deliberately not this
+   * component's job — the caller owns the filter and is the only thing that
+   * can resolve "all matching" (see the leads table's select-all banner).
+   */
+  onSelectAllRows?: (selected: boolean) => void;
 }
 
 export function Table<T>({
@@ -26,8 +35,21 @@ export function Table<T>({
   onRowClick,
   selectedKeys,
   onSelectRow,
+  onSelectAllRows,
 }: TableProps<T>): React.ReactElement {
   const selectable = Boolean(onSelectRow);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  const selectedOnPage = rows.filter((row) => selectedKeys?.has(getRowKey(row))).length;
+  const allOnPageSelected = rows.length > 0 && selectedOnPage === rows.length;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      // Indeterminate is a DOM property, not an attribute — React can't set it
+      // via JSX, so a partial page selection has to be applied imperatively.
+      selectAllRef.current.indeterminate = selectedOnPage > 0 && !allOnPageSelected;
+    }
+  }, [selectedOnPage, allOnPageSelected]);
 
   if (rows.length === 0 && emptyState) {
     return <>{emptyState}</>;
@@ -38,7 +60,19 @@ export function Table<T>({
       <table className="w-full border-collapse text-left text-sm">
         <thead className="bg-surface-container">
           <tr>
-            {selectable ? <th className="w-10 px-4 py-3" /> : null}
+            {selectable ? (
+              <th className="w-10 px-4 py-3">
+                {onSelectAllRows ? (
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    aria-label="Select all rows"
+                    checked={allOnPageSelected}
+                    onChange={(event) => onSelectAllRows(event.target.checked)}
+                  />
+                ) : null}
+              </th>
+            ) : null}
             {columns.map((column) => (
               <th
                 key={column.key}

@@ -10,6 +10,7 @@ import {
   EmptyState,
   PageHeader,
   Select,
+  TextArea,
   TextInput,
   TimePicker,
   useToast,
@@ -131,6 +132,13 @@ interface CampaignDetail {
   sendingWindowStartMinute: number;
   sendingWindowEndMinute: number;
   inboxCooldownMinutes: number;
+  emailPromptInstructions: string | null;
+}
+
+interface LeadList {
+  id: string;
+  name: string;
+  leadCount: number;
 }
 
 interface Enrollment {
@@ -165,7 +173,13 @@ export default function CampaignDetailPage(): React.ReactElement {
   const [leadSearch, setLeadSearch] = useState("");
   const [leadResults, setLeadResults] = useState<LeadSearchResult[]>([]);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [leadLists, setLeadLists] = useState<LeadList[]>([]);
+  const [selectedLeadListId, setSelectedLeadListId] = useState("");
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollingList, setEnrollingList] = useState(false);
+  const [promptInstructions, setPromptInstructions] = useState("");
+  const [savingPrompt, setSavingPrompt] = useState(false);
+  const promptInitialized = useRef(false);
   const [sendingNow, setSendingNow] = useState(false);
 
   const [scheduleDays, setScheduleDays] = useState<Set<number>>(
@@ -192,14 +206,16 @@ export default function CampaignDetailPage(): React.ReactElement {
   } | null>(null);
 
   const load = useCallback(async () => {
-    const [campaignRes, enrollmentsRes, inboxesRes] = await Promise.all([
+    const [campaignRes, enrollmentsRes, inboxesRes, leadListsRes] = await Promise.all([
       fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`),
       fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}/enrollments`),
       fetch(`/api/organisations/${organisationId}/inboxes`),
+      fetch(`/api/organisations/${organisationId}/lead-lists`),
     ]);
     if (campaignRes.ok) setCampaign(await campaignRes.json());
     if (enrollmentsRes.ok) setEnrollments((await enrollmentsRes.json()).enrollments);
     if (inboxesRes.ok) setAllInboxes((await inboxesRes.json()).inboxes);
+    if (leadListsRes.ok) setLeadLists((await leadListsRes.json()).leadLists);
     setLoading(false);
   }, [organisationId, campaignId]);
 
@@ -215,6 +231,12 @@ export default function CampaignDetailPage(): React.ReactElement {
     setScheduleEnd(minutesToTime(campaign.sendingWindowEndMinute));
     setScheduleTimezone(campaign.timezone);
     setScheduleCooldown(String(campaign.inboxCooldownMinutes));
+  }, [campaign]);
+
+  useEffect(() => {
+    if (!campaign || promptInitialized.current) return;
+    promptInitialized.current = true;
+    setPromptInstructions(campaign.emailPromptInstructions ?? "");
   }, [campaign]);
 
   function handleUseRecommendedSchedule() {
@@ -446,6 +468,55 @@ export default function CampaignDetailPage(): React.ReactElement {
       }
     } finally {
       setEnrolling(false);
+    }
+  }
+
+  async function handleEnrollList() {
+    if (!selectedLeadListId) return;
+    setEnrollingList(true);
+    try {
+      const response = await fetch(
+        `/api/organisations/${organisationId}/campaigns/${campaignId}/enrollments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadListId: selectedLeadListId }),
+        },
+      );
+      if (response.ok) {
+        const result = await response.json();
+        toast.show(
+          `Enrolled ${result.enrolled}, ${result.suppressed} suppressed, ${result.alreadyEnrolled} already enrolled`,
+          "success",
+        );
+        setSelectedLeadListId("");
+        await load();
+      } else {
+        toast.show("Could not enroll this list", "error");
+      }
+    } finally {
+      setEnrollingList(false);
+    }
+  }
+
+  /** Takes the value explicitly so "clear" can save an empty string in the same tick it resets the field, rather than racing the state update. */
+  async function handleSavePrompt(value: string) {
+    setSavingPrompt(true);
+    try {
+      const response = await fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailPromptInstructions: value }),
+      });
+      if (response.ok) {
+        toast.show("Campaign tone instructions saved", "success");
+        await load();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not save tone instructions", "error");
+      }
+    } finally {
+      setSavingPrompt(false);
     }
   }
 
@@ -696,14 +767,83 @@ export default function CampaignDetailPage(): React.ReactElement {
         )}
       </Card>
 
+      <CollapsibleCard title="Tone & style instructions">
+        <p className="text-sm text-on-surface-variant">
+          Voice guidance for AI-generated emails in this campaign — how to sound, what to emphasise,
+          what to avoid. When set, this replaces the organisation-wide instructions in Settings for
+          this campaign only. Leave it empty to use the organisation default.
+        </p>
+        <p className="mt-2 text-sm text-on-surface-variant">
+          This is style guidance only. The hard rules — facts-only personalisation, no invented
+          claims, no fabricated URLs — always apply and cannot be overridden here.
+        </p>
+        <div className="mt-4">
+          <TextArea
+            label="Campaign tone instructions"
+            rows={6}
+            maxLength={2000}
+            placeholder="e.g. Warm and peer-to-peer, never salesy. Lead with the operational problem, not the product. Avoid superlatives and any mention of ROI."
+            value={promptInstructions}
+            onChange={(event) => setPromptInstructions(event.target.value)}
+          />
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <Button loading={savingPrompt} onClick={() => handleSavePrompt(promptInstructions)}>
+            Save tone instructions
+          </Button>
+          {campaign.emailPromptInstructions ? (
+            <Button
+              variant="text"
+              onClick={() => {
+                setPromptInstructions("");
+                void handleSavePrompt("");
+              }}
+            >
+              Clear and use organisation default
+            </Button>
+          ) : (
+            <span className="text-sm text-on-surface-variant">
+              Currently using the organisation default.
+            </span>
+          )}
+        </div>
+      </CollapsibleCard>
+
       <Card>
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">
           Enrollments ({enrollments.length})
         </h3>
 
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3 border-b border-outline/15 pb-4">
+          <div className="w-72">
+            <Select
+              label="Enroll a whole lead list"
+              value={selectedLeadListId}
+              placeholder="Choose a list…"
+              onChange={(event) => setSelectedLeadListId(event.target.value)}
+              options={leadLists.map((list) => ({
+                value: list.id,
+                label: `${list.name} (${list.leadCount} leads)`,
+              }))}
+            />
+          </div>
+          <Button
+            loading={enrollingList}
+            disabled={!selectedLeadListId}
+            onClick={handleEnrollList}
+          >
+            Enroll list
+          </Button>
+          {leadLists.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">
+              Import a CSV to create your first named lead list.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-3">
           <TextInput
-            label="Search leads to enroll"
+            label="Or search leads to enroll individually"
             value={leadSearch}
             onChange={(event) => setLeadSearch(event.target.value)}
           />

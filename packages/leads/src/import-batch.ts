@@ -77,7 +77,10 @@ function normalizeRow(row: MappedRow): MappedRow {
   };
 }
 
-type Prisma = Pick<PrismaClient, "importBatch" | "importRow" | "lead" | "company" | "$transaction">;
+type Prisma = Pick<
+  PrismaClient,
+  "importBatch" | "importRow" | "lead" | "company" | "leadListMembership" | "$transaction"
+>;
 
 async function resolveCompanyId(
   prisma: Prisma,
@@ -257,6 +260,18 @@ export async function processImportBatch(
       });
       leadId = updated.id;
       rowStatus = "UPDATED";
+    }
+
+    // Every import names its audience, so the lead joins that list whether it
+    // was created or matched an existing record — an operator re-importing an
+    // updated CSV expects the whole file to be selectable as one list, not
+    // just the rows that happened to be new. skipDuplicates makes this safe
+    // on a batch retry.
+    if (batch.leadListId) {
+      await prisma.leadListMembership.createMany({
+        data: [{ leadListId: batch.leadListId, leadId }],
+        skipDuplicates: true,
+      });
     }
 
     await prisma.importRow.upsert({

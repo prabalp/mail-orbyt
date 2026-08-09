@@ -11,6 +11,7 @@ export interface CreateCampaignParams {
   sendingWindowStartMinute?: number;
   sendingWindowEndMinute?: number;
   inboxCooldownMinutes?: number;
+  emailPromptInstructions?: string | null;
   createdByUserId: string;
 }
 
@@ -25,6 +26,7 @@ export async function createCampaign(prisma: Prisma, params: CreateCampaignParam
       sendingWindowStartMinute: params.sendingWindowStartMinute,
       sendingWindowEndMinute: params.sendingWindowEndMinute,
       inboxCooldownMinutes: params.inboxCooldownMinutes,
+      emailPromptInstructions: params.emailPromptInstructions,
       createdByUserId: params.createdByUserId,
     },
   });
@@ -64,6 +66,8 @@ export interface UpdateCampaignParams {
   sendingWindowStartMinute?: number;
   sendingWindowEndMinute?: number;
   inboxCooldownMinutes?: number;
+  /** Campaign-level tone/style guidance; null clears it and falls back to the organisation's. */
+  emailPromptInstructions?: string | null;
   status?: CampaignStatus;
 }
 

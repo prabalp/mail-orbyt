@@ -37,11 +37,14 @@ AI may additionally, via `packages/email-generation`'s `generateEmail`:
   it. The output validator's URL-allowlist and every other check still run
   exactly as before — nothing about this excerpt loosens what the model is
   allowed to produce.
-- receive organisation-configured tone/style instructions (Settings → Email
-  template), appended to — never replacing — the fixed core system prompt.
-  The hard rules (no invented facts, no research disclosure, one CTA, plain
-  text, etc.) are always present and always take priority; an organisation
-  can only add voice/phrasing preferences on top of them.
+- receive configured tone/style instructions — either organisation-wide
+  (Settings → Email template) or per-campaign
+  (`Campaign.emailPromptInstructions`, which replaces the organisation's for
+  that campaign; see docs/campaigns.md). Whichever applies is appended to —
+  never replacing — the fixed core system prompt. The hard rules (no invented
+  facts, no research disclosure, one CTA, plain text, etc.) are always present
+  and always take priority; an operator can only add voice/phrasing
+  preferences on top of them.
 - be told to echo a fixed placeholder token (`[[BOOKING_LINK]]`) representing
   a configured Calendly link. The model never sees or writes the real URL —
   `generateEmail` substitutes the real link in after validation via plain
@@ -56,7 +59,7 @@ decisions, scheduling, inbox rotation, reply classification, analytics,
 compliance decisions, SPF/DKIM/DMARC checks, deliverability decisions, or
 inventing missing information. ("Live webpage extraction" — i.e. an AI
 model fetching or browsing a page itself — is prohibited; extracting
-keywords from a page's text *after* it has already been fetched and saved
+keywords from a page's text _after_ it has already been fetched and saved
 by deterministic code is the one narrow, opt-in exception described above.)
 
 All of the above are implemented as deterministic code in
@@ -81,7 +84,7 @@ All of the above are implemented as deterministic code in
    "Allowed uses" above) — never search result pages, scripts, hidden page
    content, private profile data, or unbounded/whole-page raw text.
    Note: `createResearchSnapshot` (`packages/research/src/snapshot.ts`)
-   currently includes facts with status `OBSERVED` *or* `USER_CONFIRMED` —
+   currently includes facts with status `OBSERVED` _or_ `USER_CONFIRMED` —
    a fact does not strictly require a human to click "Accept" before it can
    reach a draft, only to not be rejected/conflicted/expired. Tightening
    this to `USER_CONFIRMED`-only is a known possible follow-up, not yet done.

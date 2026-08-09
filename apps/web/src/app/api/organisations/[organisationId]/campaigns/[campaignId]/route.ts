@@ -22,6 +22,15 @@ const updateSchema = z.object({
   sendingWindowStartMinute: z.number().int().min(0).max(1439).optional(),
   sendingWindowEndMinute: z.number().int().min(0).max(1439).optional(),
   inboxCooldownMinutes: z.number().int().min(0).max(180).optional(),
+  // Empty string is a meaningful value here — it's how the UI clears the
+  // campaign override and falls back to the organisation-level instructions,
+  // so it's normalised to null rather than rejected.
+  emailPromptInstructions: z
+    .string()
+    .max(2000)
+    .transform((value) => value.trim() || null)
+    .nullable()
+    .optional(),
   status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
 });
 

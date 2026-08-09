@@ -3,12 +3,16 @@ import type { Pagination } from "@mail-orbyt/validation";
 
 type LeadsPrisma = Pick<PrismaClient, "lead">;
 
-export interface ListLeadsParams extends Pagination {
+/** The filter half of a lead query, without pagination — what a "select all matching" action operates on. */
+export interface LeadFilter {
   organisationId: string;
   search?: string;
   status?: LeadStatus;
   companyId?: string;
+  leadListId?: string;
 }
+
+export interface ListLeadsParams extends LeadFilter, Pagination {}
 
 export interface ListLeadsResult {
   leads: Lead[];
@@ -32,8 +36,33 @@ function buildSearchFilter(search: string): Prisma.LeadWhereInput {
         { lastName: { contains: word, mode: "insensitive" as const } },
         { email: { contains: word, mode: "insensitive" as const } },
         { title: { contains: word, mode: "insensitive" as const } },
+        { industry: { contains: word, mode: "insensitive" as const } },
+        { city: { contains: word, mode: "insensitive" as const } },
+        { country: { contains: word, mode: "insensitive" as const } },
+        // Searching a company name is how operators actually look for "everyone
+        // at Acme", so the term is matched through the relation too.
+        { company: { name: { contains: word, mode: "insensitive" as const } } },
       ],
     })),
+  };
+}
+
+/**
+ * The single source of truth for how a lead filter becomes a Prisma where
+ * clause. Shared by listing, export, and bulk actions so "select all
+ * matching" in the UI provably operates on the same set the user is looking
+ * at — a second, drifting copy of this predicate is how a bulk delete ends
+ * up hitting rows that were never on screen.
+ */
+export function buildLeadWhere(filter: LeadFilter): Prisma.LeadWhereInput {
+  return {
+    organisationId: filter.organisationId,
+    status: filter.status ?? "ACTIVE",
+    ...(filter.companyId ? { companyId: filter.companyId } : {}),
+    ...(filter.leadListId
+      ? { leadListMemberships: { some: { leadListId: filter.leadListId } } }
+      : {}),
+    ...(filter.search ? buildSearchFilter(filter.search) : {}),
   };
 }
 
@@ -47,12 +76,7 @@ export async function listLeads(
   prisma: LeadsPrisma,
   params: ListLeadsParams,
 ): Promise<ListLeadsResult> {
-  const where: Prisma.LeadWhereInput = {
-    organisationId: params.organisationId,
-    status: params.status ?? "ACTIVE",
-    ...(params.companyId ? { companyId: params.companyId } : {}),
-    ...(params.search ? buildSearchFilter(params.search) : {}),
-  };
+  const where = buildLeadWhere(params);
 
   const [leads, totalCount] = await Promise.all([
     prisma.lead.findMany({
@@ -99,4 +123,22 @@ export async function unarchiveLeads(
     data: { status: "ACTIVE" },
   });
   return result.count;
+}
+
+/**
+ * Resolves every lead ID matching a filter — the server-side half of the
+ * table's "select all N matching" affordance. Returns IDs rather than full
+ * rows so a 50k-lead selection stays a few megabytes of strings, and so the
+ * caller (delete, export, enroll) can still apply its own per-ID logic.
+ */
+export async function listLeadIdsMatching(
+  prisma: LeadsPrisma,
+  filter: LeadFilter,
+): Promise<string[]> {
+  const leads = await prisma.lead.findMany({
+    where: buildLeadWhere(filter),
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return leads.map((lead) => lead.id);
 }

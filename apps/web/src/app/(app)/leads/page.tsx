@@ -29,20 +29,60 @@ interface Lead {
   status: "ACTIVE" | "ARCHIVED";
 }
 
+interface LeadList {
+  id: string;
+  name: string;
+  leadCount: number;
+}
+
 const PAGE_SIZE = 25;
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function LeadsPage(): React.ReactElement {
   const { organisationId } = useOrganisation();
   const toast = useToast();
 
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [leadLists, setLeadLists] = useState<LeadList[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ACTIVE");
+  const [leadListId, setLeadListId] = useState("");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /**
+   * "Every lead matching the current filter", not just the ticked rows. Kept
+   * as a flag rather than by materialising every ID client-side: the server
+   * re-resolves the filter for the action, so the set can't drift between the
+   * click and the request, and a 50k-lead selection stays free.
+   */
+  const [allMatchingSelected, setAllMatchingSelected] = useState(false);
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const filterPayload = {
+    ...(search ? { search } : {}),
+    status: status as "ACTIVE" | "ARCHIVED",
+    ...(leadListId ? { leadListId } : {}),
+  };
+
+  function filterQuery(): string {
+    const query = new URLSearchParams();
+    if (search) query.set("search", search);
+    query.set("status", status);
+    if (leadListId) query.set("leadListId", leadListId);
+    return query.toString();
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +91,7 @@ export default function LeadsPage(): React.ReactElement {
     url.searchParams.set("pageSize", String(PAGE_SIZE));
     url.searchParams.set("status", status);
     if (search) url.searchParams.set("search", search);
+    if (leadListId) url.searchParams.set("leadListId", leadListId);
 
     const response = await fetch(url);
     if (response.ok) {
@@ -59,26 +100,110 @@ export default function LeadsPage(): React.ReactElement {
       setTotalCount(data.totalCount);
     }
     setLoading(false);
-  }, [organisationId, page, search, status]);
+  }, [organisationId, page, search, status, leadListId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    fetch(`/api/organisations/${organisationId}/lead-lists`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data) setLeadLists(data.leadLists);
+      });
+  }, [organisationId]);
+
+  /** Changing what's on screen invalidates a selection that was made against the previous result set. */
+  function resetSelection() {
+    setSelected(new Set());
+    setAllMatchingSelected(false);
+  }
+
+  const selectionCount = allMatchingSelected ? totalCount : selected.size;
+
   async function handleBulkAction(action: "archive" | "unarchive") {
     const response = await fetch(`/api/organisations/${organisationId}/leads`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, leadIds: Array.from(selected) }),
+      body: JSON.stringify(
+        allMatchingSelected
+          ? { action, filter: filterPayload }
+          : { action, leadIds: Array.from(selected) },
+      ),
     });
     if (response.ok) {
       toast.show(action === "archive" ? "Leads archived" : "Leads restored", "success");
-      setSelected(new Set());
+      resetSelection();
       void load();
     } else {
       toast.show("Something went wrong", "error");
     }
   }
+
+  async function handleDelete() {
+    // Deleting a lead cascades to its enrollments, queued and sent outbox
+    // items, conversations and meetings — so the confirmation says the count
+    // out loud rather than a vague "these leads".
+    if (
+      !window.confirm(
+        `Permanently delete ${selectionCount} lead${selectionCount === 1 ? "" : "s"} and all associated data ` +
+          `(email history, campaign enrollments, conversations, meetings)? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/organisations/${organisationId}/leads`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          allMatchingSelected
+            ? { action: "delete", filter: filterPayload }
+            : { action: "delete", leadIds: Array.from(selected) },
+        ),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        toast.show(`Deleted ${data.deleted} lead${data.deleted === 1 ? "" : "s"}`, "success");
+        resetSelection();
+        setPage(1);
+        void load();
+      } else {
+        toast.show("Could not delete leads", "error");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleExportSelection() {
+    setExporting(true);
+    try {
+      // "All matching" exports through the filtered GET so the server resolves
+      // the set; an explicit tick-selection POSTs its IDs, which can run well
+      // past what a URL would hold.
+      const response = allMatchingSelected
+        ? await fetch(`/api/organisations/${organisationId}/leads/export?${filterQuery()}`)
+        : await fetch(`/api/organisations/${organisationId}/leads/export`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ leadIds: Array.from(selected) }),
+          });
+
+      if (!response.ok) {
+        toast.show("Could not export leads", "error");
+        return;
+      }
+      downloadBlob(await response.blob(), "leads-export.csv");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const hasFilter = Boolean(search || leadListId || status !== "ACTIVE");
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,8 +211,13 @@ export default function LeadsPage(): React.ReactElement {
         title="Leads"
         actions={
           <>
+            {hasFilter ? (
+              <a href={`/api/organisations/${organisationId}/leads/export?${filterQuery()}`}>
+                <Button variant="outlined">Export filtered</Button>
+              </a>
+            ) : null}
             <a href={`/api/organisations/${organisationId}/leads/export`}>
-              <Button variant="outlined">Export CSV</Button>
+              <Button variant="outlined">Export all</Button>
             </a>
             <Link href="/leads/import">
               <Button>Import CSV</Button>
@@ -101,10 +231,11 @@ export default function LeadsPage(): React.ReactElement {
           <TextInput
             label="Search"
             hideLabel
-            placeholder="Search name, email, title…"
+            placeholder="Search name, email, title, company…"
             value={search}
             onChange={(e) => {
               setPage(1);
+              resetSelection();
               setSearch(e.target.value);
             }}
           />
@@ -116,6 +247,7 @@ export default function LeadsPage(): React.ReactElement {
             value={status}
             onChange={(e) => {
               setPage(1);
+              resetSelection();
               setStatus(e.target.value);
             }}
             options={[
@@ -124,9 +256,29 @@ export default function LeadsPage(): React.ReactElement {
             ]}
           />
         </div>
-        {selected.size > 0 ? (
+        <div className="w-56">
+          <Select
+            label="Lead list"
+            hideLabel
+            value={leadListId}
+            placeholder="All lists"
+            onChange={(e) => {
+              setPage(1);
+              resetSelection();
+              setLeadListId(e.target.value);
+            }}
+            options={leadLists.map((list) => ({
+              value: list.id,
+              label: `${list.name} (${list.leadCount})`,
+            }))}
+          />
+        </div>
+        {selectionCount > 0 ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-on-surface-variant">{selected.size} selected</span>
+            <span className="text-sm text-on-surface-variant">{selectionCount} selected</span>
+            <Button variant="outlined" loading={exporting} onClick={handleExportSelection}>
+              Export selected
+            </Button>
             {status === "ACTIVE" ? (
               <Button variant="outlined" onClick={() => handleBulkAction("archive")}>
                 Archive
@@ -136,9 +288,40 @@ export default function LeadsPage(): React.ReactElement {
                 Restore
               </Button>
             )}
+            <Button variant="outlined" loading={deleting} onClick={handleDelete}>
+              Delete
+            </Button>
           </div>
         ) : null}
       </div>
+
+      {selected.size > 0 && selected.size === leads.length && totalCount > leads.length ? (
+        <div className="flex items-center gap-3 rounded-md-md bg-primary-container/30 px-4 py-3 text-sm">
+          {allMatchingSelected ? (
+            <>
+              <span>All {totalCount} leads matching this filter are selected.</span>
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => setAllMatchingSelected(false)}
+              >
+                Select only these {leads.length}
+              </button>
+            </>
+          ) : (
+            <>
+              <span>All {leads.length} leads on this page are selected.</span>
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => setAllMatchingSelected(true)}
+              >
+                Select all {totalCount} matching this filter
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
 
       <Card padded={false}>
         {!loading && leads.length === 0 ? (
@@ -194,6 +377,13 @@ export default function LeadsPage(): React.ReactElement {
               if (isSelected) next.add(key);
               else next.delete(key);
               setSelected(next);
+              // Un-ticking a row means the selection is no longer "everything
+              // matching", so the whole-filter escalation has to drop away too.
+              if (!isSelected) setAllMatchingSelected(false);
+            }}
+            onSelectAllRows={(isSelected) => {
+              setSelected(isSelected ? new Set(leads.map((lead) => lead.id)) : new Set());
+              if (!isSelected) setAllMatchingSelected(false);
             }}
           />
         )}
@@ -204,11 +394,21 @@ export default function LeadsPage(): React.ReactElement {
           page={page}
           pageSize={PAGE_SIZE}
           totalItems={totalCount}
-          onPageChange={setPage}
+          onPageChange={(next) => {
+            resetSelection();
+            setPage(next);
+          }}
         />
       ) : null}
 
-      <LeadDetailDrawer leadId={openLeadId} onClose={() => setOpenLeadId(null)} />
+      <LeadDetailDrawer
+        leadId={openLeadId}
+        onClose={() => setOpenLeadId(null)}
+        onDeleted={() => {
+          resetSelection();
+          void load();
+        }}
+      />
     </div>
   );
 }

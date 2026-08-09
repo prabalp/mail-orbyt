@@ -177,6 +177,70 @@ describe("processOutboxItem", () => {
     expect(scheduleNextStepMock).toHaveBeenCalledWith(prisma, "enrollment-1");
   });
 
+  it("uses the campaign's own tone instructions in place of the organisation's", async () => {
+    isSuppressedMock.mockResolvedValueOnce(false);
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
+    materializeStepContentMock.mockResolvedValueOnce({ subject: "Hi", body: "Body" });
+    const sendEmail = vi.fn().mockResolvedValueOnce({ messageId: "m", threadId: "t" });
+
+    const prisma = fakePrisma({
+      ...BASE_ITEM,
+      campaign: { ...BASE_ITEM.campaign, emailPromptInstructions: "Blunt and technical." },
+    });
+    await processOutboxItem(
+      prisma,
+      {
+        ...BASE_DEPS,
+        sendEmail,
+        getSenderContext: vi.fn().mockResolvedValue({
+          senderCompanyName: "Mail Orbyt",
+          customInstructions: "Warm and chatty.",
+        }),
+      },
+      "outbox-1",
+    );
+
+    expect(materializeStepContentMock).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ customInstructions: "Blunt and technical." }),
+    );
+  });
+
+  it("falls back to the organisation's instructions when the campaign has none", async () => {
+    isSuppressedMock.mockResolvedValueOnce(false);
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
+    materializeStepContentMock.mockResolvedValueOnce({ subject: "Hi", body: "Body" });
+    const sendEmail = vi.fn().mockResolvedValueOnce({ messageId: "m", threadId: "t" });
+
+    // Whitespace-only is treated as "not set" — an operator clearing the field
+    // shouldn't leave a blank instruction block shadowing the org default.
+    const prisma = fakePrisma({
+      ...BASE_ITEM,
+      campaign: { ...BASE_ITEM.campaign, emailPromptInstructions: "   " },
+    });
+    await processOutboxItem(
+      prisma,
+      {
+        ...BASE_DEPS,
+        sendEmail,
+        getSenderContext: vi.fn().mockResolvedValue({
+          senderCompanyName: "Mail Orbyt",
+          customInstructions: "Warm and chatty.",
+        }),
+      },
+      "outbox-1",
+    );
+
+    expect(materializeStepContentMock).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ customInstructions: "Warm and chatty." }),
+    );
+  });
+
   it("retries (stays SCHEDULED) on a send failure below the max attempt count", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
     pickNextInboxMock.mockResolvedValueOnce({

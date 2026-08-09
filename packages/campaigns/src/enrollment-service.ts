@@ -65,8 +65,11 @@ export async function enrollLeadsFromList(
   campaignId: string,
   leadListId: string,
 ): Promise<EnrollLeadsResult> {
+  // Scoped through the list's own organisation as well as the campaign's:
+  // enrollLeads would filter out foreign leads anyway, but that would report a
+  // cross-tenant list ID as "0 enrolled" rather than as the mistake it is.
   const memberships = await prisma.leadListMembership.findMany({
-    where: { leadListId },
+    where: { leadListId, leadList: { organisationId } },
     select: { leadId: true },
   });
   return enrollLeads(

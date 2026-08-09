@@ -14,6 +14,8 @@ scheduler/outbox is what will actually pick up enrollments and send.
   the minimum gap between two sends from the same inbox. Phase 8's scheduler
   owns converting all of these into actual send times; see
   docs/scheduling-sending.md for how the per-inbox throttle is enforced.
+  `emailPromptInstructions` holds the campaign's own tone/style guidance —
+  see "Per-campaign tone instructions" below.
 - **CampaignStep** — one step in the sequence, ordered by `orderIndex`
   (kept contiguous — see below), typed `INITIAL`/`FOLLOW_UP`/
   `CLOSE_THE_LOOP`, with `delayDays` since the previous step. Each step is
@@ -30,6 +32,39 @@ scheduler/outbox is what will actually pick up enrollments and send.
   already suppressed (`packages/leads`' `isSuppressed`) enrolls them with
   status `SUPPRESSED` rather than silently skipping them, so it's visible in
   the UI _why_ a contact isn't being reached, not just absent from the list.
+
+## Enrolling leads
+
+Two paths, both landing in `enrollLeads`:
+
+- **A whole lead list** — `POST /campaigns/:id/enrollments` with
+  `{ leadListId }`. Every CSV import names its list (docs/csv-import.md), so
+  this is the normal way to put an audience into a campaign. The membership
+  query is scoped by the list's `organisationId` as well as the campaign's,
+  so a cross-tenant list ID is an error rather than a silent "0 enrolled".
+- **Individually** — `{ leadIds }`, from the search box in the campaign's
+  Enrollments card, for one-off additions.
+
+## Per-campaign tone instructions
+
+`Campaign.emailPromptInstructions` is voice guidance for AI-generated copy in
+one campaign: how to sound, what to lead with, what to avoid.
+
+- **It replaces the organisation-level `emailPromptInstructions`** from
+  Settings rather than stacking with it. Two sets of voice guidance in one
+  prompt contradict each other as often as they compose, and a campaign's
+  voice should be readable in one place.
+- Empty (or whitespace-only) falls back to the organisation default, which is
+  what the "Clear and use organisation default" button writes.
+- It is **style guidance only**. It is injected in exactly the same slot as
+  the org-level instructions (`customInstructions` in
+  `buildGenerateEmailPrompt`), below the hard rules — facts-only
+  personalisation, no invented claims, no fabricated URLs — which always take
+  priority. See docs/ai-boundaries.md.
+- Both send paths honour it: `processOutboxItem`
+  (`packages/scheduling/src/outbox-service.ts`) for real sends and
+  `sendTestEmail` (`apps/web/src/lib/campaigns.ts`), so a test send previews
+  the campaign's real voice.
 
 ## Guardrails
 

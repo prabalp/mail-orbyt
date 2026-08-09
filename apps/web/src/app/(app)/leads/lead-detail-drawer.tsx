@@ -6,6 +6,7 @@ import { Button, Drawer, Skeleton, Badge, useToast } from "@mail-orbyt/design-sy
 import { useOrganisation } from "../organisation-context";
 import { ResearchPanel } from "../_components/ResearchPanel";
 import { EmailDraftPanel } from "../_components/EmailDraftPanel";
+import { LeadEmailHistory } from "./lead-email-history";
 
 interface LeadDetail {
   id: string;
@@ -30,9 +31,12 @@ interface CompanyDetail {
 export function LeadDetailDrawer({
   leadId,
   onClose,
+  onDeleted,
 }: {
   leadId: string | null;
   onClose: () => void;
+  /** Lets the parent list drop the now-dangling row without a full refetch race. */
+  onDeleted?: () => void;
 }): React.ReactElement {
   const { organisationId } = useOrganisation();
   const toast = useToast();
@@ -91,6 +95,7 @@ export function LeadDetailDrawer({
       });
       if (response.ok) {
         toast.show("Lead data deleted", "success");
+        onDeleted?.();
         onClose();
       } else {
         toast.show("Could not delete lead data", "error");
@@ -203,6 +208,12 @@ export function LeadDetailDrawer({
       {lead ? (
         <div className="mt-6 border-t border-outline/20 pt-6">
           <EmailDraftPanel leadId={lead.id} />
+        </div>
+      ) : null}
+
+      {lead ? (
+        <div className="mt-6 border-t border-outline/20 pt-6">
+          <LeadEmailHistory leadId={lead.id} />
         </div>
       ) : null}
 

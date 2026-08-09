@@ -1,5 +1,6 @@
 import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
-import { archiveLeads, listLeads, unarchiveLeads } from "@mail-orbyt/leads";
+import { deleteLeadsData } from "@mail-orbyt/compliance";
+import { archiveLeads, listLeadIdsMatching, listLeads, unarchiveLeads } from "@mail-orbyt/leads";
 import { prisma } from "@mail-orbyt/database";
 import { paginationSchema } from "@mail-orbyt/validation";
 import { NextResponse } from "next/server";
@@ -31,15 +32,38 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
   const statusParam = url.searchParams.get("status");
   const status =
     statusParam === "ARCHIVED" ? "ARCHIVED" : statusParam === "ACTIVE" ? "ACTIVE" : undefined;
+  const leadListId = url.searchParams.get("leadListId") ?? undefined;
 
-  const result = await listLeads(prisma, { organisationId, ...pagination, search, status });
+  const result = await listLeads(prisma, {
+    organisationId,
+    ...pagination,
+    search,
+    status,
+    leadListId,
+  });
   return NextResponse.json(result);
 }
 
-const bulkActionSchema = z.object({
-  action: z.enum(["archive", "unarchive"]),
-  leadIds: z.array(z.string().min(1)).min(1).max(500),
+/** The filter half of the leads query, mirrored from GET so a bulk action can say "everything matching what I'm looking at" instead of enumerating IDs. */
+const filterSchema = z.object({
+  search: z.string().optional(),
+  status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
+  leadListId: z.string().min(1).optional(),
 });
+
+/**
+ * A bulk action targets EITHER an explicit set of IDs (what's ticked on the
+ * current page) OR a filter (the table's "select all N matching"). The filter
+ * form is resolved to IDs server-side rather than trusting a client-sent list
+ * of up to 50k strings, and both forms stay scoped to this organisation.
+ */
+const bulkActionSchema = z.intersection(
+  z.object({ action: z.enum(["archive", "unarchive", "delete"]) }),
+  z.union([
+    z.object({ leadIds: z.array(z.string().min(1)).min(1).max(50000) }),
+    z.object({ filter: filterSchema }),
+  ]),
+);
 
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const session = await auth();
@@ -66,10 +90,27 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  const target = parsed.data;
+  const leadIds =
+    "leadIds" in target
+      ? target.leadIds
+      : await listLeadIdsMatching(prisma, { organisationId, ...target.filter });
+
+  if (leadIds.length === 0) {
+    return NextResponse.json({ updated: 0, deleted: 0 });
+  }
+
+  if (target.action === "delete") {
+    // Hard delete: cascades through enrollments, outbox items, conversations,
+    // meetings and research for each lead, and is audited as one event.
+    const deleted = await deleteLeadsData(prisma, organisationId, leadIds, session.user.id);
+    return NextResponse.json({ deleted });
+  }
+
   const count =
-    parsed.data.action === "archive"
-      ? await archiveLeads(prisma, organisationId, parsed.data.leadIds)
-      : await unarchiveLeads(prisma, organisationId, parsed.data.leadIds);
+    target.action === "archive"
+      ? await archiveLeads(prisma, organisationId, leadIds)
+      : await unarchiveLeads(prisma, organisationId, leadIds);
 
   return NextResponse.json({ updated: count });
 }

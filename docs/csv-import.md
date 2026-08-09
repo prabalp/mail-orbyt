@@ -10,18 +10,22 @@
 2. **Map & review** — the user confirms/adjusts the column mapping in the
    wizard (`apps/web/src/app/(app)/leads/import/page.tsx`) against the same
    preview data.
-3. **Choose a duplicate strategy** — SKIP, UPDATE_BLANKS, OVERWRITE, REJECT,
+3. **Name the list** — every import must be given a lead-list name
+   (defaulted from the file name, editable). See "Named lead lists" below.
+4. **Choose a duplicate strategy** — SKIP, UPDATE_BLANKS, OVERWRITE, REJECT,
    or ALLOW_SEPARATE (see `packages/leads/src/duplicates.ts`).
-4. **Confirm** (`POST /api/organisations/:id/leads/import`) — creates an
+5. **Confirm** (`POST /api/organisations/:id/leads/import`) — resolves the
+   list name to a `LeadList` (creating it if new), then creates an
    `ImportBatch` row referencing the same storage key (the file is never
    uploaded twice) and enqueues a BullMQ job. No parsing/writing happens on
    the request thread.
-5. **Background processing** (`apps/worker/src/queues/lead-import.ts` →
+6. **Background processing** (`apps/worker/src/queues/lead-import.ts` →
    `packages/leads/src/import-batch.ts`) does the real work: normalize each
    field (deterministic — no AI), find-or-create the `Company` by domain,
    detect within-file and against-DB duplicates, apply the chosen strategy,
-   and upsert leads.
-6. The wizard polls `GET /api/organisations/:id/leads/import/:batchId` for
+   upsert leads, and add every imported/updated lead to the batch's
+   `LeadList`.
+7. The wizard polls `GET /api/organisations/:id/leads/import/:batchId` for
    status until `COMPLETED` or `FAILED`.
 
 ## Idempotency
@@ -35,6 +39,27 @@ duplicate lead. `enqueueImportJob` also gives every job a stable `jobId`
 derived from the batch ID, so enqueuing the same batch twice (a double
 click, a retried request) reuses the same BullMQ job instead of running the
 import concurrently.
+
+## Named lead lists
+
+`leadListName` is **required** by `POST /api/organisations/:id/leads/import`
+— an import with no name is a `400`. The reason is downstream: a campaign
+enrols a whole `LeadList` in one action
+(`POST /campaigns/:id/enrollments` with `{ leadListId }`), so an unnamed
+import is an audience that can only ever be re-selected by ticking prospects
+one at a time.
+
+- Reusing an existing name is allowed and **merges** into that list rather
+  than erroring — re-importing a refreshed CSV of the same audience should
+  extend the audience. The wizard warns when the name already exists.
+- Membership is added for **updated** rows as well as newly created ones, so
+  the list always describes the whole file, not just its new rows.
+- `createMany({ skipDuplicates: true })` on the `(leadListId, leadId)` unique
+  constraint keeps this idempotent under the batch-retry semantics below.
+- Lists can also be created independently of an import:
+  `POST /api/organisations/:id/lead-lists` takes either explicit `leadIds` or
+  a `filter`, which is resolved server-side — that's "save this search as a
+  list".
 
 ## Normalization (deterministic, no AI)
 
@@ -63,6 +88,34 @@ writing it to the export CSV — the standard mitigation for spreadsheet
 formula injection ("CSV injection"), where a malicious lead record (e.g. a
 company name of `=cmd|'/c calc'!A1`) would otherwise execute as a formula
 when the export is opened in Excel/Sheets.
+
+Three export shapes share that sanitizer and one column set:
+
+| What                    | Request                                         |
+| ----------------------- | ----------------------------------------------- |
+| Every lead (all states) | `GET /leads/export`                             |
+| The current view        | `GET /leads/export?search=&status=&leadListId=` |
+| A tick-box selection    | `POST /leads/export` with `{ leadIds }`         |
+
+The selection form is a POST because a selection can run to tens of
+thousands of IDs, past any URL length limit. The filtered form goes through
+`buildLeadWhere` — the same predicate builder the leads table itself lists
+through — so "export what I'm looking at" provably matches what's on screen.
+
+## Bulk actions and "select all matching"
+
+`PATCH /api/organisations/:id/leads` takes an action (`archive`,
+`unarchive`, `delete`) against **either** `{ leadIds }` (what's ticked) or
+`{ filter }` (the table's "select all N matching" banner). The filter form
+is resolved to IDs server-side by `listLeadIdsMatching` rather than trusting
+a client-sent list, and every path stays scoped by `organisationId`.
+
+`delete` is a hard delete via `deleteLeadsData`
+(`packages/compliance/src/deletion-service.ts`): it relies on the schema's
+cascades, so a deleted lead takes its enrollments, outbox items (including
+sent-email history), conversations, meetings, and research with it. It is
+chunked at 1000 IDs per statement and recorded as a single `DATA_DELETED`
+audit event carrying the count and IDs.
 
 ## Suppression foundation
 

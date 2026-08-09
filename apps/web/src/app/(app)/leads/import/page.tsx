@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Badge,
@@ -12,6 +12,7 @@ import {
   Select,
   Stepper,
   Table,
+  TextInput,
 } from "@mail-orbyt/design-system";
 import { useOrganisation } from "../../organisation-context";
 
@@ -47,20 +48,32 @@ interface PreviewResponse {
 const STEPS = [
   { key: "upload", label: "Upload" },
   { key: "map", label: "Map columns" },
+  { key: "name", label: "Name list" },
   { key: "strategy", label: "Duplicates" },
   { key: "done", label: "Import" },
 ];
+
+/** Falls back to the file's own name so the required field is never a dead end — "contacts-q3.csv" becomes "contacts q3". */
+function suggestListName(fileName: string): string {
+  return fileName
+    .replace(/\.csv$/i, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}
 
 export default function ImportLeadsPage(): React.ReactElement {
   const { organisationId } = useOrganisation();
   const router = useRouter();
 
-  const [step, setStep] = useState<"upload" | "map" | "strategy" | "done">("upload");
+  const [step, setStep] = useState<"upload" | "map" | "name" | "strategy" | "done">("upload");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [duplicateStrategy, setDuplicateStrategy] = useState("SKIP");
+  const [leadListName, setLeadListName] = useState("");
+  const [leadListDescription, setLeadListDescription] = useState("");
+  const [existingListNames, setExistingListNames] = useState<string[]>([]);
   const [batchStatus, setBatchStatus] = useState<{
     status: string;
     importedCount: number;
@@ -69,6 +82,24 @@ export default function ImportLeadsPage(): React.ReactElement {
     totalRows: number;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Existing names are loaded only to warn about a merge — reusing a name is
+  // allowed (the API resolves it to the same list), it just shouldn't be a
+  // surprise when the campaign picker shows one list holding both imports.
+  useEffect(() => {
+    fetch(`/api/organisations/${organisationId}/lead-lists`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data) {
+          setExistingListNames(data.leadLists.map((list: { name: string }) => list.name));
+        }
+      });
+  }, [organisationId]);
+
+  const trimmedListName = leadListName.trim();
+  const listNameExists = existingListNames.some(
+    (name) => name.toLowerCase() === trimmedListName.toLowerCase(),
+  );
 
   async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -96,6 +127,7 @@ export default function ImportLeadsPage(): React.ReactElement {
         if (suggested) initialMapping[column.key] = suggested;
       }
       setMapping(initialMapping);
+      setLeadListName((current) => current || suggestListName(data.fileName));
       setStep("map");
     } finally {
       setUploading(false);
@@ -120,6 +152,8 @@ export default function ImportLeadsPage(): React.ReactElement {
           fileName: preview.fileName,
           columnMapping,
           duplicateStrategy,
+          leadListName: leadListName.trim(),
+          leadListDescription: leadListDescription.trim() || undefined,
         }),
       });
       if (!response.ok) {
@@ -255,7 +289,49 @@ export default function ImportLeadsPage(): React.ReactElement {
             <Button variant="text" onClick={() => setStep("upload")}>
               Back
             </Button>
-            <Button onClick={() => setStep("strategy")}>Continue</Button>
+            <Button onClick={() => setStep("name")}>Continue</Button>
+          </div>
+        </>
+      ) : null}
+
+      {step === "name" ? (
+        <>
+          <Card>
+            <h2 className="text-lg font-medium text-on-surface">Name this list</h2>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              Every import is saved as a named lead list. Campaigns can then enrol the whole list in
+              one step instead of you ticking prospects one by one.
+            </p>
+            <div className="mt-4 flex max-w-lg flex-col gap-4">
+              <TextInput
+                label="List name"
+                required
+                placeholder="e.g. Series B fintech CTOs — August"
+                value={leadListName}
+                onChange={(event) => setLeadListName(event.target.value)}
+              />
+              <TextInput
+                label="Description (optional)"
+                placeholder="Where this audience came from, how it was built…"
+                value={leadListDescription}
+                onChange={(event) => setLeadListDescription(event.target.value)}
+              />
+            </div>
+            {listNameExists ? (
+              <div className="mt-4">
+                <Alert tone="warning" title="A list with this name already exists">
+                  These leads will be added to the existing list rather than creating a new one.
+                </Alert>
+              </div>
+            ) : null}
+          </Card>
+          <div className="flex justify-end gap-2">
+            <Button variant="text" onClick={() => setStep("map")}>
+              Back
+            </Button>
+            <Button disabled={trimmedListName.length === 0} onClick={() => setStep("strategy")}>
+              Continue
+            </Button>
           </div>
         </>
       ) : null}
@@ -297,10 +373,14 @@ export default function ImportLeadsPage(): React.ReactElement {
             </div>
           </Card>
           <div className="flex justify-end gap-2">
-            <Button variant="text" onClick={() => setStep("map")}>
+            <Button variant="text" onClick={() => setStep("name")}>
               Back
             </Button>
-            <Button loading={submitting} onClick={handleConfirmImport}>
+            <Button
+              loading={submitting}
+              disabled={trimmedListName.length === 0}
+              onClick={handleConfirmImport}
+            >
               Start import
             </Button>
           </div>
@@ -316,6 +396,9 @@ export default function ImportLeadsPage(): React.ReactElement {
                 ? "Import failed"
                 : "Importing…"}
           </h2>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Importing into list <span className="font-medium">{trimmedListName}</span>.
+          </p>
           {batchStatus ? (
             <div className="mt-4 flex gap-6 text-sm">
               <span>Imported: {batchStatus.importedCount}</span>

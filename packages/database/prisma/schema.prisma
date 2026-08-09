@@ -416,13 +416,18 @@ model LeadCompany {
   @@index([companyId])
 }
 
+/// A named set of leads. Every CSV import creates (or reuses) one, so a
+/// campaign can enroll "the leads from that import" as a unit instead of the
+/// operator ticking prospects one at a time.
 model LeadList {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   organisationId String
   name           String
+  description    String?
 
-  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  memberships  LeadListMembership[]
+  organisation  Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  memberships   LeadListMembership[]
+  importBatches ImportBatch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -465,6 +470,10 @@ model ImportBatch {
   id                String            @id @default(cuid())
   organisationId    String
   createdByUserId   String
+  /// Every import names its leads: the LeadList each imported/updated row is
+  /// added to. Required at the API layer (the column is nullable only so
+  /// pre-existing batches survive the migration).
+  leadListId        String?
   fileName          String
   /// Object storage key for the originally uploaded CSV (see packages/storage).
   storageKey        String
@@ -478,6 +487,7 @@ model ImportBatch {
   errorMessage      String?
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  leadList     LeadList?    @relation(fields: [leadListId], references: [id], onDelete: SetNull)
   rows         ImportRow[]
 
   createdAt DateTime @default(now())
@@ -485,6 +495,7 @@ model ImportBatch {
 
   @@index([organisationId])
   @@index([organisationId, status])
+  @@index([leadListId])
 }
 
 enum ImportRowStatus {
@@ -1029,6 +1040,13 @@ model Campaign {
   /// which is what spam filters look for. Enforced per inbox, so a pool of
   /// N inboxes still sends N emails concurrently. 0 disables the throttle.
   inboxCooldownMinutes     Int            @default(3)
+  /// Tone/style guidance for AI-generated copy in THIS campaign. When set it
+  /// replaces Organisation.emailPromptInstructions outright (it does not
+  /// stack with it) so a campaign's voice is readable in one place; null/empty
+  /// falls back to the organisation-level instructions. Like the org-level
+  /// field this is style guidance only — the hard rules in the generation
+  /// system prompt always take priority (see packages/email-generation/src/prompt.ts).
+  emailPromptInstructions  String?
   createdByUserId          String
 
   organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)

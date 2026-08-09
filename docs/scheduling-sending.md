@@ -112,6 +112,25 @@ retries (stays `SCHEDULED`, rescheduled 5 minutes out) until
 `MAX_ATTEMPTS` (3), after which the item is marked `FAILED` — terminal, not
 retried further, and visible for a human to investigate.
 
+## The per-lead email record
+
+`OutboxItem` is not just a queue — it's the permanent record of what was
+sent. Its `subject`/`body` are materialized once, at send time, and never
+regenerated on retry, so the stored copy is byte-identical to what the
+prospect received rather than a re-render of the template.
+
+`listLeadEmailHistory` (`packages/leads/src/email-history.ts`, exposed as
+`GET /api/organisations/:id/leads/:leadId/emails` and rendered in the lead
+drawer) reads that record for one lead: the campaign and step each email
+came from, the inbox it was sent from, `sentAt`/`scheduledFor`, provider
+message/thread IDs, and the copy itself.
+
+Items that never left — `FAILED`, `SKIPPED_SUPPRESSED`, `CANCELLED` — are
+returned alongside sends on purpose. "Why has this lead never heard from us"
+is the same question as "what did we send them", and hiding the non-sends
+makes it unanswerable. Ordering is `sentAt` then `scheduledFor`, since
+queued items have no `sentAt` and would otherwise strand at one end.
+
 ## A real bug found via live verification
 
 **`EMERGENCY_STOP=false` in `.env` was silently engaging the kill switch.**

@@ -34,3 +34,42 @@ export async function deleteLeadData(
 
   return true;
 }
+
+/** How many lead IDs one bulk delete will touch per statement — large enough that a full-list purge is a handful of round trips, small enough to stay well inside Postgres's parameter limits. */
+const DELETE_CHUNK_SIZE = 1000;
+
+/**
+ * Bulk counterpart to deleteLeadData, for the leads table's "select all →
+ * delete" action. Same cascade semantics (everything tied to each lead goes
+ * with it — outbox items, conversations, meetings, research), and the
+ * deleteMany is scoped by organisationId as well as ID so a caller passing a
+ * foreign lead ID deletes nothing rather than someone else's data. One
+ * audit event is recorded for the operation as a whole, carrying the count
+ * and the IDs, rather than one event per lead.
+ */
+export async function deleteLeadsData(
+  prisma: Prisma,
+  organisationId: string,
+  leadIds: string[],
+  deletedByUserId: string,
+): Promise<number> {
+  if (leadIds.length === 0) return 0;
+
+  let deleted = 0;
+  for (let index = 0; index < leadIds.length; index += DELETE_CHUNK_SIZE) {
+    const chunk = leadIds.slice(index, index + DELETE_CHUNK_SIZE);
+    const result = await prisma.lead.deleteMany({
+      where: { id: { in: chunk }, organisationId },
+    });
+    deleted += result.count;
+  }
+
+  await recordAuditEvent(prisma, {
+    type: "DATA_DELETED",
+    organisationId,
+    userId: deletedByUserId,
+    metadata: { leadIds, deletedCount: deleted, reason: "bulk_delete" },
+  });
+
+  return deleted;
+}
