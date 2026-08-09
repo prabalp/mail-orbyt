@@ -53,6 +53,7 @@ const BASE_ITEM = {
   lead: { id: "lead-1", email: "prospect@example.com", firstName: "Jamie" },
   campaign: {
     id: "campaign-1",
+    status: "ACTIVE",
     timezone: "UTC",
     sendingDaysOfWeek: [0, 1, 2, 3, 4, 5, 6],
     sendingWindowStartMinute: 0,
@@ -96,6 +97,21 @@ describe("processOutboxItem", () => {
     );
     expect(result?.status).toBe("SCHEDULED");
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  // Pausing must stop sends that were already queued, not only stop new ones
+  // being scheduled — the dispatcher hands over every due item regardless of
+  // campaign, so this check is the only thing enforcing it.
+  it("does not send for a paused campaign, and leaves the item SCHEDULED for the resume", async () => {
+    const prisma = fakePrisma({
+      ...BASE_ITEM,
+      campaign: { ...BASE_ITEM.campaign, status: "PAUSED" },
+    });
+    const sendEmail = vi.fn();
+    const result = await processOutboxItem(prisma, { ...BASE_DEPS, sendEmail }, "outbox-1");
+    expect(result?.status).toBe("SCHEDULED");
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(prisma.outboxItem.update).not.toHaveBeenCalled();
   });
 
   it("marks the item SKIPPED_SUPPRESSED and exits the enrollment when the lead is suppressed", async () => {

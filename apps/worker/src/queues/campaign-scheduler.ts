@@ -2,8 +2,8 @@ import type { PrismaClient } from "@mail-orbyt/database";
 import type { Logger } from "@mail-orbyt/logging";
 import {
   SCHEDULER_QUEUE_NAME,
+  dispatchDueOutboxItems,
   enqueueDueOutboxItems,
-  enqueueOutboxItem,
 } from "@mail-orbyt/scheduling";
 import { syncRepliesForOutboxItem } from "@mail-orbyt/conversations";
 import { fetchThreadMessages } from "@mail-orbyt/gmail";
@@ -53,17 +53,11 @@ export function createCampaignSchedulerWorker(params: {
       const { scheduled, considered } = await enqueueDueOutboxItems(params.prisma);
       params.logger.info("scheduler tick", { scheduled, considered });
 
-      const due = await params.prisma.outboxItem.findMany({
-        where: {
-          status: "SCHEDULED",
-          scheduledFor: { lte: new Date(Date.now() + LOOKAHEAD_MS) },
-        },
-        select: { id: true, scheduledFor: true },
+      const dispatched = await dispatchDueOutboxItems(params.prisma, params.connection, {
+        lookaheadMs: LOOKAHEAD_MS,
       });
-
-      for (const item of due) {
-        const delayMs = Math.max(0, item.scheduledFor.getTime() - Date.now());
-        await enqueueOutboxItem(params.connection, { outboxItemId: item.id }, delayMs);
+      if (dispatched > 0) {
+        params.logger.info("dispatched due outbox items", { dispatched });
       }
 
       const repliesFound = await syncRecentReplies(params.prisma, params.logger);

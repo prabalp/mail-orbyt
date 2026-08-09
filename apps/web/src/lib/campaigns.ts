@@ -27,7 +27,13 @@ import {
   resolveInboxSenderName,
   sendFromInbox,
 } from "@mail-orbyt/gmail";
-import { applyMergeTokens, enqueueDueOutboxItems, processOutboxItem } from "@mail-orbyt/scheduling";
+import {
+  applyMergeTokens,
+  dispatchDueOutboxItems,
+  enqueueDueOutboxItems,
+  processOutboxItem,
+} from "@mail-orbyt/scheduling";
+import { redisConnection } from "@/lib/queue";
 
 export {
   CampaignActivationError,
@@ -52,7 +58,19 @@ export async function updateOrganisationCampaign(
   campaignId: string,
   patch: UpdateCampaignParams,
 ) {
-  return updateCampaign(prisma, organisationId, campaignId, patch);
+  const campaign = await updateCampaign(prisma, organisationId, campaignId, patch);
+
+  // Activating is otherwise only a column write, and sending is driven by the
+  // worker's 60s tick — so without this a campaign switched back to Active sits
+  // there with its emails "queued" for up to a minute, which reads as the
+  // resume not having worked. Both calls are idempotent, so the tick that
+  // follows re-covers the same items without sending anything twice.
+  if (campaign?.status === "ACTIVE" && patch.status === "ACTIVE") {
+    await enqueueDueOutboxItems(prisma, { campaignId });
+    await dispatchDueOutboxItems(prisma, redisConnection, { campaignId });
+  }
+
+  return campaign;
 }
 
 export async function archiveOrganisationCampaign(organisationId: string, campaignId: string) {

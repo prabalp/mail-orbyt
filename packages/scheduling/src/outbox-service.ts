@@ -27,12 +27,17 @@ const MAX_ATTEMPTS = 3;
 const RETRY_BACKOFF_MS = 5 * 60_000;
 const DEFER_WHEN_NO_INBOX_MS = 60 * 60_000;
 
-/** Ensures every ACTIVE campaign's PENDING/ACTIVE enrollments have their next due OutboxItem scheduled. Safe to call repeatedly (e.g. every scheduler tick) — scheduleNextStepForEnrollment is itself idempotent. */
+/** Ensures every ACTIVE campaign's PENDING/ACTIVE enrollments have their next due OutboxItem scheduled. Safe to call repeatedly (e.g. every scheduler tick) — scheduleNextStepForEnrollment is itself idempotent. Pass `campaignId` to narrow it to one campaign, as the resume path does: reactivating one campaign should not walk every organisation's enrollments. */
 export async function enqueueDueOutboxItems(
   prisma: Pick<PrismaClient, "campaignEnrollment" | "campaignStep" | "outboxItem">,
+  options: { campaignId?: string } = {},
 ) {
   const enrollments = await prisma.campaignEnrollment.findMany({
-    where: { status: { in: ["PENDING", "ACTIVE"] }, campaign: { status: "ACTIVE" } },
+    where: {
+      status: { in: ["PENDING", "ACTIVE"] },
+      campaign: { status: "ACTIVE" },
+      ...(options.campaignId ? { campaignId: options.campaignId } : {}),
+    },
     select: { id: true },
   });
 
@@ -95,6 +100,13 @@ export async function processOutboxItem(
   });
   if (!item) return null;
   if (item.status !== "SCHEDULED") return item;
+
+  // Pause has to hold at SEND time, not just at scheduling time: the scheduler
+  // dispatches every due SCHEDULED item regardless of which campaign it belongs
+  // to, so without this a paused campaign keeps sending everything already
+  // queued and only looks paused once that backlog drains. The item is left
+  // SCHEDULED and otherwise untouched, so resuming picks it straight back up.
+  if (item.campaign.status !== "ACTIVE") return item;
 
   if (deps.emergencyStop) {
     return item;

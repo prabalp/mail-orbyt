@@ -68,6 +68,21 @@ describe("updateCampaign", () => {
     expect(result?.status).toBe("ACTIVE");
   });
 
+  // A send time is baked in when the item is created, so anything the pause
+  // left pointing at a stale slot would keep that time and the resumed
+  // campaign would look like it had done nothing.
+  it("re-anchors pending sends when a paused campaign is resumed", async () => {
+    const prisma = fakePrisma({ ...SCHEDULED_CAMPAIGN, status: "PAUSED" }, 1, 1);
+    await updateCampaign(prisma, "org-1", "campaign-1", { status: "ACTIVE" });
+    expect(prisma.outboxItem.findMany).toHaveBeenCalled();
+  });
+
+  it("leaves pending sends alone when a campaign is paused", async () => {
+    const prisma = fakePrisma({ ...SCHEDULED_CAMPAIGN, status: "ACTIVE" });
+    await updateCampaign(prisma, "org-1", "campaign-1", { status: "PAUSED" });
+    expect(prisma.outboxItem.findMany).not.toHaveBeenCalled();
+  });
+
   // Without this, a window edit applies only to items created afterwards and
   // already-scheduled sends stay pinned to the old window.
   it("reschedules pending outbox items when the sending window moves", async () => {

@@ -19,6 +19,7 @@ export {
   processOutboxItem,
   type ProcessOutboxItemDeps,
 } from "./outbox-service";
+export { dispatchDueOutboxItems, OUTBOX_LOOKAHEAD_MS } from "./dispatch";
 export {
   getSchedulerQueue,
   scheduleRecurringTick,

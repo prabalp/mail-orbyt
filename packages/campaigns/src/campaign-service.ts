@@ -156,7 +156,15 @@ export async function updateCampaign(
     }
   }
 
-  const shouldReschedule = movesSendingWindow(campaign, patch);
+  // Resuming re-anchors pending sends for the same reason a window edit does:
+  // an item's scheduledFor is computed once, at creation, so anything the pause
+  // left pointing at a stale slot (a send deferred an hour for want of a free
+  // inbox, a time clamped into a window that has since passed) would keep that
+  // time and make the resumed campaign look inert. Re-deriving from the
+  // enrollment anchor puts overdue items at `now` without ever pulling a
+  // follow-up in ahead of its delayDays gap.
+  const resuming = patch.status === "ACTIVE" && campaign.status === "PAUSED";
+  const shouldReschedule = movesSendingWindow(campaign, patch) || resuming;
   const updated = await prisma.campaign.update({ where: { id: campaignId }, data: patch });
 
   // Pending sends carry a scheduledFor computed under the OLD window, so
