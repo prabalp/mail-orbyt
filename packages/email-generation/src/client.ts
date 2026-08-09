@@ -36,27 +36,56 @@ interface AiConfig {
   maxOutputTokens: number;
 }
 
-function getAiConfig(): AiConfig | undefined {
+/**
+ * Per-organisation overrides, resolved by @mail-orbyt/ai-settings from the
+ * organisation's saved settings. Each field independently takes precedence
+ * over the environment default; anything omitted falls back to it. This is
+ * the ONLY way a caller can influence which key/model is used — no caller
+ * outside this module ever reads AI_PROVIDER_API_KEY itself.
+ */
+export interface AiConfigOverride {
+  apiKey?: string;
+  model?: string;
+}
+
+function getAiConfig(override?: AiConfigOverride): AiConfig | undefined {
   const env = loadEnv();
-  if (!env.AI_PROVIDER_API_KEY) return undefined;
+  const apiKey = override?.apiKey || env.AI_PROVIDER_API_KEY;
+  if (!apiKey) return undefined;
   return {
-    apiKey: env.AI_PROVIDER_API_KEY,
-    model: env.AI_PROVIDER_MODEL,
+    apiKey,
+    model: override?.model || env.AI_PROVIDER_MODEL,
     maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
   };
 }
 
-export function isAiConfigured(): boolean {
-  return getAiConfig() !== undefined;
+/** True when this organisation can make AI calls — via its own key, or the deployment's. */
+export function isAiConfigured(override?: AiConfigOverride): boolean {
+  return getAiConfig(override) !== undefined;
 }
 
-let cachedClient: GoogleGenAI | undefined;
+/**
+ * What the deployment falls back to when an organisation brings no key or
+ * model of its own. Exposed so the Settings UI can say "Default (…)" without
+ * reading AI_PROVIDER_API_KEY itself — the key's VALUE never leaves this
+ * module, only whether one exists.
+ */
+export function getEnvironmentAiDefaults(): { keyAvailable: boolean; model: string } {
+  const env = loadEnv();
+  return { keyAvailable: Boolean(env.AI_PROVIDER_API_KEY), model: env.AI_PROVIDER_MODEL };
+}
+
+// Keyed by API key, not a bare singleton: organisations bring their own keys,
+// and a single cached client would pin whichever key happened to be used
+// first and silently bill/authenticate every other organisation as that one.
+const clientCache = new Map<string, GoogleGenAI>();
 
 function getGeminiClient(apiKey: string): GoogleGenAI {
-  if (!cachedClient) {
-    cachedClient = new GoogleGenAI({ apiKey });
-  }
-  return cachedClient;
+  const cached = clientCache.get(apiKey);
+  if (cached) return cached;
+  const client = new GoogleGenAI({ apiKey });
+  clientCache.set(apiKey, client);
+  return client;
 }
 
 class GeminiEmailGenerator implements AiEmailGenerator {
@@ -113,10 +142,75 @@ class GeminiEmailGenerator implements AiEmailGenerator {
   }
 }
 
-/** Returns the configured Gemini-backed generator, or throws AiNotConfiguredError if no API key is set. */
-export function getAiEmailGenerator(): AiEmailGenerator {
-  const config = getAiConfig();
+/**
+ * Returns the Gemini-backed generator for these overrides (the
+ * organisation's own key/model where set, the environment's otherwise), or
+ * throws AiNotConfiguredError if neither supplies a key.
+ */
+export function getAiEmailGenerator(override?: AiConfigOverride): AiEmailGenerator {
+  const config = getAiConfig(override);
   if (!config) throw new AiNotConfiguredError();
   const client = getGeminiClient(config.apiKey);
   return new GeminiEmailGenerator(client, config.model, config.maxOutputTokens);
+}
+
+/**
+ * Makes the smallest possible real call against a key/model pair so Settings
+ * can reject credentials at save time rather than letting them surface later
+ * as an opaque 502 mid-campaign. Returns the provider's own message on
+ * failure (unknown model, bad key, exhausted quota) — that text is the whole
+ * point, since it is what actually tells the user which of those it is.
+ */
+export async function verifyAiCredentials(
+  override: AiConfigOverride,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const config = getAiConfig(override);
+  if (!config) return { ok: false, message: "No API key was provided." };
+
+  try {
+    const response = await getGeminiClient(config.apiKey).models.generateContent({
+      model: config.model,
+      contents: [{ role: "user", parts: [{ text: "Reply with the single word: ok" }] }],
+      config: { maxOutputTokens: 8, thinkingConfig: { thinkingBudget: 0 } },
+    });
+    if (!response.text) {
+      return { ok: false, message: "The provider accepted the request but returned no output." };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: describeProviderError(error) };
+  }
+}
+
+/**
+ * Turns a raw provider error into something a settings form can show. The
+ * SDK stringifies its errors as a JSON blob containing the real status and
+ * message, which is unreadable in a form field — the common, actionable
+ * cases get plain wording and anything else falls back to the raw text.
+ */
+function describeProviderError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (/API_KEY_INVALID|API key not valid/i.test(raw)) {
+    return "That API key was rejected by the provider. Check it was copied in full.";
+  }
+  if (/RESOURCE_EXHAUSTED|"code":\s*429/.test(raw)) {
+    return "This key's quota is exhausted. It's valid, but the provider is refusing requests until the quota resets — check your plan and billing details.";
+  }
+  if (/no longer available/i.test(raw)) {
+    return "That model has been retired by the provider and is no longer available to new keys. Pick a current model.";
+  }
+  if (/NOT_FOUND|"code":\s*404/.test(raw)) {
+    return "That model wasn't found for this API key. Check the model ID, or whether your plan has access to it.";
+  }
+  // Every call this package makes sets thinkingBudget: 0 (see
+  // GeminiEmailGenerator.complete for why). Models that cannot have thinking
+  // disabled reject the whole request with a bare "invalid argument", which
+  // is otherwise impossible to act on.
+  if (/INVALID_ARGUMENT|"code":\s*400/.test(raw)) {
+    return "The provider rejected the request for that model. It most likely doesn't support running with reasoning disabled, which this app requires — pick a different model.";
+  }
+  if (/PERMISSION_DENIED|"code":\s*403/.test(raw)) {
+    return "That API key doesn't have permission to use the Generative Language API.";
+  }
+  return raw;
 }

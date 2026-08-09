@@ -1,24 +1,19 @@
 import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
-import {
-  AiGenerationFailedError,
-  AiNotConfiguredError,
-  GeneratedEmailValidationError,
-} from "@mail-orbyt/email-generation";
 import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { rewriteDraft, setDraftStatus } from "@/lib/email-drafts";
+import { deleteDraft, setDraftStatus } from "@/lib/email-drafts";
 
 interface RouteParams {
   params: Promise<{ organisationId: string; draftId: string }>;
 }
 
-const patchSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("approve") }),
-  z.object({ action: z.literal("discard") }),
-  z.object({ action: z.literal("rewrite"), style: z.enum(["SHORTER", "FORMAL", "DIRECT"]) }),
-]);
+// "discard" used to live here alongside "approve". An unwanted draft is now
+// DELETEd instead, so it leaves the panel rather than lingering as a
+// DISCARDED row. The status itself still exists for rows created before this
+// change, which the retention sweep continues to clean up.
+const patchSchema = z.object({ action: z.literal("approve") });
 
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const session = await auth();
@@ -49,38 +44,36 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
   }
 
+  const updated = await setDraftStatus(organisationId, draftId, "APPROVED");
+  return NextResponse.json(updated);
+}
+
+export async function DELETE(_request: Request, { params }: RouteParams): Promise<NextResponse> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  }
+  const { organisationId, draftId } = await params;
+
   try {
-    if (body.data.action === "approve") {
-      const updated = await setDraftStatus(organisationId, draftId, "APPROVED");
-      return NextResponse.json(updated);
-    }
-    if (body.data.action === "discard") {
-      const updated = await setDraftStatus(organisationId, draftId, "DISCARDED");
-      return NextResponse.json(updated);
-    }
-    const rewritten = await rewriteDraft({
+    await requireOrganisationMembership(prisma, {
+      userId: session.user.id,
       organisationId,
-      draftId,
-      style: body.data.style,
-      createdByUserId: session.user.id,
+      permission: "campaigns:manage",
     });
-    return NextResponse.json(rewritten, { status: 201 });
   } catch (error) {
-    if (error instanceof AiNotConfiguredError) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
-    }
-    if (error instanceof GeneratedEmailValidationError) {
-      return NextResponse.json(
-        { error: "Rewrite failed safety checks, please try again.", violations: error.violations },
-        { status: 502 },
-      );
-    }
-    if (error instanceof AiGenerationFailedError) {
-      return NextResponse.json(
-        { error: "The AI provider request failed. Please try again." },
-        { status: 502 },
-      );
-    }
+    if (error instanceof ForbiddenError)
+      return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
   }
+
+  const draft = await prisma.emailDraft.findUnique({ where: { id: draftId } });
+  // Also covers a draft another tab already deleted — idempotent from the
+  // panel's point of view, since it reloads the list either way.
+  if (!draft || draft.organisationId !== organisationId) {
+    return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+  }
+
+  await deleteDraft(organisationId, draftId);
+  return new NextResponse(null, { status: 204 });
 }

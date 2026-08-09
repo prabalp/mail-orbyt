@@ -4,7 +4,10 @@ export {
   type SendingWindowConfig,
 } from "./sending-window";
 export { pickNextInbox, markInboxSent, type InboxSelection } from "./inbox-rotation";
-export { scheduleNextStepForEnrollment } from "./enrollment-progression";
+export {
+  scheduleNextStepForEnrollment,
+  rescheduleCampaignOutboxItems,
+} from "./enrollment-progression";
 export {
   materializeStepContent,
   applyMergeTokens,

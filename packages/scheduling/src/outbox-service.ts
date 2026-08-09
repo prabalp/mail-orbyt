@@ -45,7 +45,15 @@ export async function enqueueDueOutboxItems(
 }
 
 export interface ProcessOutboxItemDeps {
-  aiGenerator: AiEmailGenerator | undefined;
+  /**
+   * Resolves the AI generator for a given organisation, rather than taking
+   * one fixed generator: an organisation can supply its own provider key and
+   * model in Settings, and a worker processes items for many organisations,
+   * so which credentials to use isn't known until the item's organisation
+   * is. Returns undefined when neither the organisation nor the environment
+   * has a key configured, which callers treat as "AI steps can't run".
+   */
+  resolveAiGenerator: (organisationId: string) => Promise<AiEmailGenerator | undefined>;
   sendEmail: (
     inboxId: string,
     message: { to: string; subject: string; body: string },
@@ -59,7 +67,7 @@ export interface ProcessOutboxItemDeps {
    */
   getSenderContext: (organisationId: string) => Promise<{
     senderCompanyName: string;
-    customInstructions?: string;
+    campaignPrompt?: string;
     bookingLink?: string;
     generationSystemPromptOverride?: string;
     reviewSystemPromptOverride?: string;
@@ -164,15 +172,17 @@ export async function processOutboxItem(
     const [
       {
         senderCompanyName,
-        customInstructions,
+        campaignPrompt,
         bookingLink,
         generationSystemPromptOverride,
         reviewSystemPromptOverride,
       },
       signatureText,
+      aiGenerator,
     ] = await Promise.all([
       deps.getSenderContext(item.organisationId),
       resolveDefaultSignatureText(prisma, inbox.id),
+      deps.resolveAiGenerator(item.organisationId),
     ]);
     const generated = await materializeStepContent(prisma, {
       organisationId: item.organisationId,
@@ -181,11 +191,13 @@ export async function processOutboxItem(
       senderName: resolveInboxSenderName(inbox),
       senderCompanyName,
       priorEmail,
-      aiGenerator: deps.aiGenerator,
-      // A campaign's own tone/style instructions replace the organisation's
-      // rather than stacking with them — two sets of voice guidance in one
-      // prompt contradict each other as often as they compose.
-      customInstructions: item.campaign.emailPromptInstructions?.trim() || customInstructions,
+      aiGenerator,
+      // A campaign's own prompt replaces the organisation's rather than
+      // stacking with it — two sets of data/format/voice guidance in one
+      // prompt contradict each other as often as they compose. Neither set
+      // falls back to DEFAULT_CAMPAIGN_EMAIL_PROMPT here; that happens in
+      // buildGenerateEmailPrompt, so there is exactly one such fallback.
+      campaignPrompt: item.campaign.emailPromptInstructions?.trim() || campaignPrompt,
       bookingLink,
       signatureText,
       generationSystemPromptOverride,

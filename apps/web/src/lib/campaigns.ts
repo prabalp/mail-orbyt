@@ -18,10 +18,15 @@ import {
   type CreateCampaignParams,
   type UpdateCampaignParams,
 } from "@mail-orbyt/campaigns";
+import { resolveOrgAiConfig } from "@mail-orbyt/ai-settings";
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
 import { generateEmail, getAiEmailGenerator, isAiConfigured } from "@mail-orbyt/email-generation";
-import { resolveDefaultSignatureText, resolveInboxSenderName, sendFromInbox } from "@mail-orbyt/gmail";
+import {
+  resolveDefaultSignatureText,
+  resolveInboxSenderName,
+  sendFromInbox,
+} from "@mail-orbyt/gmail";
 import { applyMergeTokens, enqueueDueOutboxItems, processOutboxItem } from "@mail-orbyt/scheduling";
 
 export {
@@ -131,7 +136,7 @@ async function getSenderContext(organisationId: string) {
   return {
     senderName: organisation.name,
     senderCompanyName: organisation.name,
-    customInstructions: organisation.emailPromptInstructions ?? undefined,
+    campaignPrompt: organisation.emailPromptInstructions ?? undefined,
     bookingLink: organisation.calendlyUrl ?? undefined,
     generationSystemPromptOverride: organisation.generationSystemPrompt ?? undefined,
     reviewSystemPromptOverride: organisation.reviewSystemPrompt ?? undefined,
@@ -160,7 +165,10 @@ export async function sendCampaignNow(organisationId: string, campaignId: string
     const processed = await processOutboxItem(
       prisma,
       {
-        aiGenerator: isAiConfigured() ? getAiEmailGenerator() : undefined,
+        resolveAiGenerator: async (itemOrganisationId) => {
+          const aiConfig = await resolveOrgAiConfig(prisma, itemOrganisationId);
+          return isAiConfigured(aiConfig) ? getAiEmailGenerator(aiConfig) : undefined;
+        },
         sendEmail: (inboxId, message) => sendFromInbox(prisma, inboxId, message),
         getSenderContext,
         emergencyStop: env.EMERGENCY_STOP,
@@ -225,26 +233,34 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     subject = applyMergeTokens(step.manualSubject, SAMPLE_RECIPIENT);
     body = applyMergeTokens(step.manualBody, SAMPLE_RECIPIENT);
   } else {
-    if (!isAiConfigured()) {
-      throw new Error("This step uses AI generation, but no AI provider is configured.");
-    }
     const [
-      { senderCompanyName, customInstructions, bookingLink, generationSystemPromptOverride, reviewSystemPromptOverride },
+      {
+        senderCompanyName,
+        campaignPrompt,
+        bookingLink,
+        generationSystemPromptOverride,
+        reviewSystemPromptOverride,
+      },
       signatureText,
+      aiConfig,
     ] = await Promise.all([
       getSenderContext(organisationId),
       resolveDefaultSignatureText(prisma, inbox.id),
+      resolveOrgAiConfig(prisma, organisationId),
     ]);
-    const generated = await generateEmail(getAiEmailGenerator(), {
+    if (!isAiConfigured(aiConfig)) {
+      throw new Error("This step uses AI generation, but no AI provider is configured.");
+    }
+    const generated = await generateEmail(getAiEmailGenerator(aiConfig), {
       generationType: step.stepType,
       senderName: resolveInboxSenderName(inbox),
       senderCompanyName,
       callToAction: step.callToActionOverride ?? "connect and learn more about your priorities",
       facts: [],
       signatureText,
-      // Mirrors processOutboxItem: the campaign's own instructions replace the
-      // organisation's, so a test send previews the campaign's real voice.
-      customInstructions: campaign.emailPromptInstructions?.trim() || customInstructions,
+      // Mirrors processOutboxItem: the campaign's own prompt replaces the
+      // organisation's, so a test send previews the campaign's real output.
+      campaignPrompt: campaign.emailPromptInstructions?.trim() || campaignPrompt,
       bookingLink,
       generationSystemPromptOverride,
       reviewSystemPromptOverride,
@@ -259,7 +275,11 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
         await sendFromInbox(prisma, inbox.id, { to, subject, body });
         return { email: to, ok: true };
       } catch (error) {
-        return { email: to, ok: false, error: error instanceof Error ? error.message : String(error) };
+        return {
+          email: to,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
       }
     }),
   );

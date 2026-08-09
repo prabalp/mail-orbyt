@@ -1,9 +1,9 @@
 import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
 import {
+  DEFAULT_CAMPAIGN_EMAIL_PROMPT,
   DEFAULT_GENERATION_SYSTEM_PROMPT,
   DEFAULT_REVIEW_SYSTEM_PROMPT,
-  DEFAULT_REWRITE_SYSTEM_PROMPT,
 } from "@mail-orbyt/email-generation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -14,11 +14,10 @@ interface RouteParams {
 }
 
 const bodySchema = z.object({
-  emailPromptInstructions: z.string().max(2000).optional(),
+  emailPromptInstructions: z.string().max(4000).optional(),
   calendlyUrl: z.union([z.string().url(), z.literal("")]).optional(),
   generationSystemPrompt: z.string().max(8000).optional(),
   reviewSystemPrompt: z.string().max(8000).optional(),
-  rewriteSystemPrompt: z.string().max(8000).optional(),
 });
 
 export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
@@ -44,11 +43,10 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     calendlyUrl: organisation.calendlyUrl,
     generationSystemPrompt: organisation.generationSystemPrompt,
     reviewSystemPrompt: organisation.reviewSystemPrompt,
-    rewriteSystemPrompt: organisation.rewriteSystemPrompt,
     defaults: {
       generationSystemPrompt: DEFAULT_GENERATION_SYSTEM_PROMPT,
       reviewSystemPrompt: DEFAULT_REVIEW_SYSTEM_PROMPT,
-      rewriteSystemPrompt: DEFAULT_REWRITE_SYSTEM_PROMPT,
+      campaignPrompt: DEFAULT_CAMPAIGN_EMAIL_PROMPT,
     },
   });
 }
@@ -85,7 +83,6 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
       calendlyUrl: parsed.data.calendlyUrl || null,
       generationSystemPrompt: parsed.data.generationSystemPrompt || null,
       reviewSystemPrompt: parsed.data.reviewSystemPrompt || null,
-      rewriteSystemPrompt: parsed.data.rewriteSystemPrompt || null,
     },
   });
 
@@ -94,6 +91,5 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
     calendlyUrl: organisation.calendlyUrl,
     generationSystemPrompt: organisation.generationSystemPrompt,
     reviewSystemPrompt: organisation.reviewSystemPrompt,
-    rewriteSystemPrompt: organisation.rewriteSystemPrompt,
   });
 }

@@ -1,3 +1,4 @@
+import { resolveOrgAiConfig } from "@mail-orbyt/ai-settings";
 import type { ExtractionMethod, PrismaClient, ResearchSubjectType } from "@mail-orbyt/database";
 import { assertAllowedCategory } from "@mail-orbyt/research";
 import { getKeywordExtractionMode } from "./config";
@@ -8,7 +9,7 @@ const KEYWORDS_CATEGORY = "extracted_keywords";
 
 type Prisma = Pick<
   PrismaClient,
-  "researchSource" | "researchPageText" | "researchKeywordRun" | "researchFact"
+  "researchSource" | "researchPageText" | "researchKeywordRun" | "researchFact" | "organisation"
 >;
 
 const EXCERPT_RADIUS = 60;
@@ -135,15 +136,19 @@ export async function processKeywordExtractionJob(
     let extractionMethod: ExtractionMethod;
     let fallbackNote: string | undefined;
 
-    if (mode === "ai" && isAiConfigured()) {
-      candidates = await extractKeywordsWithAi(source.pageText.text);
+    // The organisation's own key/model, when it has set one in Settings —
+    // otherwise empty, and the client falls back to the environment.
+    const aiConfig = await resolveOrgAiConfig(prisma, source.organisationId);
+
+    if (mode === "ai" && isAiConfigured(aiConfig)) {
+      candidates = await extractKeywordsWithAi(source.pageText.text, aiConfig);
       extractionMethod = "AI_KEYWORD";
     } else {
       candidates = extractKeywordsDeterministic(source.pageText.text);
       extractionMethod = "KEYWORD_FREQUENCY";
       if (mode === "ai") {
         fallbackNote =
-          "KEYWORD_EXTRACTION_MODE=ai but no AI_PROVIDER_API_KEY configured — used the deterministic extractor instead.";
+          "KEYWORD_EXTRACTION_MODE=ai but no AI provider key is configured (neither this organisation's own key nor AI_PROVIDER_API_KEY) — used the deterministic extractor instead.";
       }
     }
 

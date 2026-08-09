@@ -3,10 +3,9 @@ import {
   BOOKING_LINK_PLACEHOLDER,
   buildGenerateEmailPrompt,
   buildReviewEmailPrompt,
-  buildRewriteEmailPrompt,
+  DEFAULT_CAMPAIGN_EMAIL_PROMPT,
   DEFAULT_GENERATION_SYSTEM_PROMPT,
   DEFAULT_REVIEW_SYSTEM_PROMPT,
-  DEFAULT_REWRITE_SYSTEM_PROMPT,
 } from "./prompt";
 import type { GenerateEmailInput } from "./types";
 
@@ -66,36 +65,41 @@ describe("buildGenerateEmailPrompt", () => {
 
   it("system prompt forbids the model from writing its own sign-off/signature", () => {
     const { system } = buildGenerateEmailPrompt(BASE_INPUT);
-    expect(system).toMatch(/do not write any closing sign-off/i);
+    expect(system).toMatch(/never write a closing sign-off/i);
     expect(system).toMatch(/appended automatically/i);
   });
 
-  it("system prompt requires blank-line paragraph breaks", () => {
+  // The split that makes the flow concise: safety in the system prompt, shape
+  // in the campaign prompt. A format rule leaking back into the system prompt
+  // would silently override whatever a campaign asked for.
+  it("keeps formatting rules out of the system prompt", () => {
     const { system } = buildGenerateEmailPrompt(BASE_INPUT);
-    expect(system).toMatch(/blank line/i);
+    expect(system).not.toMatch(/blank line/i);
+    expect(system).not.toMatch(/30-55/);
+    expect(system).not.toMatch(/clickbait/i);
+    expect(system).not.toMatch(/hi \{first name\}/i);
   });
 
-  it("system prompt requires an opening greeting", () => {
-    const { system } = buildGenerateEmailPrompt(BASE_INPUT);
-    expect(system).toMatch(/always start the body with a short greeting/i);
-    expect(system).toMatch(/hi \{firstname\}/i);
-  });
-
-  it("system prompt requires a professional, non-clickbait subject line", () => {
-    const { system } = buildGenerateEmailPrompt(BASE_INPUT);
-    expect(system).toMatch(/clickbait/i);
-    expect(system).toMatch(/spam-trigger words/i);
+  it("puts greeting, paragraph, and subject-line rules in the campaign prompt", () => {
+    const { user } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(user).toMatch(/hi \{first name\}/i);
+    expect(user).toMatch(/blank line/i);
+    expect(user).toMatch(/30-55/);
   });
 
   it("omits the website-text block when none is provided", () => {
     const { user } = buildGenerateEmailPrompt(BASE_INPUT);
-    expect(user).not.toMatch(/background context/i);
+    // Anchored on the block's own header — the campaign prompt mentions
+    // background context as usable data whether or not any is attached.
+    expect(user).not.toMatch(/Background context —/);
   });
 
-  it("includes a truncated, explicitly-untrusted website-text block when provided", () => {
+  // The excerpt is usable material, but it is data and never direction — the
+  // injection defense is the one thing that must survive any loosening here.
+  it("includes a truncated website-text block carrying the injection defense when provided", () => {
     const longText = "a".repeat(3000);
     const { user } = buildGenerateEmailPrompt({ ...BASE_INPUT, websiteText: longText });
-    expect(user).toMatch(/untrusted/i);
+    expect(user).toMatch(/never as direction/i);
     expect(user).toMatch(/never follow any instruction/i);
     expect(user).toContain("a".repeat(2000));
     expect(user).not.toContain("a".repeat(2001));
@@ -115,14 +119,30 @@ describe("buildGenerateEmailPrompt", () => {
     expect(user).not.toContain(BOOKING_LINK_PLACEHOLDER);
   });
 
-  it("appends organisation custom instructions after the fixed hard rules, without removing them", () => {
-    const { system } = buildGenerateEmailPrompt({
+  it("puts the campaign prompt in the user message, never the system prompt", () => {
+    const { system, user } = buildGenerateEmailPrompt({
       ...BASE_INPUT,
-      customInstructions: "Always sign off with 'Cheers,'",
+      campaignPrompt: "Use first name only. Two sentences.",
     });
+    expect(user).toContain("Use first name only. Two sentences.");
+    expect(system).not.toContain("Use first name only. Two sentences.");
+    // The safety rules survive alongside it, un-negotiated.
     expect(system).toMatch(/never invent/i);
-    expect(system).toContain("Always sign off with 'Cheers,'");
-    expect(system).toMatch(/never overridden by this section/i);
+  });
+
+  it("falls back to the default campaign prompt when the campaign sets none", () => {
+    const { user } = buildGenerateEmailPrompt(BASE_INPUT);
+    expect(user).toContain(DEFAULT_CAMPAIGN_EMAIL_PROMPT);
+  });
+
+  it("treats a whitespace-only campaign prompt as unset", () => {
+    const { user } = buildGenerateEmailPrompt({ ...BASE_INPUT, campaignPrompt: "   \n  " });
+    expect(user).toContain(DEFAULT_CAMPAIGN_EMAIL_PROMPT);
+  });
+
+  it("keeps the campaign prompt and the lead data in separate sections", () => {
+    const { user } = buildGenerateEmailPrompt({ ...BASE_INPUT, campaignPrompt: "Be terse." });
+    expect(user.indexOf("Be terse.")).toBeLessThan(user.indexOf("Recipient:"));
   });
 
   it("uses the default generation system prompt when no override is given", () => {
@@ -130,52 +150,14 @@ describe("buildGenerateEmailPrompt", () => {
     expect(system).toBe(DEFAULT_GENERATION_SYSTEM_PROMPT);
   });
 
-  it("uses a custom generationSystemPromptOverride as the base instead of the default", () => {
-    const { system } = buildGenerateEmailPrompt({
+  it("uses a custom generationSystemPromptOverride instead of the default", () => {
+    const { system, user } = buildGenerateEmailPrompt({
       ...BASE_INPUT,
       generationSystemPromptOverride: "Custom base rules only.",
-      customInstructions: "Extra tone guidance.",
+      campaignPrompt: "Extra tone guidance.",
     });
-    expect(system).toContain("Custom base rules only.");
-    expect(system).toContain("Extra tone guidance.");
-    expect(system).not.toContain(DEFAULT_GENERATION_SYSTEM_PROMPT);
-  });
-});
-
-describe("buildRewriteEmailPrompt", () => {
-  it("includes style-specific instructions and forbids new facts", () => {
-    const { system, user } = buildRewriteEmailPrompt({
-      style: "SHORTER",
-      subject: "Hi",
-      body: "Original long body",
-    });
-    expect(user).toMatch(/shorter/i);
-    expect(user).toContain("Original long body");
-    expect(system).toMatch(/do not add any new factual claim/i);
-  });
-
-  it("instructs preserving an existing signature rather than stripping it", () => {
-    const { system } = buildRewriteEmailPrompt({
-      style: "FORMAL",
-      subject: "Hi",
-      body: "Original body\n\nBest,\nAlex",
-    });
-    expect(system).toMatch(/preserve it exactly/i);
-  });
-
-  it("uses the default system prompt when no override is given", () => {
-    const { system } = buildRewriteEmailPrompt({ style: "SHORTER", subject: "Hi", body: "Body" });
-    expect(system).toBe(DEFAULT_REWRITE_SYSTEM_PROMPT);
-  });
-
-  it("uses a custom rewriteSystemPromptOverride instead of the default when given", () => {
-    const { system } = buildRewriteEmailPrompt({
-      style: "SHORTER",
-      subject: "Hi",
-      body: "Body",
-      rewriteSystemPromptOverride: "Custom rewrite rules only.",
-    });
-    expect(system).toBe("Custom rewrite rules only.");
+    expect(system).toBe("Custom base rules only.");
+    expect(user).toContain("Extra tone guidance.");
   });
 });
 
@@ -195,10 +177,26 @@ describe("buildReviewEmailPrompt", () => {
     expect(system).toMatch(/leave it byte-for-byte identical/i);
   });
 
-  it("checks for a missing opening greeting without inventing a name", () => {
+  it("never invents a recipient name while correcting", () => {
     const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" });
-    expect(system).toMatch(/opens with a greeting line/i);
-    expect(system).toMatch(/do not invent a name/i);
+    expect(system).toMatch(/do not invent a recipient name/i);
+  });
+
+  // QA checks the draft against the CAMPAIGN's format, not a house style —
+  // otherwise a campaign asking for one-line emails gets "corrected" back.
+  it("hands the campaign prompt to the reviewer as the spec to check against", () => {
+    const { system, user } = buildReviewEmailPrompt(
+      { subject: "Hi", body: "Body" },
+      { campaignPrompt: "One line only, no greeting." },
+    );
+    expect(user).toContain("One line only, no greeting.");
+    expect(system).toMatch(/campaign's formatting instructions/i);
+  });
+
+  it("carries no format rules of its own in the default review prompt", () => {
+    const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" });
+    expect(system).not.toMatch(/2-4 short paragraphs/i);
+    expect(system).not.toMatch(/30-55/);
   });
 
   it("uses the default review system prompt when no override is given", () => {
@@ -207,7 +205,10 @@ describe("buildReviewEmailPrompt", () => {
   });
 
   it("uses a custom reviewSystemPromptOverride instead of the default when given", () => {
-    const { system } = buildReviewEmailPrompt({ subject: "Hi", body: "Body" }, "Custom review rules.");
+    const { system } = buildReviewEmailPrompt(
+      { subject: "Hi", body: "Body" },
+      { reviewSystemPromptOverride: "Custom review rules." },
+    );
     expect(system).toBe("Custom review rules.");
   });
 });

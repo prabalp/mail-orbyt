@@ -108,7 +108,7 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
 
     const sentMessages: { to: string; subject: string; body: string }[] = [];
     const deps = {
-      aiGenerator: undefined,
+      resolveAiGenerator: async () => undefined,
       sendEmail: async (
         _inboxId: string,
         message: { to: string; subject: string; body: string },
@@ -238,7 +238,7 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
 
     let sendCount = 0;
     const deps = {
-      aiGenerator: undefined,
+      resolveAiGenerator: async () => undefined,
       sendEmail: async () => {
         sendCount += 1;
         return { messageId: "fake-message", threadId: "fake-thread" };
@@ -320,7 +320,7 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
 
     const sentFromInboxIds: string[] = [];
     const deps = {
-      aiGenerator: undefined,
+      resolveAiGenerator: async () => undefined,
       sendEmail: async (inboxId: string) => {
         sentFromInboxIds.push(inboxId);
         return {

@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@mail-orbyt/database";
 import type { Logger } from "@mail-orbyt/logging";
+import { resolveOrgAiConfig } from "@mail-orbyt/ai-settings";
 import { loadEnv } from "@mail-orbyt/config";
 import { getAiEmailGenerator, isAiConfigured } from "@mail-orbyt/email-generation";
 import { sendFromInbox } from "@mail-orbyt/gmail";
@@ -15,7 +16,7 @@ async function getSenderContext(prisma: PrismaClient, organisationId: string) {
   // not from here — the organisation only supplies company-level context.
   return {
     senderCompanyName: organisation.name,
-    customInstructions: organisation.emailPromptInstructions ?? undefined,
+    campaignPrompt: organisation.emailPromptInstructions ?? undefined,
     bookingLink: organisation.calendlyUrl ?? undefined,
     generationSystemPromptOverride: organisation.generationSystemPrompt ?? undefined,
     reviewSystemPromptOverride: organisation.reviewSystemPrompt ?? undefined,
@@ -40,7 +41,12 @@ export function createOutboxWorker(params: {
       await processOutboxItem(
         params.prisma,
         {
-          aiGenerator: isAiConfigured() ? getAiEmailGenerator() : undefined,
+          resolveAiGenerator: async (organisationId) => {
+            // Per organisation, not per worker: each may bring its own
+            // provider key/model, and this worker serves all of them.
+            const aiConfig = await resolveOrgAiConfig(params.prisma, organisationId);
+            return isAiConfigured(aiConfig) ? getAiEmailGenerator(aiConfig) : undefined;
+          },
           sendEmail: (inboxId, message) => sendFromInbox(params.prisma, inboxId, message),
           getSenderContext: (organisationId) => getSenderContext(params.prisma, organisationId),
           emergencyStop: env.EMERGENCY_STOP,

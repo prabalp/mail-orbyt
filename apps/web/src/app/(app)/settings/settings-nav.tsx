@@ -7,6 +7,7 @@ import { cn } from "@mail-orbyt/design-system";
 const SETTINGS_LINKS = [
   { href: "/settings/members", label: "Members" },
   { href: "/settings/email-template", label: "Email template" },
+  { href: "/settings/ai-provider", label: "AI provider" },
 ];
 
 export function SettingsNav(): React.ReactElement {

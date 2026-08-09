@@ -160,22 +160,35 @@ model Organisation {
   id   String @id @default(cuid())
   name String
   slug String @unique
-  /// Additive tone/style guidance appended to (never replacing) the fixed
-  /// core safety rules in packages/email-generation's system prompt. See
+  /// The organisation's DEFAULT campaign prompt: which recipient data emails
+  /// may use, how they are formatted, and the voice to write in. Used by
+  /// campaigns that set no prompt of their own (Campaign.emailPromptInstructions
+  /// replaces it outright). Sent as the leading section of the user message,
+  /// never merged into the system prompt, so it can never relax the safety
+  /// rules there. Null falls back to DEFAULT_CAMPAIGN_EMAIL_PROMPT. See
   /// docs/ai-boundaries.md.
   emailPromptInstructions String? @db.Text
   /// Booking link embedded verbatim (via deterministic substitution, never
   /// model-generated) into every AI-drafted email's call to action.
   calendlyUrl             String?
-  /// Full override of the base system prompt sent to the model for each AI
-  /// step, editable in Settings. Null means "use the package default" (see
-  /// DEFAULT_GENERATION_SYSTEM_PROMPT / DEFAULT_REVIEW_SYSTEM_PROMPT /
-  /// DEFAULT_REWRITE_SYSTEM_PROMPT in packages/email-generation/src/prompt.ts).
-  /// emailPromptInstructions above is still appended on top of whichever
-  /// generation prompt (default or override) is active.
+  /// Full override of the safety-rule system prompts, editable in Settings.
+  /// Null means "use the package default" (see DEFAULT_GENERATION_SYSTEM_PROMPT
+  /// / DEFAULT_REVIEW_SYSTEM_PROMPT in packages/email-generation/src/prompt.ts).
+  /// These hold only rules no campaign may relax — what an email says and how
+  /// it looks comes from the campaign prompt instead.
   generationSystemPrompt String? @db.Text
   reviewSystemPrompt     String? @db.Text
-  rewriteSystemPrompt    String? @db.Text
+  /// The organisation's own AI provider (Gemini) API key, AES-256-GCM
+  /// encrypted at rest with TOKEN_ENCRYPTION_KEY — the same scheme used for
+  /// Gmail OAuth tokens. Null means "use the deployment's AI_PROVIDER_API_KEY".
+  /// Never returned to the browser once saved; the settings API exposes only a
+  /// masked hint. Applies to every AI call made for this organisation: email
+  /// generation, the QA review pass, and AI keyword extraction.
+  aiProviderApiKey String? @db.Text
+  /// Model ID used for this organisation's AI calls. Null means "use the
+  /// deployment's AI_PROVIDER_MODEL". Independent of aiProviderApiKey — an
+  /// organisation may pin a model without bringing its own key.
+  aiProviderModel  String?
 
   memberships        OrganisationMembership[]
   invitations        Invitation[]
@@ -857,12 +870,6 @@ enum EmailGenerationType {
   CLOSE_THE_LOOP
 }
 
-enum EmailRewriteStyle {
-  SHORTER
-  FORMAL
-  DIRECT
-}
-
 enum EmailDraftStatus {
   DRAFT
   APPROVED
@@ -873,15 +880,14 @@ enum EmailDraftStatus {
 /// exact ResearchSnapshot of facts it was generated from — the AI is never
 /// given live, unbounded access to a lead/company's facts, and a draft's
 /// inputs remain reproducible even if facts are edited or deleted later. A
-/// rewrite (shorter/formal/direct) or an experiment variant points back at
+/// a regeneration or an experiment variant points back at
 /// the draft it was derived from via basedOnDraftId rather than duplicating
-/// the snapshot, since a rewrite must not introduce new factual claims.
+/// the snapshot, since a regeneration must not introduce new factual claims.
 model EmailDraft {
   id                 String              @id @default(cuid())
   organisationId     String
   leadId             String
   generationType     EmailGenerationType
-  rewriteStyle       EmailRewriteStyle?
   basedOnDraftId     String?
   researchSnapshotId String?
   subject            String

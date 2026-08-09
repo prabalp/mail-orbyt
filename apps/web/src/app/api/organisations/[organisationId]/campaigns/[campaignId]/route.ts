@@ -1,5 +1,6 @@
 import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
+import { DEFAULT_CAMPAIGN_EMAIL_PROMPT } from "@mail-orbyt/email-generation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
@@ -27,7 +28,7 @@ const updateSchema = z.object({
   // so it's normalised to null rather than rejected.
   emailPromptInstructions: z
     .string()
-    .max(2000)
+    .max(4000)
     .transform((value) => value.trim() || null)
     .nullable()
     .optional(),
@@ -51,7 +52,10 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
 
   const campaign = await getOrganisationCampaign(organisationId, campaignId);
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
-  return NextResponse.json(campaign);
+  // Served rather than imported by the page: the campaign editor is a client
+  // component, and importing @mail-orbyt/email-generation there would pull the
+  // AI provider SDK into the browser bundle.
+  return NextResponse.json({ ...campaign, defaultCampaignPrompt: DEFAULT_CAMPAIGN_EMAIL_PROMPT });
 }
 
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {

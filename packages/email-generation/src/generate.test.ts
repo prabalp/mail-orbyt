@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { generateEmail, rewriteEmail } from "./generate";
+import { generateEmail } from "./generate";
 import { BOOKING_LINK_PLACEHOLDER } from "./prompt";
 import { GeneratedEmailValidationError } from "./validator";
 import type { AiEmailGenerator } from "./client";
@@ -38,6 +38,20 @@ describe("generateEmail", () => {
     expect(result.body).toBe(
       "Would you be open to a quick call?\n\nCheers,\nAlex Rivera\nHead of Sales, Mail Orbyt",
     );
+  });
+
+  // Both calls in the two-prompt flow must see the campaign's instructions:
+  // generation to write to them, QA to check against them.
+  it("passes the campaign prompt to both the generation and the QA pass", async () => {
+    const generator = fakeGenerator(
+      { subject: "Hi", body: "Would you be open to a quick call?" },
+      { subject: "Hi", body: "Would you be open to a quick call?" },
+    );
+    await generateEmail(generator, { ...BASE_INPUT, campaignPrompt: "One line only." });
+
+    const [generationCall, reviewCall] = vi.mocked(generator.complete).mock.calls;
+    expect(generationCall?.[0].user).toContain("One line only.");
+    expect(reviewCall?.[0].user).toContain("One line only.");
   });
 
   it("applies the review pass's corrected output when the review differs and still validates", async () => {
@@ -125,45 +139,5 @@ describe("generateEmail", () => {
     const result = await generateEmail(generator, BASE_INPUT);
     expect(result.body).toBe("Would you be open to a quick call?\n\nBest,\nAlex");
     expect(result.body).not.toContain("Book a time here");
-  });
-});
-
-describe("rewriteEmail", () => {
-  it("returns the rewritten email when valid", async () => {
-    const generator = fakeGenerator({ subject: "Hi", body: "Shorter version." });
-    const result = await rewriteEmail(generator, {
-      style: "SHORTER",
-      subject: "Hi",
-      body: "Original longer body text here.",
-    });
-    expect(result.body).toBe("Shorter version.");
-  });
-
-  it("allows the rewrite to keep a URL that was already present in the original email", async () => {
-    const originalBody = "Book here: https://calendly.com/acme/intro. Talk soon.";
-    const generator = fakeGenerator({
-      subject: "Hi",
-      body: "Shorter — book here: https://calendly.com/acme/intro",
-    });
-    const result = await rewriteEmail(generator, {
-      style: "SHORTER",
-      subject: "Hi",
-      body: originalBody,
-    });
-    expect(result.body).toBe("Shorter — book here: https://calendly.com/acme/intro");
-  });
-
-  it("still rejects a URL introduced by the rewrite that wasn't in the original", async () => {
-    const generator = fakeGenerator(
-      { subject: "Hi", body: "Shorter — book here: https://not-in-original.example/booking" },
-      { subject: "Hi", body: "Shorter — book here: https://not-in-original.example/booking" },
-    );
-    await expect(
-      rewriteEmail(generator, {
-        style: "SHORTER",
-        subject: "Hi",
-        body: "Original body with no links at all.",
-      }),
-    ).rejects.toBeInstanceOf(GeneratedEmailValidationError);
   });
 });

@@ -13,8 +13,8 @@ outside that package for the SDK import, the key reference, or a deep import
 of `@mail-orbyt/email-generation/src/client` (which would let another
 package construct an AI call by hand). Even `apps/web`, which triggers
 generation, never touches the API key or the Gemini client directly — it
-only calls the package's public `generateEmail`/`rewriteEmail` functions and
-checks `isAiConfigured()`.
+only calls the package's public `generateEmail` function and checks
+`isAiConfigured()`.
 
 `packages/email-generation/src/client.ts` is the single file where the SDK
 is imported. Everything else in the package — prompt construction,
@@ -32,8 +32,9 @@ and nothing else:
 - **FOLLOW_UP** — references the prior email that got no reply.
 - **CLOSE_THE_LOOP** — the final message in a sequence, briefly acknowledging
   no reply and leaving the door open.
-- **Rewrites** — SHORTER / FORMAL / DIRECT variants of an existing draft,
-  which must not introduce any new factual claim.
+
+Each of these runs the same two prompts, and nothing else: generation, then
+a QA review pass over the draft.
 
 The model is never given: browsing/search access, the ability to invent
 facts, scheduling logic, lead scoring, reply classification, or analytics.
@@ -52,8 +53,8 @@ underlying facts are later edited or the lead's research is rerun.
 
 ## Deterministic guardrails around the model
 
-The model's output is never trusted blindly. Every generated email — from
-the initial draft through every rewrite — passes through
+The model's output is never trusted blindly. Every generated email — the
+initial draft and the QA-reviewed version alike — passes through
 `packages/email-generation/src/validator.ts` before it's returned to the
 caller:
 

@@ -41,6 +41,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@mail-orbyt/ai-settings':
+        specifier: workspace:*
+        version: link:../../packages/ai-settings
       '@mail-orbyt/analytics':
         specifier: workspace:*
         version: link:../../packages/analytics
@@ -138,6 +141,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@mail-orbyt/ai-settings':
+        specifier: workspace:*
+        version: link:../../packages/ai-settings
       '@mail-orbyt/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -180,6 +186,25 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.1
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/ai-settings:
+    dependencies:
+      '@mail-orbyt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -258,6 +283,9 @@ importers:
       '@mail-orbyt/leads':
         specifier: workspace:*
         version: link:../leads
+      '@mail-orbyt/scheduling':
+        specifier: workspace:*
+        version: link:../scheduling
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -415,6 +443,9 @@ importers:
 
   packages/gmail:
     dependencies:
+      '@mail-orbyt/ai-settings':
+        specifier: workspace:*
+        version: link:../ai-settings
       '@mail-orbyt/config':
         specifier: workspace:*
         version: link:../config
@@ -505,6 +536,9 @@ importers:
       '@google/genai':
         specifier: ^2.13.0
         version: 2.13.0
+      '@mail-orbyt/ai-settings':
+        specifier: workspace:*
+        version: link:../ai-settings
       '@mail-orbyt/config':
         specifier: workspace:*
         version: link:../config

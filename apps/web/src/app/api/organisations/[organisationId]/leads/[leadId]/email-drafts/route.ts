@@ -8,7 +8,7 @@ import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { generateDraft, isAiConfigured, listDrafts } from "@/lib/email-drafts";
+import { generateDraft, isAiConfiguredForOrganisation, listDrafts } from "@/lib/email-drafts";
 
 interface RouteParams {
   params: Promise<{ organisationId: string; leadId: string }>;
@@ -35,8 +35,11 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     throw error;
   }
 
-  const drafts = await listDrafts(organisationId, leadId);
-  return NextResponse.json({ drafts, aiConfigured: isAiConfigured() });
+  const [drafts, aiConfigured] = await Promise.all([
+    listDrafts(organisationId, leadId),
+    isAiConfiguredForOrganisation(organisationId),
+  ]);
+  return NextResponse.json({ drafts, aiConfigured });
 }
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
@@ -92,9 +95,18 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       );
     }
     if (error instanceof AiGenerationFailedError) {
+      // The provider's own message is the only thing that distinguishes an
+      // exhausted quota from a bad key from a network blip — without it this
+      // is an unactionable 502 in the log and nothing else.
+      console.error("AI generation failed", { organisationId, leadId, cause: error.message });
+      const isQuota = /RESOURCE_EXHAUSTED|"code":\s*429/.test(error.message);
       return NextResponse.json(
-        { error: "The AI provider request failed. Please try again." },
-        { status: 502 },
+        {
+          error: isQuota
+            ? "The AI provider's quota is exhausted for the key in use. Add your organisation's own API key in Settings → AI provider, or wait for the quota to reset."
+            : "The AI provider request failed. Please try again.",
+        },
+        { status: isQuota ? 429 : 502 },
       );
     }
     throw error;

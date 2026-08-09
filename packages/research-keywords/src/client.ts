@@ -32,27 +32,37 @@ interface AiConfig {
   maxOutputTokens: number;
 }
 
-function getAiConfig(): AiConfig | undefined {
+/** Per-organisation key/model overrides — see the identically-named type in packages/email-generation/src/client.ts. */
+export interface AiConfigOverride {
+  apiKey?: string;
+  model?: string;
+}
+
+function getAiConfig(override?: AiConfigOverride): AiConfig | undefined {
   const env = loadEnv();
-  if (!env.AI_PROVIDER_API_KEY) return undefined;
+  const apiKey = override?.apiKey || env.AI_PROVIDER_API_KEY;
+  if (!apiKey) return undefined;
   return {
-    apiKey: env.AI_PROVIDER_API_KEY,
-    model: env.AI_PROVIDER_MODEL,
+    apiKey,
+    model: override?.model || env.AI_PROVIDER_MODEL,
     maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
   };
 }
 
-export function isAiConfigured(): boolean {
-  return getAiConfig() !== undefined;
+export function isAiConfigured(override?: AiConfigOverride): boolean {
+  return getAiConfig(override) !== undefined;
 }
 
-let cachedClient: GoogleGenAI | undefined;
+// Keyed by API key — a bare singleton would pin the first organisation's key
+// and use it for every other organisation's extraction too.
+const clientCache = new Map<string, GoogleGenAI>();
 
 function getGeminiClient(apiKey: string): GoogleGenAI {
-  if (!cachedClient) {
-    cachedClient = new GoogleGenAI({ apiKey });
-  }
-  return cachedClient;
+  const cached = clientCache.get(apiKey);
+  if (cached) return cached;
+  const client = new GoogleGenAI({ apiKey });
+  clientCache.set(apiKey, client);
+  return client;
 }
 
 const SYSTEM_INSTRUCTION =
@@ -101,8 +111,11 @@ async function callGemini(
  * everything else is dropped rather than trusted, so a fact this produces
  * can still be traced to a deterministic slice of the saved source text.
  */
-export async function extractKeywordsWithAi(text: string): Promise<KeywordCandidate[]> {
-  const config = getAiConfig();
+export async function extractKeywordsWithAi(
+  text: string,
+  override?: AiConfigOverride,
+): Promise<KeywordCandidate[]> {
+  const config = getAiConfig(override);
   if (!config) throw new AiNotConfiguredError();
 
   let keywords: string[];

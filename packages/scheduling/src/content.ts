@@ -43,8 +43,8 @@ export interface MaterializeContentParams {
   senderCompanyName: string;
   priorEmail?: { subject: string; body: string };
   aiGenerator: AiEmailGenerator | undefined;
-  /** Organisation-configured additive tone guidance and booking link — see packages/email-generation's generateEmail. */
-  customInstructions?: string;
+  /** The campaign's own prompt (recipient data it may use, format, voice) — see packages/email-generation's DEFAULT_CAMPAIGN_EMAIL_PROMPT. */
+  campaignPrompt?: string;
   bookingLink?: string;
   /** The sending inbox's configured default signature, if any — see resolveDefaultSignatureText in @mail-orbyt/gmail. Falls back to a plain "Best,\n{senderName}" line when omitted. */
   signatureText?: string;
@@ -96,7 +96,7 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
     facts,
     priorEmail: params.priorEmail,
     websiteText: pageText?.text,
-    customInstructions: params.customInstructions,
+    campaignPrompt: params.campaignPrompt,
     bookingLink: params.bookingLink,
     signatureText: params.signatureText,
     generationSystemPromptOverride: params.generationSystemPromptOverride,

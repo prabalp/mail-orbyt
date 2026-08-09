@@ -95,6 +95,46 @@ function timeToMinutes(time: string): number {
   return (hours ?? 0) * 60 + (minutes ?? 0);
 }
 
+function dayLabel(day: number): string {
+  return DAYS_OF_WEEK.find((entry) => entry.value === day)?.label ?? String(day);
+}
+
+/** "Mon-Fri" / "Sun, Tue, Sat" — collapses consecutive runs so a normal working week reads as one phrase instead of five. */
+function formatSendingDays(days: number[]): string {
+  const sorted = [...new Set(days)].sort((a, b) => a - b);
+  if (sorted.length === 0) return "No days selected";
+  if (sorted.length === 7) return "Every day";
+
+  const runs: { start: number; end: number }[] = [];
+  for (const day of sorted) {
+    const current = runs[runs.length - 1];
+    if (current && day === current.end + 1) current.end = day;
+    else runs.push({ start: day, end: day });
+  }
+
+  return runs
+    .map(({ start, end }) => {
+      const span = end - start + 1;
+      return span >= 3
+        ? `${dayLabel(start)}-${dayLabel(end)}`
+        : Array.from({ length: span }, (_, offset) => dayLabel(start + offset)).join(", ");
+    })
+    .join(", ");
+}
+
+/** Renders an instant in the CAMPAIGN's timezone, not the viewer's — the window is defined in campaign-local time, so a send time shown in any other zone invites the reader to conclude it falls outside the window. */
+function formatInTimezone(iso: string, timezone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: timezone,
+  }).format(new Date(iso));
+}
+
 function recommendedTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -133,6 +173,8 @@ interface CampaignDetail {
   sendingWindowEndMinute: number;
   inboxCooldownMinutes: number;
   emailPromptInstructions: string | null;
+  pendingSends: { count: number; nextScheduledFor: string | null };
+  defaultCampaignPrompt: string;
 }
 
 interface LeadList {
@@ -236,7 +278,7 @@ export default function CampaignDetailPage(): React.ReactElement {
   useEffect(() => {
     if (!campaign || promptInitialized.current) return;
     promptInitialized.current = true;
-    setPromptInstructions(campaign.emailPromptInstructions ?? "");
+    setPromptInstructions(campaign.emailPromptInstructions ?? campaign.defaultCampaignPrompt);
   }, [campaign]);
 
   function handleUseRecommendedSchedule() {
@@ -522,6 +564,17 @@ export default function CampaignDetailPage(): React.ReactElement {
 
   if (loading || !campaign) return <p className="text-sm text-on-surface-variant">Loading…</p>;
 
+  // Compared against the SAVED campaign so the summary below can never claim a
+  // schedule the server hasn't stored — the form state alone would show edits
+  // that were only typed, not saved.
+  const scheduleHasUnsavedEdits =
+    scheduleTimezone !== campaign.timezone ||
+    timeToMinutes(scheduleStart) !== campaign.sendingWindowStartMinute ||
+    timeToMinutes(scheduleEnd) !== campaign.sendingWindowEndMinute ||
+    Number(scheduleCooldown) !== campaign.inboxCooldownMinutes ||
+    scheduleDays.size !== campaign.sendingDaysOfWeek.length ||
+    campaign.sendingDaysOfWeek.some((day) => !scheduleDays.has(day));
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -561,6 +614,39 @@ export default function CampaignDetailPage(): React.ReactElement {
       />
 
       <CollapsibleCard title="Sending schedule">
+        <div className="mb-4 rounded-lg border border-outline bg-surface-container p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-medium text-on-surface">Currently active schedule</p>
+            {scheduleHasUnsavedEdits ? (
+              <span className="text-xs text-on-surface-variant">
+                Unsaved edits below — save to apply
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            {formatSendingDays(campaign.sendingDaysOfWeek)},{" "}
+            {minutesToTime(campaign.sendingWindowStartMinute)}–
+            {minutesToTime(campaign.sendingWindowEndMinute)} {campaign.timezone}
+            {campaign.inboxCooldownMinutes > 0
+              ? ` · ${campaign.inboxCooldownMinutes} min gap per inbox`
+              : " · no gap between sends"}
+          </p>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            {campaign.pendingSends.nextScheduledFor ? (
+              <>
+                Next email goes out{" "}
+                <span className="font-medium text-on-surface">
+                  {formatInTimezone(campaign.pendingSends.nextScheduledFor, campaign.timezone)}
+                </span>{" "}
+                ({campaign.timezone}) · {campaign.pendingSends.count}{" "}
+                {campaign.pendingSends.count === 1 ? "email" : "emails"} queued
+              </>
+            ) : (
+              "No emails are queued for this campaign right now."
+            )}
+          </p>
+        </div>
+
         <div className="mb-4 flex justify-end">
           <Button variant="text" onClick={handleUseRecommendedSchedule}>
             Use recommended
@@ -767,29 +853,36 @@ export default function CampaignDetailPage(): React.ReactElement {
         )}
       </Card>
 
-      <CollapsibleCard title="Tone & style instructions">
+      <CollapsibleCard title="Campaign email prompt">
         <p className="text-sm text-on-surface-variant">
-          Voice guidance for AI-generated emails in this campaign — how to sound, what to emphasise,
-          what to avoid. When set, this replaces the organisation-wide instructions in Settings for
-          this campaign only. Leave it empty to use the organisation default.
+          What emails in this campaign say and how they look: which recipient data they may use, the
+          format to follow, and the voice to write in. It is sent to the AI with every email this
+          campaign generates, and the QA pass checks the draft against it.
         </p>
         <p className="mt-2 text-sm text-on-surface-variant">
-          This is style guidance only. The hard rules — facts-only personalisation, no invented
-          claims, no fabricated URLs — always apply and cannot be overridden here.
+          The safety rules — facts-only personalisation, no invented claims, no fabricated URLs, no
+          self-written signature — always apply on top of this and cannot be relaxed here. Leave it
+          empty to fall back to the organisation default in Settings.
         </p>
         <div className="mt-4">
           <TextArea
-            label="Campaign tone instructions"
-            rows={6}
-            maxLength={2000}
-            placeholder="e.g. Warm and peer-to-peer, never salesy. Lead with the operational problem, not the product. Avoid superlatives and any mention of ROI."
+            label="Campaign email prompt"
+            rows={14}
+            maxLength={4000}
+            placeholder={campaign.defaultCampaignPrompt}
             value={promptInstructions}
             onChange={(event) => setPromptInstructions(event.target.value)}
           />
         </div>
         <div className="mt-4 flex items-center gap-2">
           <Button loading={savingPrompt} onClick={() => handleSavePrompt(promptInstructions)}>
-            Save tone instructions
+            Save campaign prompt
+          </Button>
+          <Button
+            variant="text"
+            onClick={() => setPromptInstructions(campaign.defaultCampaignPrompt)}
+          >
+            Reset to default
           </Button>
           {campaign.emailPromptInstructions ? (
             <Button
@@ -827,11 +920,7 @@ export default function CampaignDetailPage(): React.ReactElement {
               }))}
             />
           </div>
-          <Button
-            loading={enrollingList}
-            disabled={!selectedLeadListId}
-            onClick={handleEnrollList}
-          >
+          <Button loading={enrollingList} disabled={!selectedLeadListId} onClick={handleEnrollList}>
             Enroll list
           </Button>
           {leadLists.length === 0 ? (

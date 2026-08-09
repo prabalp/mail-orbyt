@@ -82,9 +82,12 @@ export default function CampaignsPage(): React.ReactElement {
 
     setDeletingId(campaign.id);
     try {
-      const response = await fetch(`/api/organisations/${organisationId}/campaigns/${campaign.id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/organisations/${organisationId}/campaigns/${campaign.id}`,
+        {
+          method: "DELETE",
+        },
+      );
       if (response.ok) {
         toast.show("Campaign deleted", "success");
         await load();

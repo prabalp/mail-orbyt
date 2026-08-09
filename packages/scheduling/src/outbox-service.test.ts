@@ -64,7 +64,7 @@ const BASE_ITEM = {
 };
 
 const BASE_DEPS = {
-  aiGenerator: undefined,
+  resolveAiGenerator: async () => undefined,
   sendEmail: vi.fn(),
   getSenderContext: vi
     .fn()
@@ -177,7 +177,7 @@ describe("processOutboxItem", () => {
     expect(scheduleNextStepMock).toHaveBeenCalledWith(prisma, "enrollment-1");
   });
 
-  it("uses the campaign's own tone instructions in place of the organisation's", async () => {
+  it("uses the campaign's own prompt in place of the organisation's", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
     pickNextInboxMock.mockResolvedValueOnce({
       inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
@@ -196,7 +196,7 @@ describe("processOutboxItem", () => {
         sendEmail,
         getSenderContext: vi.fn().mockResolvedValue({
           senderCompanyName: "Mail Orbyt",
-          customInstructions: "Warm and chatty.",
+          campaignPrompt: "Warm and chatty.",
         }),
       },
       "outbox-1",
@@ -204,11 +204,11 @@ describe("processOutboxItem", () => {
 
     expect(materializeStepContentMock).toHaveBeenCalledWith(
       prisma,
-      expect.objectContaining({ customInstructions: "Blunt and technical." }),
+      expect.objectContaining({ campaignPrompt: "Blunt and technical." }),
     );
   });
 
-  it("falls back to the organisation's instructions when the campaign has none", async () => {
+  it("falls back to the organisation's prompt when the campaign has none", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
     pickNextInboxMock.mockResolvedValueOnce({
       inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
@@ -229,7 +229,7 @@ describe("processOutboxItem", () => {
         sendEmail,
         getSenderContext: vi.fn().mockResolvedValue({
           senderCompanyName: "Mail Orbyt",
-          customInstructions: "Warm and chatty.",
+          campaignPrompt: "Warm and chatty.",
         }),
       },
       "outbox-1",
@@ -237,7 +237,7 @@ describe("processOutboxItem", () => {
 
     expect(materializeStepContentMock).toHaveBeenCalledWith(
       prisma,
-      expect.objectContaining({ customInstructions: "Warm and chatty." }),
+      expect.objectContaining({ campaignPrompt: "Warm and chatty." }),
     );
   });
 

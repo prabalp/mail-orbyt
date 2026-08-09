@@ -6,7 +6,6 @@ import {
   Badge,
   Button,
   EmptyState,
-  Select,
   Skeleton,
   TextInput,
   useToast,
@@ -17,7 +16,6 @@ import { useOrganisation } from "../organisation-context";
 interface EmailDraft {
   id: string;
   generationType: "INITIAL" | "FOLLOW_UP" | "CLOSE_THE_LOOP";
-  rewriteStyle: "SHORTER" | "FORMAL" | "DIRECT" | null;
   basedOnDraftId: string | null;
   subject: string;
   body: string;
@@ -38,6 +36,7 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
   const [aiConfigured, setAiConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [callToAction, setCallToAction] = useState("book a 15 minute intro call");
 
   const apiBase = `/api/organisations/${organisationId}/leads/${leadId}/email-drafts`;
@@ -86,21 +85,35 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
     );
   }
 
-  async function handleDraftAction(
-    draftId: string,
-    action: "approve" | "discard" | "rewrite",
-    style?: "SHORTER" | "FORMAL" | "DIRECT",
-  ) {
+  async function handleApprove(draftId: string) {
     const response = await fetch(`/api/organisations/${organisationId}/email-drafts/${draftId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(style ? { action, style } : { action }),
+      body: JSON.stringify({ action: "approve" }),
     });
     if (response.ok) {
       await load();
     } else {
       const data = await response.json().catch(() => ({}));
       toast.show(data.error ?? "Something went wrong", "error");
+    }
+  }
+
+  /** Removes the draft for good. These are previews of how an email would read, so the useless ones go rather than piling up in the list. */
+  async function handleDelete(draftId: string) {
+    setDeletingId(draftId);
+    try {
+      const response = await fetch(`/api/organisations/${organisationId}/email-drafts/${draftId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        await load();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not delete this draft", "error");
+      }
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -176,7 +189,6 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
                 <div>
                   <p className="text-xs font-medium text-on-surface-variant">
                     {draft.generationType.replace(/_/g, " ")}
-                    {draft.rewriteStyle ? ` — ${draft.rewriteStyle.toLowerCase()} rewrite` : ""}
                   </p>
                   <p className="mt-1 text-sm font-medium text-on-surface">{draft.subject}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-on-surface-variant">
@@ -185,28 +197,16 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
                 </div>
                 <Badge tone={STATUS_TONE[draft.status]}>{draft.status}</Badge>
               </div>
-              {draft.status === "DRAFT" ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Button variant="text" onClick={() => handleDraftAction(draft.id, "approve")}>
+              {/* Delete is offered on every draft, whatever its status — the
+                  panel is for seeing how an email reads, and clearing out the
+                  ones you're done with is the main way it stays readable. */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {draft.status === "DRAFT" ? (
+                  <Button variant="text" onClick={() => handleApprove(draft.id)}>
                     Approve
                   </Button>
-                  <Button variant="text" onClick={() => handleDraftAction(draft.id, "discard")}>
-                    Discard
-                  </Button>
-                  <Select
-                    label="Rewrite"
-                    hideLabel
-                    placeholder="Rewrite as…"
-                    options={[
-                      { value: "SHORTER", label: "Shorter" },
-                      { value: "FORMAL", label: "Formal" },
-                      { value: "DIRECT", label: "Direct" },
-                    ]}
-                    onChange={(event) => {
-                      const style = event.target.value as "SHORTER" | "FORMAL" | "DIRECT" | "";
-                      if (style) void handleDraftAction(draft.id, "rewrite", style);
-                    }}
-                  />
+                ) : null}
+                {draft.status !== "APPROVED" ? (
                   <Button
                     variant="text"
                     loading={generating}
@@ -214,14 +214,15 @@ export function EmailDraftPanel({ leadId }: { leadId: string }): React.ReactElem
                   >
                     Regenerate
                   </Button>
-                </div>
-              ) : draft.status === "DISCARDED" ? (
-                <div className="mt-3">
-                  <Button variant="text" loading={generating} onClick={() => handleRegenerate(draft)}>
-                    Regenerate
-                  </Button>
-                </div>
-              ) : null}
+                ) : null}
+                <Button
+                  variant="text"
+                  loading={deletingId === draft.id}
+                  onClick={() => handleDelete(draft.id)}
+                >
+                  Delete
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

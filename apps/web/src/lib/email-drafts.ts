@@ -3,10 +3,9 @@ import {
   generateEmail,
   getAiEmailGenerator,
   isAiConfigured,
-  rewriteEmail,
   type GenerationType,
-  type RewriteStyle,
 } from "@mail-orbyt/email-generation";
+import { resolveOrgAiConfig } from "@mail-orbyt/ai-settings";
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
 import { resolveInboxSenderName } from "@mail-orbyt/gmail";
@@ -14,7 +13,16 @@ import { createResearchSnapshot, getLatestPageText } from "@mail-orbyt/research"
 
 const env = loadEnv();
 
-export { isAiConfigured, AiNotConfiguredError };
+export { AiNotConfiguredError };
+
+/**
+ * Whether this organisation can generate at all — its own saved provider key
+ * counts, not just the deployment's. Async because the organisation's key
+ * lives in the database, unlike the environment-only check it replaced.
+ */
+export async function isAiConfiguredForOrganisation(organisationId: string): Promise<boolean> {
+  return isAiConfigured(await resolveOrgAiConfig(prisma, organisationId));
+}
 
 export interface GenerateDraftParams {
   organisationId: string;
@@ -44,11 +52,10 @@ async function loadSenderContext(organisationId: string, createdByUserId: string
   return {
     senderCompanyName: organisation.name,
     senderName: inbox ? resolveInboxSenderName(inbox) : (user.name ?? user.email),
-    customInstructions: organisation.emailPromptInstructions ?? undefined,
+    campaignPrompt: organisation.emailPromptInstructions ?? undefined,
     bookingLink: organisation.calendlyUrl ?? undefined,
     generationSystemPromptOverride: organisation.generationSystemPrompt ?? undefined,
     reviewSystemPromptOverride: organisation.reviewSystemPrompt ?? undefined,
-    rewriteSystemPromptOverride: organisation.rewriteSystemPrompt ?? undefined,
   };
 }
 
@@ -81,27 +88,29 @@ export async function generateDraft(params: GenerateDraftParams) {
     {
       senderCompanyName,
       senderName,
-      customInstructions,
+      campaignPrompt,
       bookingLink,
       generationSystemPromptOverride,
       reviewSystemPromptOverride,
     },
+    aiConfig,
   ] = await Promise.all([
-      createResearchSnapshot(prisma, {
-        organisationId: params.organisationId,
-        subjectType: "LEAD",
-        leadId: params.leadId,
-      }),
-      getLatestPageText(prisma, {
-        organisationId: params.organisationId,
-        subjectType: "LEAD",
-        leadId: params.leadId,
-      }),
-      loadSenderContext(params.organisationId, params.createdByUserId),
-    ]);
+    createResearchSnapshot(prisma, {
+      organisationId: params.organisationId,
+      subjectType: "LEAD",
+      leadId: params.leadId,
+    }),
+    getLatestPageText(prisma, {
+      organisationId: params.organisationId,
+      subjectType: "LEAD",
+      leadId: params.leadId,
+    }),
+    loadSenderContext(params.organisationId, params.createdByUserId),
+    resolveOrgAiConfig(prisma, params.organisationId),
+  ]);
   const facts = snapshot.facts as { category: string; value: string; sourceUrl: string }[];
 
-  const generator = getAiEmailGenerator();
+  const generator = getAiEmailGenerator(aiConfig);
   const generated = await generateEmail(generator, {
     generationType: params.generationType,
     leadFirstName: lead.firstName ?? undefined,
@@ -113,7 +122,7 @@ export async function generateDraft(params: GenerateDraftParams) {
     facts,
     priorEmail,
     websiteText: pageText?.text,
-    customInstructions,
+    campaignPrompt,
     bookingLink,
     generationSystemPromptOverride,
     reviewSystemPromptOverride,
@@ -134,52 +143,29 @@ export async function generateDraft(params: GenerateDraftParams) {
   });
 }
 
-export interface RewriteDraftParams {
-  organisationId: string;
-  draftId: string;
-  style: RewriteStyle;
-  createdByUserId: string;
-}
-
-export async function rewriteDraft(params: RewriteDraftParams) {
-  const original = await prisma.emailDraft.findUniqueOrThrow({ where: { id: params.draftId } });
-  if (original.organisationId !== params.organisationId) {
-    throw new Error("Draft does not belong to this organisation.");
-  }
-
-  const organisation = await prisma.organisation.findUniqueOrThrow({
-    where: { id: params.organisationId },
-  });
-
-  const generator = getAiEmailGenerator();
-  const rewritten = await rewriteEmail(generator, {
-    style: params.style,
-    subject: original.subject,
-    body: original.body,
-    rewriteSystemPromptOverride: organisation.rewriteSystemPrompt ?? undefined,
-  });
-
-  return prisma.emailDraft.create({
-    data: {
-      organisationId: params.organisationId,
-      leadId: original.leadId,
-      generationType: original.generationType,
-      rewriteStyle: params.style,
-      basedOnDraftId: original.id,
-      researchSnapshotId: original.researchSnapshotId,
-      subject: rewritten.subject,
-      body: rewritten.body,
-      modelUsed: env.AI_PROVIDER_MODEL,
-      createdByUserId: params.createdByUserId,
-    },
-  });
-}
-
 export async function listDrafts(organisationId: string, leadId: string) {
   return prisma.emailDraft.findMany({
     where: { organisationId, leadId },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/**
+ * Removes a draft outright. The drafts panel is a preview surface — you
+ * generate a few, see how they read, and throw the rest away — so an unwanted
+ * draft is deleted rather than parked in a DISCARDED state that keeps
+ * cluttering the list until the retention sweep runs.
+ *
+ * Safe for drafts that follow-ups were generated from: EmailDraft's
+ * self-relation is ON DELETE SET NULL, so a derived draft survives and simply
+ * loses its `basedOnDraftId` pointer.
+ */
+export async function deleteDraft(organisationId: string, draftId: string) {
+  const draft = await prisma.emailDraft.findUniqueOrThrow({ where: { id: draftId } });
+  if (draft.organisationId !== organisationId) {
+    throw new Error("Draft does not belong to this organisation.");
+  }
+  await prisma.emailDraft.delete({ where: { id: draftId } });
 }
 
 export async function setDraftStatus(

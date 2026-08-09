@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.13.0",
+    "@mail-orbyt/ai-settings": "workspace:*",
     "@mail-orbyt/config": "workspace:*",
     "@mail-orbyt/database": "workspace:*",
     "@mail-orbyt/research": "workspace:*",

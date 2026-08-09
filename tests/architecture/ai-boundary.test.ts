@@ -86,6 +86,29 @@ describe("AI SDK import boundary", () => {
     });
   }
 
+  /**
+   * An organisation can store its own AI provider key (Settings → AI
+   * provider). It lives encrypted in Organisation.aiProviderApiKey, and
+   * @mail-orbyt/ai-settings is the only place allowed to turn it back into
+   * plaintext — everything else receives it as an opaque AiConfigOverride
+   * and hands it straight to an AI client. This keeps the number of places
+   * that can materialise a customer's key to one.
+   */
+  it("only @mail-orbyt/ai-settings decrypts stored secrets", () => {
+    const ALLOWED_DECRYPTORS = [
+      "packages/ai-settings/src",
+      // Re-exports the same helpers under Gmail-token names; adds no new
+      // decryption of its own.
+      "packages/gmail/src/token-crypto.ts",
+    ];
+    const offenders = files
+      .map((file) => relative(REPO_ROOT, file))
+      .filter((path) => !ALLOWED_DECRYPTORS.some((allowed) => path.startsWith(allowed)))
+      .filter((path) => /\bdecryptSecret\b/.test(readFileSync(join(REPO_ROOT, path), "utf-8")));
+
+    expect(offenders, `unexpected secret decryption in: ${offenders.join(", ")}`).toEqual([]);
+  });
+
   it("only packages/email-generation and packages/research-keywords declare the AI SDK as a dependency", () => {
     const allPackageJsonDirs = new Set<string>();
     for (const root of SCAN_ROOTS) {

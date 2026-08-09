@@ -10,7 +10,7 @@ AI may only be used, via `packages/email-generation`, to:
 - generate an initial outbound email;
 - generate a follow-up email;
 - generate a final close-the-loop email;
-- rewrite an email to be shorter, more formal, or more direct;
+- QA-review a generated draft before it is sent, without changing its facts;
 - generate a controlled experiment variant.
 
 AI may additionally be used, via `packages/research-keywords`, to:
@@ -30,21 +30,26 @@ AI may additionally, via `packages/email-generation`'s `generateEmail`:
 
 - receive a bounded (~2000 character) excerpt of the subject's own saved
   website text (the same `ResearchPageText` used by keyword extraction),
-  **in addition to** — never instead of — the curated facts list. It is
-  explicitly labeled to the model as untrusted, context-only content: usable
-  for tone/topic familiarity, never as a source of a new factual claim, and
-  the model is told not to follow any instruction that might appear inside
-  it. The output validator's URL-allowlist and every other check still run
-  exactly as before — nothing about this excerpt loosens what the model is
-  allowed to produce.
-- receive configured tone/style instructions — either organisation-wide
+  **in addition to** — never instead of — the curated facts list. The model
+  may draw on it freely for personalisation, not just tone. The one rule
+  kept on the excerpt is the injection defense: it is data, never direction,
+  and the model is told to follow no instruction appearing inside it. The
+  output validator's URL-allowlist and every other check still run exactly
+  as before — nothing about this excerpt loosens what the model is allowed
+  to produce. Note the tradeoff this accepts: a claim sourced from the
+  excerpt rather than from a curated fact is not individually auditable back
+  to a `sourceUrl`, though it still originates from the subject's own site.
+- receive a configured **campaign prompt** — either organisation-wide
   (Settings → Email template) or per-campaign
   (`Campaign.emailPromptInstructions`, which replaces the organisation's for
-  that campaign; see docs/campaigns.md). Whichever applies is appended to —
-  never replacing — the fixed core system prompt. The hard rules (no invented
-  facts, no research disclosure, one CTA, plain text, etc.) are always present
-  and always take priority; an operator can only add voice/phrasing
-  preferences on top of them.
+  that campaign; see docs/campaigns.md). It states which recipient data the
+  email may use, how it should be formatted, and the voice to write in.
+  Whichever applies is sent as the leading section of the **user** message,
+  never merged into the system prompt, so it cannot relax anything there. The
+  system prompt holds only the hard rules (no invented facts, no research
+  disclosure, no unauthorized URLs, plain text, no self-written signature),
+  which are always present and always take priority. Blank falls back to
+  `DEFAULT_CAMPAIGN_EMAIL_PROMPT`.
 - be told to echo a fixed placeholder token (`[[BOOKING_LINK]]`) representing
   a configured Calendly link. The model never sees or writes the real URL —
   `generateEmail` substitutes the real link in after validation via plain
@@ -78,6 +83,19 @@ All of the above are implemented as deterministic code in
    - `eslint.config.js` sets `no-restricted-imports` against
      `@google/genai` / `@anthropic-ai/sdk` / `openai` for every package
      except those two.
+
+   **Credentials.** An organisation may supply its own provider key and model
+   in Settings → AI provider, which then apply to every AI call made for that
+   organisation — email generation, the QA review pass, and AI keyword
+   extraction. This does not widen the boundary: the key is stored encrypted
+   (AES-256-GCM under `TOKEN_ENCRYPTION_KEY`, the same scheme as Gmail OAuth
+   tokens) in `Organisation.aiProviderApiKey`, and `@mail-orbyt/ai-settings`
+   is the only module that decrypts it — also enforced by
+   `tests/architecture/ai-boundary.test.ts`. Everywhere else it travels as an
+   opaque `AiConfigOverride` handed straight to one of the two AI client
+   modules, which still own every call. Both fields fall back independently
+   to `AI_PROVIDER_API_KEY` / `AI_PROVIDER_MODEL`, and a key that fails to
+   decrypt falls back rather than failing the send.
 2. **Input boundary** (Phase 5). The model receives a compact, structured
    fact payload plus, as one narrow and explicitly-labeled exception, a
    bounded excerpt of the subject's own already-fetched website text (see

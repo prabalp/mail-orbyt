@@ -10,10 +10,8 @@ export interface EmailTemplateClientProps {
   calendlyUrl: string;
   generationSystemPrompt: string;
   reviewSystemPrompt: string;
-  rewriteSystemPrompt: string;
   defaultGenerationSystemPrompt: string;
   defaultReviewSystemPrompt: string;
-  defaultRewriteSystemPrompt: string;
 }
 
 export function EmailTemplateClient({
@@ -23,17 +21,14 @@ export function EmailTemplateClient({
   calendlyUrl,
   generationSystemPrompt,
   reviewSystemPrompt,
-  rewriteSystemPrompt,
   defaultGenerationSystemPrompt,
   defaultReviewSystemPrompt,
-  defaultRewriteSystemPrompt,
 }: EmailTemplateClientProps): React.ReactElement {
   const toast = useToast();
   const [instructions, setInstructions] = useState(emailPromptInstructions);
   const [link, setLink] = useState(calendlyUrl);
   const [generationPrompt, setGenerationPrompt] = useState(generationSystemPrompt);
   const [reviewPrompt, setReviewPrompt] = useState(reviewSystemPrompt);
-  const [rewritePrompt, setRewritePrompt] = useState(rewriteSystemPrompt);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<{ system: string; user: string } | null>(null);
@@ -51,7 +46,6 @@ export function EmailTemplateClient({
           calendlyUrl: link,
           generationSystemPrompt: generationPrompt,
           reviewSystemPrompt: reviewPrompt,
-          rewriteSystemPrompt: rewritePrompt,
         }),
       });
       if (response.ok) {
@@ -74,7 +68,7 @@ export function EmailTemplateClient({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            customInstructions: instructions,
+            campaignPrompt: instructions,
             calendlyUrl: link,
             generationSystemPrompt: generationPrompt,
           }),
@@ -100,13 +94,13 @@ export function EmailTemplateClient({
         ) : null}
 
         <TextArea
-          label="Custom tone/style instructions"
-          helperText="Appended to the AI's fixed safety rules (never invent facts, no research disclosure, one clear call to action, plain text) — use this for voice, phrasing, or structure preferences only."
-          rows={6}
+          label="Default campaign prompt"
+          helperText="Used by campaigns that have no prompt of their own. Say which recipient data emails may use, how they should be formatted, and the voice to write in — the safety rules below always apply on top and cannot be relaxed here."
+          rows={10}
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
           disabled={!canManage}
-          placeholder="e.g. Write in a warm, casual tone. Prefer short sentences. Sign off with 'Best,' not 'Regards,'."
+          placeholder="e.g. Use first name and job title only. Three short paragraphs, under 120 words. Warm and casual, short sentences."
         />
 
         <TextInput
@@ -123,11 +117,13 @@ export function EmailTemplateClient({
           <div>
             <h3 className="text-sm font-medium text-on-surface">System prompts</h3>
             <p className="text-xs text-on-surface-variant">
-              These are the exact instructions sent to the AI for each step. Editing them replaces
-              the built-in safety rules (never invent facts, no real URLs, plain-text formatting,
-              etc.) entirely — if you loosen or remove those, generated emails may start failing
-              the app&apos;s automatic fact/URL validation instead of sending. &quot;Reset to
-              default&quot; restores the original, tested wording.
+              Two prompts run per email: generation writes the draft, then QA reviews it. Both hold
+              only the safety rules that no campaign may relax (never invent facts, no real URLs,
+              plain text, no self-written signature) — what an email says and how it is formatted
+              belongs in the campaign prompt above. Editing these replaces those safety rules
+              entirely; loosen them and generated emails may start failing the app&apos;s automatic
+              fact/URL validation instead of sending. &quot;Reset to default&quot; restores the
+              original, tested wording.
             </p>
           </div>
 
@@ -176,30 +172,6 @@ export function EmailTemplateClient({
               onChange={(e) => setReviewPrompt(e.target.value)}
               disabled={!canManage}
               helperText="Used for the automatic self-review pass that checks grammar, tone, and formatting before every generated email is finalized."
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-on-surface-variant">
-                Rewrite system prompt
-              </span>
-              <Button
-                variant="text"
-                disabled={!canManage}
-                onClick={() => setRewritePrompt(defaultRewriteSystemPrompt)}
-              >
-                Reset to default
-              </Button>
-            </div>
-            <TextArea
-              label="Rewrite system prompt"
-              hideLabel
-              rows={10}
-              value={rewritePrompt}
-              onChange={(e) => setRewritePrompt(e.target.value)}
-              disabled={!canManage}
-              helperText="Used when a user asks the AI to rewrite an existing draft (shorter, more formal, more direct)."
             />
           </div>
         </div>

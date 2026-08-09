@@ -22,7 +22,6 @@ const RESEARCH_DISCLOSURE_PATTERNS = [
 ];
 const MAX_BODY_WORDS = 220;
 
-/** Exported for reuse by generate.ts's rewrite allow-list (a rewrite may keep a URL already present in the original email). */
 export function extractHostname(url: string): string | null {
   try {
     return new URL(url).hostname.toLowerCase();

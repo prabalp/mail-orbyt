@@ -10,7 +10,7 @@ interface RouteParams {
 }
 
 const bodySchema = z.object({
-  customInstructions: z.string().max(2000).optional(),
+  campaignPrompt: z.string().max(4000).optional(),
   calendlyUrl: z.union([z.string().url(), z.literal("")]).optional(),
   generationSystemPrompt: z.string().max(8000).optional(),
 });
@@ -61,7 +61,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     ],
     websiteText:
       "(example) Acme Inc | Developer tools for platform teams. We help engineering orgs ship faster with less toil...",
-    customInstructions: parsed.data.customInstructions || undefined,
+    campaignPrompt: parsed.data.campaignPrompt || undefined,
     bookingLink: parsed.data.calendlyUrl || undefined,
     generationSystemPromptOverride: parsed.data.generationSystemPrompt || undefined,
   });

@@ -1,4 +1,8 @@
-import { ConsoleEmailSender, ResendEmailSender, type EmailSender } from "@mail-orbyt/authentication";
+import {
+  ConsoleEmailSender,
+  ResendEmailSender,
+  type EmailSender,
+} from "@mail-orbyt/authentication";
 import { loadEnv } from "@mail-orbyt/config";
 
 /**

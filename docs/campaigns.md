@@ -14,8 +14,8 @@ scheduler/outbox is what will actually pick up enrollments and send.
   the minimum gap between two sends from the same inbox. Phase 8's scheduler
   owns converting all of these into actual send times; see
   docs/scheduling-sending.md for how the per-inbox throttle is enforced.
-  `emailPromptInstructions` holds the campaign's own tone/style guidance —
-  see "Per-campaign tone instructions" below.
+  `emailPromptInstructions` holds the campaign's own prompt — see "The
+  campaign prompt" below.
 - **CampaignStep** — one step in the sequence, ordered by `orderIndex`
   (kept contiguous — see below), typed `INITIAL`/`FOLLOW_UP`/
   `CLOSE_THE_LOOP`, with `delayDays` since the previous step. Each step is
@@ -45,26 +45,35 @@ Two paths, both landing in `enrollLeads`:
 - **Individually** — `{ leadIds }`, from the search box in the campaign's
   Enrollments card, for one-off additions.
 
-## Per-campaign tone instructions
+## The campaign prompt
 
-`Campaign.emailPromptInstructions` is voice guidance for AI-generated copy in
-one campaign: how to sound, what to lead with, what to avoid.
+`Campaign.emailPromptInstructions` is the campaign's own prompt: which
+recipient data its emails may use, how they should be formatted, and the
+voice to write in. Generating an email runs exactly two prompts — generation,
+then a QA review pass — and this is the editable half of both.
 
 - **It replaces the organisation-level `emailPromptInstructions`** from
-  Settings rather than stacking with it. Two sets of voice guidance in one
-  prompt contradict each other as often as they compose, and a campaign's
-  voice should be readable in one place.
+  Settings rather than stacking with it. Two sets of data/format/voice
+  guidance in one prompt contradict each other as often as they compose, and
+  a campaign's output should be readable in one place.
 - Empty (or whitespace-only) falls back to the organisation default, which is
-  what the "Clear and use organisation default" button writes.
-- It is **style guidance only**. It is injected in exactly the same slot as
-  the org-level instructions (`customInstructions` in
-  `buildGenerateEmailPrompt`), below the hard rules — facts-only
-  personalisation, no invented claims, no fabricated URLs — which always take
-  priority. See docs/ai-boundaries.md.
+  what the "Clear and use organisation default" button writes. If that is
+  empty too, `buildGenerateEmailPrompt` falls back to
+  `DEFAULT_CAMPAIGN_EMAIL_PROMPT` — the single fallback in the chain, and the
+  text the campaign editor seeds itself with, so what generates is what the
+  editor shows.
+- It rides in the **user** message (`campaignPrompt`), never the system
+  prompt. The system prompt holds only the safety rules — facts-only
+  personalisation, no invented claims, no fabricated URLs, no self-written
+  signature — which always take priority and cannot be relaxed from here.
+  See docs/ai-boundaries.md.
+- The **QA pass sees it too**, as the specification to check the draft
+  against, so a campaign asking for one-line emails is not "corrected" back
+  into a house style.
 - Both send paths honour it: `processOutboxItem`
   (`packages/scheduling/src/outbox-service.ts`) for real sends and
   `sendTestEmail` (`apps/web/src/lib/campaigns.ts`), so a test send previews
-  the campaign's real voice.
+  the campaign's real output.
 
 ## Guardrails
 

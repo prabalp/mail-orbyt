@@ -3,16 +3,9 @@ import {
   BOOKING_LINK_PLACEHOLDER,
   buildGenerateEmailPrompt,
   buildReviewEmailPrompt,
-  buildRewriteEmailPrompt,
 } from "./prompt";
-import {
-  generateEmailInputSchema,
-  rewriteEmailInputSchema,
-  type GenerateEmailInput,
-  type GeneratedEmail,
-  type RewriteEmailInput,
-} from "./types";
-import { assertValidGeneratedEmail, GeneratedEmailValidationError, URL_PATTERN } from "./validator";
+import { generateEmailInputSchema, type GenerateEmailInput, type GeneratedEmail } from "./types";
+import { assertValidGeneratedEmail, GeneratedEmailValidationError } from "./validator";
 
 const MAX_ATTEMPTS = 2;
 
@@ -55,7 +48,10 @@ async function completeWithValidation(
 function applyBookingLink(output: GeneratedEmail, bookingLink: string | undefined): GeneratedEmail {
   if (!bookingLink) return output;
 
-  if (output.subject.includes(BOOKING_LINK_PLACEHOLDER) || output.body.includes(BOOKING_LINK_PLACEHOLDER)) {
+  if (
+    output.subject.includes(BOOKING_LINK_PLACEHOLDER) ||
+    output.body.includes(BOOKING_LINK_PLACEHOLDER)
+  ) {
     return {
       subject: output.subject.split(BOOKING_LINK_PLACEHOLDER).join(bookingLink),
       body: output.body.split(BOOKING_LINK_PLACEHOLDER).join(bookingLink),
@@ -67,7 +63,7 @@ function applyBookingLink(output: GeneratedEmail, bookingLink: string | undefine
 
 /**
  * Appends the closing signature deterministically — the model is instructed
- * (system prompt rule 9) never to write its own sign-off, so there is no
+ * (system prompt rule 5) never to write its own sign-off, so there is no
  * "already signed?" check to make here; this is the only place a signature
  * is ever written into the body. `signatureText` is the sending inbox's
  * configured Signature.content when one exists, otherwise callers pass the
@@ -91,10 +87,10 @@ async function reviewEmail(
   generator: AiEmailGenerator,
   output: GeneratedEmail,
   facts: { category: string; value: string; sourceUrl: string }[],
-  reviewSystemPromptOverride: string | undefined,
+  options: { campaignPrompt?: string; reviewSystemPromptOverride?: string },
 ): Promise<GeneratedEmail> {
   try {
-    const reviewed = await generator.complete(buildReviewEmailPrompt(output, reviewSystemPromptOverride));
+    const reviewed = await generator.complete(buildReviewEmailPrompt(output, options));
     assertValidGeneratedEmail(reviewed, facts);
     return reviewed;
   } catch {
@@ -117,36 +113,14 @@ export async function generateEmail(
 
   const prompt = buildGenerateEmailPrompt(parsed);
   const output = await completeWithValidation(generator, prompt, parsed.facts);
-  const reviewed = await reviewEmail(
-    generator,
-    output,
-    parsed.facts,
-    parsed.reviewSystemPromptOverride,
-  );
+  // The QA pass sees the same campaign instructions the draft was written to,
+  // so it corrects against this campaign's format rather than a house style.
+  const reviewed = await reviewEmail(generator, output, parsed.facts, {
+    campaignPrompt: parsed.campaignPrompt,
+    reviewSystemPromptOverride: parsed.reviewSystemPromptOverride,
+  });
   const signatureText = parsed.signatureText ?? `Best,\n${parsed.senderName}`;
   return applySignature(applyBookingLink(reviewed, parsed.bookingLink), signatureText);
-}
-
-/** Rewrites an existing email's tone/length without introducing new facts. */
-export async function rewriteEmail(
-  generator: AiEmailGenerator,
-  input: RewriteEmailInput,
-): Promise<GeneratedEmail> {
-  const parsed = rewriteEmailInputSchema.parse(input);
-  const prompt = buildRewriteEmailPrompt(parsed);
-  // A rewrite may only reference URLs already present in the original email
-  // (e.g. an already-embedded booking link) — never a new one. The allow-
-  // list is built from the original's own URLs rather than left empty, so
-  // the validator's URL check permits keeping them but rejects anything new.
-  const originalUrls = [...`${parsed.subject}\n${parsed.body}`.matchAll(URL_PATTERN)].map(
-    (match) => match[0],
-  );
-  const originalUrlFacts = originalUrls.map((url) => ({
-    category: "original_email_url",
-    value: url,
-    sourceUrl: url,
-  }));
-  return completeWithValidation(generator, prompt, originalUrlFacts);
 }
 
 export { GeneratedEmailValidationError } from "./validator";
