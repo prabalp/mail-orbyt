@@ -205,6 +205,7 @@ model Organisation {
   researchKeywordRuns ResearchKeywordRun[]
   emailDrafts        EmailDraft[]
   inboxes            Inbox[]
+  signatures         Signature[]
   domainDnsChecks    DomainDnsCheck[]
   campaigns          Campaign[]
   outboxItems        OutboxItem[]
@@ -953,7 +954,6 @@ model Inbox {
   campaigns     CampaignInbox[]
   outboxItems   OutboxItem[]
   conversations Conversation[]
-  signatures    Signature[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -962,25 +962,26 @@ model Inbox {
   @@index([organisationId])
 }
 
-/// A reusable signature block for one inbox. Multiple signatures per inbox
-/// are allowed (e.g. different roles/styles); at most one is marked
-/// isDefault at a time (enforced by signature-service.ts's setDefaultSignature,
-/// not the database) — that's the one appended to every email sent from
-/// this inbox. content is plain text, appended verbatim after the AI's body
+/// A reusable signature block shared across every inbox in an organisation.
+/// Multiple signatures per organisation are allowed (e.g. different
+/// roles/styles); at most one is marked isDefault at a time (enforced by
+/// signature-service.ts's setDefaultSignature, not the database) — that's
+/// the one appended to every AI-generated email, regardless of which inbox
+/// sends it. content is plain text, appended verbatim after the AI's body
 /// by applySignature in packages/email-generation/src/generate.ts.
 model Signature {
-  id        String   @id @default(cuid())
-  inboxId   String
-  label     String
-  content   String
-  isDefault Boolean  @default(false)
+  id             String  @id @default(cuid())
+  organisationId String
+  label          String
+  content        String
+  isDefault      Boolean @default(false)
 
-  inbox Inbox @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([inboxId])
+  @@index([organisationId])
 }
 
 enum DnsCheckStatus {

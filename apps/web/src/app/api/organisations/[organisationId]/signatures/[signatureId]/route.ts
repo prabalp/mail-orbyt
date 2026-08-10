@@ -3,10 +3,14 @@ import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { deleteInboxSignature, setDefaultInboxSignature, updateInboxSignature } from "@/lib/gmail";
+import {
+  deleteOrganisationSignature,
+  setDefaultOrganisationSignature,
+  updateOrganisationSignature,
+} from "@/lib/gmail";
 
 interface RouteParams {
-  params: Promise<{ organisationId: string; inboxId: string; signatureId: string }>;
+  params: Promise<{ organisationId: string; signatureId: string }>;
 }
 
 const patchSchema = z.object({
@@ -28,7 +32,7 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
-  const { organisationId, inboxId, signatureId } = await params;
+  const { organisationId, signatureId } = await params;
 
   try {
     await requireManagePermission(session.user.id, organisationId);
@@ -44,13 +48,13 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
 
   if (body.data.isDefault) {
-    const signature = await setDefaultInboxSignature(organisationId, inboxId, signatureId);
+    const signature = await setDefaultOrganisationSignature(organisationId, signatureId);
     if (!signature) return NextResponse.json({ error: "Signature not found" }, { status: 404 });
     return NextResponse.json(signature);
   }
 
   const { label, content } = body.data;
-  const signature = await updateInboxSignature(organisationId, inboxId, signatureId, {
+  const signature = await updateOrganisationSignature(organisationId, signatureId, {
     label,
     content,
   });
@@ -63,7 +67,7 @@ export async function DELETE(_request: Request, { params }: RouteParams): Promis
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
-  const { organisationId, inboxId, signatureId } = await params;
+  const { organisationId, signatureId } = await params;
 
   try {
     await requireManagePermission(session.user.id, organisationId);
@@ -73,7 +77,7 @@ export async function DELETE(_request: Request, { params }: RouteParams): Promis
     throw error;
   }
 
-  const signature = await deleteInboxSignature(organisationId, inboxId, signatureId);
+  const signature = await deleteOrganisationSignature(organisationId, signatureId);
   if (!signature) return NextResponse.json({ error: "Signature not found" }, { status: 404 });
   return NextResponse.json(signature);
 }

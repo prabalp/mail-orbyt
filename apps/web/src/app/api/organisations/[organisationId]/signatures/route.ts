@@ -3,10 +3,10 @@ import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { createInboxSignature, listInboxSignatures } from "@/lib/gmail";
+import { createOrganisationSignature, listOrganisationSignatures } from "@/lib/gmail";
 
 interface RouteParams {
-  params: Promise<{ organisationId: string; inboxId: string }>;
+  params: Promise<{ organisationId: string }>;
 }
 
 const createSchema = z.object({
@@ -28,7 +28,7 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
-  const { organisationId, inboxId } = await params;
+  const { organisationId } = await params;
 
   try {
     await requireOrganisationMembership(prisma, { userId: session.user.id, organisationId });
@@ -38,8 +38,7 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     throw error;
   }
 
-  const signatures = await listInboxSignatures(organisationId, inboxId);
-  if (signatures === null) return NextResponse.json({ error: "Inbox not found" }, { status: 404 });
+  const signatures = await listOrganisationSignatures(organisationId);
   return NextResponse.json({ signatures });
 }
 
@@ -48,7 +47,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
-  const { organisationId, inboxId } = await params;
+  const { organisationId } = await params;
 
   try {
     await requireManagePermission(session.user.id, organisationId);
@@ -63,7 +62,6 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
   }
 
-  const signature = await createInboxSignature(organisationId, inboxId, body.data);
-  if (!signature) return NextResponse.json({ error: "Inbox not found" }, { status: 404 });
+  const signature = await createOrganisationSignature(organisationId, body.data);
   return NextResponse.json(signature, { status: 201 });
 }

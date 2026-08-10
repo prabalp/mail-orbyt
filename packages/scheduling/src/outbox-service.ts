@@ -193,7 +193,7 @@ export async function processOutboxItem(
       aiGenerator,
     ] = await Promise.all([
       deps.getSenderContext(item.organisationId),
-      resolveDefaultSignatureText(prisma, inbox.id),
+      resolveDefaultSignatureText(prisma, item.organisationId),
       deps.resolveAiGenerator(item.organisationId),
     ]);
     const generated = await materializeStepContent(prisma, {

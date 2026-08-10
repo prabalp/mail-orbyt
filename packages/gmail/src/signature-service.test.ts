@@ -8,10 +8,9 @@ import {
   updateSignature,
 } from "./signature-service";
 
-function fakePrisma(inbox: unknown, signatures: Record<string, unknown>[] = []) {
+function fakePrisma(signatures: Record<string, unknown>[] = []) {
   const store = [...signatures];
   const prisma = {
-    inbox: { findUnique: vi.fn().mockResolvedValue(inbox) },
     signature: {
       count: vi.fn().mockImplementation(() => store.length),
       findMany: vi.fn().mockImplementation(() => store),
@@ -19,7 +18,9 @@ function fakePrisma(inbox: unknown, signatures: Record<string, unknown>[] = []) 
       findFirst: vi
         .fn()
         .mockImplementation(({ where }) =>
-          store.find((s) => s.inboxId === where.inboxId && s.isDefault === where.isDefault),
+          store.find(
+            (s) => s.organisationId === where.organisationId && s.isDefault === where.isDefault,
+          ),
         ),
       create: vi.fn().mockImplementation(({ data }) => {
         const created = { id: `sig-${store.length + 1}`, ...data };
@@ -32,7 +33,7 @@ function fakePrisma(inbox: unknown, signatures: Record<string, unknown>[] = []) 
         return found;
       }),
       updateMany: vi.fn().mockImplementation(({ where, data }) => {
-        for (const s of store) if (s.inboxId === where.inboxId) Object.assign(s, data);
+        for (const s of store) if (s.organisationId === where.organisationId) Object.assign(s, data);
         return { count: store.length };
       }),
       delete: vi.fn().mockImplementation(({ where }) => {
@@ -46,12 +47,10 @@ function fakePrisma(inbox: unknown, signatures: Record<string, unknown>[] = []) 
   return prisma as unknown as Parameters<typeof createSignature>[0];
 }
 
-const INBOX = { id: "inbox-1", organisationId: "org-1" };
-
 describe("signature-service", () => {
-  it("makes the first signature created for an inbox the default automatically", async () => {
-    const prisma = fakePrisma(INBOX);
-    const signature = await createSignature(prisma, "org-1", "inbox-1", {
+  it("makes the first signature created for an organisation the default automatically", async () => {
+    const prisma = fakePrisma();
+    const signature = await createSignature(prisma, "org-1", {
       label: "Default",
       content: "Best,\nAlex",
     });
@@ -59,54 +58,58 @@ describe("signature-service", () => {
   });
 
   it("does not make a second signature default unless explicitly requested", async () => {
-    const prisma = fakePrisma(INBOX, [
-      { id: "sig-1", inboxId: "inbox-1", label: "Default", content: "A", isDefault: true },
+    const prisma = fakePrisma([
+      { id: "sig-1", organisationId: "org-1", label: "Default", content: "A", isDefault: true },
     ]);
-    const signature = await createSignature(prisma, "org-1", "inbox-1", {
+    const signature = await createSignature(prisma, "org-1", {
       label: "Formal",
       content: "Regards,\nAlex",
     });
     expect(signature).toMatchObject({ isDefault: false });
   });
 
-  it("setDefaultSignature unsets any other default for the inbox", async () => {
-    const prisma = fakePrisma(INBOX, [
-      { id: "sig-1", inboxId: "inbox-1", label: "Default", content: "A", isDefault: true },
-      { id: "sig-2", inboxId: "inbox-1", label: "Formal", content: "B", isDefault: false },
+  it("setDefaultSignature unsets any other default for the organisation", async () => {
+    const prisma = fakePrisma([
+      { id: "sig-1", organisationId: "org-1", label: "Default", content: "A", isDefault: true },
+      { id: "sig-2", organisationId: "org-1", label: "Formal", content: "B", isDefault: false },
     ]);
-    await setDefaultSignature(prisma, "org-1", "inbox-1", "sig-2");
-    const list = await listSignatures(prisma, "org-1", "inbox-1");
-    expect(list?.find((s: { id: string }) => s.id === "sig-1")).toMatchObject({ isDefault: false });
-    expect(list?.find((s: { id: string }) => s.id === "sig-2")).toMatchObject({ isDefault: true });
+    await setDefaultSignature(prisma, "org-1", "sig-2");
+    const list = await listSignatures(prisma, "org-1");
+    expect(list.find((s: { id: string }) => s.id === "sig-1")).toMatchObject({ isDefault: false });
+    expect(list.find((s: { id: string }) => s.id === "sig-2")).toMatchObject({ isDefault: true });
+  });
+
+  it("signatures are shared across every inbox — listSignatures takes no inboxId", async () => {
+    const prisma = fakePrisma([
+      { id: "sig-1", organisationId: "org-1", label: "Default", content: "A", isDefault: true },
+    ]);
+    const list = await listSignatures(prisma, "org-1");
+    expect(list).toHaveLength(1);
   });
 
   it("resolveDefaultSignatureText returns the default signature's content", async () => {
-    const prisma = fakePrisma(INBOX, [
-      { id: "sig-1", inboxId: "inbox-1", label: "Default", content: "Best,\nAlex", isDefault: true },
+    const prisma = fakePrisma([
+      {
+        id: "sig-1",
+        organisationId: "org-1",
+        label: "Default",
+        content: "Best,\nAlex",
+        isDefault: true,
+      },
     ]);
-    await expect(resolveDefaultSignatureText(prisma, "inbox-1")).resolves.toBe("Best,\nAlex");
+    await expect(resolveDefaultSignatureText(prisma, "org-1")).resolves.toBe("Best,\nAlex");
   });
 
   it("resolveDefaultSignatureText returns undefined when no default is set", async () => {
-    const prisma = fakePrisma(INBOX, []);
-    await expect(resolveDefaultSignatureText(prisma, "inbox-1")).resolves.toBeUndefined();
+    const prisma = fakePrisma([]);
+    await expect(resolveDefaultSignatureText(prisma, "org-1")).resolves.toBeUndefined();
   });
 
-  it("returns null for operations on an inbox outside the caller's organisation", async () => {
-    const prisma = fakePrisma({ id: "inbox-1", organisationId: "other-org" });
-    await expect(listSignatures(prisma, "org-1", "inbox-1")).resolves.toBeNull();
-    await expect(
-      createSignature(prisma, "org-1", "inbox-1", { label: "x", content: "y" }),
-    ).resolves.toBeNull();
-  });
-
-  it("updateSignature and deleteSignature reject a signature belonging to a different inbox", async () => {
-    const prisma = fakePrisma(INBOX, [
-      { id: "sig-1", inboxId: "other-inbox", label: "Default", content: "A", isDefault: true },
+  it("updateSignature and deleteSignature reject a signature belonging to a different organisation", async () => {
+    const prisma = fakePrisma([
+      { id: "sig-1", organisationId: "other-org", label: "Default", content: "A", isDefault: true },
     ]);
-    await expect(
-      updateSignature(prisma, "org-1", "inbox-1", "sig-1", { label: "New" }),
-    ).resolves.toBeNull();
-    await expect(deleteSignature(prisma, "org-1", "inbox-1", "sig-1")).resolves.toBeNull();
+    await expect(updateSignature(prisma, "org-1", "sig-1", { label: "New" })).resolves.toBeNull();
+    await expect(deleteSignature(prisma, "org-1", "sig-1")).resolves.toBeNull();
   });
 });

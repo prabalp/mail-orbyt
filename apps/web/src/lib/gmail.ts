@@ -91,39 +91,29 @@ export async function recheckDomainDns(
   return runDomainDnsCheck(prisma, organisationId, domain, dkimSelector);
 }
 
-export async function listInboxSignatures(organisationId: string, inboxId: string) {
-  return listSignatures(prisma, organisationId, inboxId);
+export async function listOrganisationSignatures(organisationId: string) {
+  return listSignatures(prisma, organisationId);
 }
 
-export async function createInboxSignature(
+export async function createOrganisationSignature(
   organisationId: string,
-  inboxId: string,
   params: CreateSignatureParams,
 ) {
-  return createSignature(prisma, organisationId, inboxId, params);
+  return createSignature(prisma, organisationId, params);
 }
 
-export async function updateInboxSignature(
+export async function updateOrganisationSignature(
   organisationId: string,
-  inboxId: string,
   signatureId: string,
   patch: UpdateSignatureParams,
 ) {
-  return updateSignature(prisma, organisationId, inboxId, signatureId, patch);
+  return updateSignature(prisma, organisationId, signatureId, patch);
 }
 
-export async function setDefaultInboxSignature(
-  organisationId: string,
-  inboxId: string,
-  signatureId: string,
-) {
-  return setDefaultSignature(prisma, organisationId, inboxId, signatureId);
+export async function setDefaultOrganisationSignature(organisationId: string, signatureId: string) {
+  return setDefaultSignature(prisma, organisationId, signatureId);
 }
 
-export async function deleteInboxSignature(
-  organisationId: string,
-  inboxId: string,
-  signatureId: string,
-) {
-  return deleteSignature(prisma, organisationId, inboxId, signatureId);
+export async function deleteOrganisationSignature(organisationId: string, signatureId: string) {
+  return deleteSignature(prisma, organisationId, signatureId);
 }

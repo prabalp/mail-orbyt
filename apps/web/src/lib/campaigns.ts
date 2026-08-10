@@ -263,7 +263,7 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
       aiConfig,
     ] = await Promise.all([
       getSenderContext(organisationId),
-      resolveDefaultSignatureText(prisma, inbox.id),
+      resolveDefaultSignatureText(prisma, organisationId),
       resolveOrgAiConfig(prisma, organisationId),
     ]);
     if (!isAiConfigured(aiConfig)) {
