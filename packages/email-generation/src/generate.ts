@@ -67,10 +67,17 @@ function applyBookingLink(output: GeneratedEmail, bookingLink: string | undefine
  * "already signed?" check to make here; this is the only place a signature
  * is ever written into the body. `signatureText` is the sending inbox's
  * configured Signature.content when one exists, otherwise callers pass the
- * plain "Best,\n{senderName}" fallback.
+ * plain "Best,\n{senderName}" fallback. Any `{senderName}` token in either is
+ * substituted here, so a user-authored Signature.content template works the
+ * same way as the fallback.
  */
-function applySignature(output: GeneratedEmail, signatureText: string): GeneratedEmail {
-  return { ...output, body: `${output.body}\n\n${signatureText}` };
+function applySignature(
+  output: GeneratedEmail,
+  signatureText: string,
+  senderName: string,
+): GeneratedEmail {
+  const resolvedSignature = signatureText.replace(/\{senderName\}/g, senderName);
+  return { ...output, body: `${output.body}\n\n${resolvedSignature}` };
 }
 
 /**
@@ -119,8 +126,8 @@ export async function generateEmail(
     campaignPrompt: parsed.campaignPrompt,
     reviewSystemPromptOverride: parsed.reviewSystemPromptOverride,
   });
-  const signatureText = parsed.signatureText ?? `Best,\n${parsed.senderName}`;
-  return applySignature(applyBookingLink(reviewed, parsed.bookingLink), signatureText);
+  const signatureText = parsed.signatureText ?? "Best,\n{senderName}";
+  return applySignature(applyBookingLink(reviewed, parsed.bookingLink), signatureText, parsed.senderName);
 }
 
 export { GeneratedEmailValidationError } from "./validator";

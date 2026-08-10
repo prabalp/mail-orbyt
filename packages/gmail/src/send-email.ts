@@ -39,17 +39,50 @@ const HTML_ESCAPES: Record<string, string> = {
   "'": "&#39;",
 };
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
+}
+
+// Matches either markdown-style `[label](https://url)` links or bare
+// `https://...` URLs, so plain text (e.g. a typed signature) can contain
+// either form and still render as a clickable link.
+const LINK_REGEX = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"')]+)/g;
+
+/**
+ * Replaces links with `<a>` tags and HTML-escapes everything else. Done as a
+ * single pass over segments (rather than escape-then-linkify or
+ * linkify-then-escape) so link URLs/labels and surrounding plain text are
+ * each escaped exactly once, with no risk of the inserted `<a>` markup being
+ * re-escaped or a raw `&`/`<` in the text corrupting a link.
+ */
+function linkifyToHtml(text: string): string {
+  let result = "";
+  let lastIndex = 0;
+  for (const match of text.matchAll(LINK_REGEX)) {
+    const [full, mdLabel, mdUrl, bareUrl] = match;
+    const index = match.index ?? 0;
+    result += escapeHtml(text.slice(lastIndex, index));
+    const url = mdUrl ?? bareUrl ?? "";
+    const label = mdLabel ?? url;
+    result += `<a href="${escapeHtml(url)}" style="color:#2563eb;">${escapeHtml(label)}</a>`;
+    lastIndex = index + full.length;
+  }
+  result += escapeHtml(text.slice(lastIndex));
+  return result;
+}
+
 /**
  * Converts the plain-text body (the single source of truth generated/edited
  * upstream) into an HTML view for the multipart HTML part below. Paragraphs
  * (separated by a blank line) become `<p>` blocks and single line breaks
  * within a paragraph become `<br>`, so paragraph/line-break structure
  * renders identically across every mail client rather than depending on
- * each client's own plain-text reflow behavior.
+ * each client's own plain-text reflow behavior. Markdown `[label](url)`
+ * links and bare URLs become clickable `<a>` tags (see linkifyToHtml).
  */
 export function textToHtml(text: string): string {
-  const escaped = text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
-  const paragraphs = escaped
+  const linked = linkifyToHtml(text);
+  const paragraphs = linked
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.split("\n").join("<br>"))
     .map((paragraph) => `<p style="margin:0 0 1em 0;">${paragraph}</p>`)

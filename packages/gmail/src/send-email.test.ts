@@ -126,4 +126,28 @@ describe("textToHtml", () => {
     const html = textToHtml("Tom & Jerry <are> \"friends\"");
     expect(html).toContain("Tom &amp; Jerry &lt;are&gt; &quot;friends&quot;");
   });
+
+  it("turns a bare URL into a clickable link", async () => {
+    const { textToHtml } = await import("./send-email");
+    const html = textToHtml("Book a time: https://calendly.com/acme/intro");
+    expect(html).toContain(
+      '<a href="https://calendly.com/acme/intro" style="color:#2563eb;">https://calendly.com/acme/intro</a>',
+    );
+  });
+
+  it("turns a markdown [label](url) link into a clickable link with custom label text", async () => {
+    const { textToHtml } = await import("./send-email");
+    const html = textToHtml("[Book a call](https://calendly.com/acme/intro) whenever works.");
+    expect(html).toContain(
+      '<a href="https://calendly.com/acme/intro" style="color:#2563eb;">Book a call</a>',
+    );
+    expect(html).toContain("whenever works.");
+  });
+
+  it("HTML-escapes ampersands inside a linkified URL and label", async () => {
+    const { textToHtml } = await import("./send-email");
+    const html = textToHtml("[A&B](https://example.com?a=1&b=2)");
+    expect(html).toContain('href="https://example.com?a=1&amp;b=2"');
+    expect(html).toContain(">A&amp;B</a>");
+  });
 });

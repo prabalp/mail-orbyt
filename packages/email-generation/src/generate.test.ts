@@ -40,6 +40,17 @@ describe("generateEmail", () => {
     );
   });
 
+  it("substitutes {senderName} in a custom signatureText with the configured sender name", async () => {
+    const generator = fakeGenerator({ subject: "Hi", body: "Would you be open to a quick call?" });
+    const result = await generateEmail(generator, {
+      ...BASE_INPUT,
+      signatureText: "Cheers,\n{senderName}\nHead of Sales, Mail Orbyt",
+    });
+    expect(result.body).toBe(
+      "Would you be open to a quick call?\n\nCheers,\nAlex\nHead of Sales, Mail Orbyt",
+    );
+  });
+
   // Both calls in the two-prompt flow must see the campaign's instructions:
   // generation to write to them, QA to check against them.
   it("passes the campaign prompt to both the generation and the QA pass", async () => {

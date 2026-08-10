@@ -72,6 +72,10 @@ export function InboxesContent(): React.ReactElement {
   const [newSignatureLabel, setNewSignatureLabel] = useState("");
   const [newSignatureContent, setNewSignatureContent] = useState("");
   const [savingSignature, setSavingSignature] = useState(false);
+  const [editingSignatureId, setEditingSignatureId] = useState<string | null>(null);
+  const [editSignatureLabel, setEditSignatureLabel] = useState("");
+  const [editSignatureContent, setEditSignatureContent] = useState("");
+  const [savingSignatureEdit, setSavingSignatureEdit] = useState(false);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/organisations/${organisationId}/inboxes`);
@@ -173,6 +177,41 @@ export function InboxesContent(): React.ReactElement {
       }
     } finally {
       setSavingSignature(false);
+    }
+  }
+
+  function handleStartEditSignature(signature: Signature) {
+    setEditingSignatureId(signature.id);
+    setEditSignatureLabel(signature.label);
+    setEditSignatureContent(signature.content);
+  }
+
+  function handleCancelEditSignature() {
+    setEditingSignatureId(null);
+    setEditSignatureLabel("");
+    setEditSignatureContent("");
+  }
+
+  async function handleSaveSignatureEdit(signatureId: string) {
+    if (!editSignatureLabel || !editSignatureContent) return;
+    setSavingSignatureEdit(true);
+    try {
+      const response = await fetch(
+        `/api/organisations/${organisationId}/inboxes/${signatureInboxId}/signatures/${signatureId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label: editSignatureLabel, content: editSignatureContent }),
+        },
+      );
+      if (response.ok) {
+        handleCancelEditSignature();
+        await loadSignatures();
+      } else {
+        toast.show("Could not update signature", "error");
+      }
+    } finally {
+      setSavingSignatureEdit(false);
     }
   }
 
@@ -326,32 +365,69 @@ export function InboxesContent(): React.ReactElement {
 
             {signatures.length > 0 ? (
               <ul className="flex flex-col gap-2">
-                {signatures.map((signature) => (
-                  <li key={signature.id} className="rounded-md-md border border-outline/30 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-on-surface">{signature.label}</p>
-                        {signature.isDefault ? <Badge tone="success">Default</Badge> : null}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {!signature.isDefault ? (
+                {signatures.map((signature) =>
+                  editingSignatureId === signature.id ? (
+                    <li key={signature.id} className="rounded-md-md border border-outline/30 p-3">
+                      <div className="flex flex-col gap-3">
+                        <TextInput
+                          label="Label"
+                          value={editSignatureLabel}
+                          onChange={(event) => setEditSignatureLabel(event.target.value)}
+                        />
+                        <TextArea
+                          label="Signature text"
+                          value={editSignatureContent}
+                          onChange={(event) => setEditSignatureContent(event.target.value)}
+                        />
+                        <p className="text-xs text-on-surface-variant">
+                          Use <code>{"{senderName}"}</code> to insert the sending inbox&apos;s name,
+                          and paste links (or <code>[label](https://...)</code>) to include clickable
+                          links. Line breaks are kept exactly as written.
+                        </p>
+                        <div className="flex items-center gap-2">
                           <Button
-                            variant="text"
-                            onClick={() => handleSetDefaultSignature(signature.id)}
+                            loading={savingSignatureEdit}
+                            disabled={!editSignatureLabel || !editSignatureContent}
+                            onClick={() => handleSaveSignatureEdit(signature.id)}
                           >
-                            Set default
+                            Save
                           </Button>
-                        ) : null}
-                        <Button variant="text" onClick={() => handleDeleteSignature(signature.id)}>
-                          Delete
-                        </Button>
+                          <Button variant="text" onClick={handleCancelEditSignature}>
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <p className="mt-2 whitespace-pre-line text-sm text-on-surface-variant">
-                      {signature.content}
-                    </p>
-                  </li>
-                ))}
+                    </li>
+                  ) : (
+                    <li key={signature.id} className="rounded-md-md border border-outline/30 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-on-surface">{signature.label}</p>
+                          {signature.isDefault ? <Badge tone="success">Default</Badge> : null}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!signature.isDefault ? (
+                            <Button
+                              variant="text"
+                              onClick={() => handleSetDefaultSignature(signature.id)}
+                            >
+                              Set default
+                            </Button>
+                          ) : null}
+                          <Button variant="text" onClick={() => handleStartEditSignature(signature)}>
+                            Edit
+                          </Button>
+                          <Button variant="text" onClick={() => handleDeleteSignature(signature.id)}>
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="mt-2 whitespace-pre-line text-sm text-on-surface-variant">
+                        {signature.content}
+                      </p>
+                    </li>
+                  ),
+                )}
               </ul>
             ) : (
               <EmptyState
@@ -369,10 +445,15 @@ export function InboxesContent(): React.ReactElement {
               />
               <TextArea
                 label="Signature text"
-                placeholder={"Best,\nAlex Rivera\nHead of Sales, Acme Inc"}
+                placeholder={"Best,\n{senderName}"}
                 value={newSignatureContent}
                 onChange={(event) => setNewSignatureContent(event.target.value)}
               />
+              <p className="text-xs text-on-surface-variant">
+                Use <code>{"{senderName}"}</code> to insert the sending inbox&apos;s name, and paste
+                links (or <code>[label](https://...)</code>) to include clickable links. Line breaks
+                are kept exactly as written.
+              </p>
               <Button
                 loading={savingSignature}
                 disabled={!newSignatureLabel || !newSignatureContent}
