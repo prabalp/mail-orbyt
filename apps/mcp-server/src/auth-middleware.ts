@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
-import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
 import { verifyAccessToken } from "@mail-orbyt/mcp-oauth";
+import { resourceUrl } from "./resource-url.js";
 
 export interface AuthenticatedActor {
   userId: string;
@@ -34,10 +34,15 @@ export function mcpAuthMiddleware() {
     const verified = rawToken ? await verifyAccessToken(prisma, rawToken) : null;
 
     if (!verified || !rawToken) {
-      const issuer = loadEnv().APP_URL;
+      // Must point at THIS resource server's own protected-resource
+      // metadata — never at APP_URL. The two are different origins/paths
+      // in every real deployment, and apps/web doesn't even serve this
+      // route (only `/.well-known/oauth-authorization-server` does); a
+      // client following APP_URL here would 404 and never discover how to
+      // authenticate.
       res.setHeader(
         "WWW-Authenticate",
-        `Bearer resource_metadata="${issuer}/.well-known/oauth-protected-resource"`,
+        `Bearer resource_metadata="${resourceUrl()}/.well-known/oauth-protected-resource"`,
       );
       res.status(401).json({ error: "unauthorized" });
       return;

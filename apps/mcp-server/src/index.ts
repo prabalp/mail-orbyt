@@ -6,23 +6,11 @@ import express from "express";
 import { type AuthenticatedRequest, mcpAuthMiddleware } from "./auth-middleware.js";
 import { createMcpServer } from "./create-server.js";
 import { mcpRateLimitMiddleware } from "./rate-limit.js";
+import { resourceUrl } from "./resource-url.js";
 import { ALL_LINK_TOOLS, ALL_TOOLS } from "./tools/index.js";
 
 const env = loadEnv();
 const logger = createLogger({ service: "mcp-server", level: env.LOG_LEVEL });
-
-// Default: same host/protocol as APP_URL, but this process's own port — the
-// common case of running web and mcp-server as separate local processes (or
-// separate containers on one host). A production deployment that puts both
-// behind one reverse-proxied origin (e.g. a path-based route) should set
-// MCP_SERVER_URL explicitly instead.
-function defaultResourceUrl(): string {
-  const url = new URL(env.APP_URL);
-  url.port = String(env.MCP_SERVER_PORT);
-  return url.toString();
-}
-
-const resourceUrl = (env.MCP_SERVER_URL ?? defaultResourceUrl()).replace(/\/$/, "");
 
 const app = express();
 app.use(express.json());
@@ -46,7 +34,7 @@ app.get("/ready", async (_req, res) => {
 // access token for this resource.
 app.get("/.well-known/oauth-protected-resource", (_req, res) => {
   res.json({
-    resource: resourceUrl,
+    resource: resourceUrl(),
     authorization_servers: [env.APP_URL.replace(/\/$/, "")],
   });
 });
