@@ -25,6 +25,7 @@
     "@mail-orbyt/gmail": "workspace:*",
     "@mail-orbyt/leads": "workspace:*",
     "@mail-orbyt/logging": "workspace:*",
+    "@mail-orbyt/mcp-oauth": "workspace:*",
     "@mail-orbyt/research": "workspace:*",
     "@mail-orbyt/research-keywords": "workspace:*",
     "@mail-orbyt/scheduling": "workspace:*",

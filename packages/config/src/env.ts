@@ -88,6 +88,18 @@ const envSchema = z.object({
 
   // Observability
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+
+  // Remote MCP connector — OAuth 2.1 authorization server (apps/web) and
+  // MCP protocol server (apps/mcp-server)
+  MCP_SERVER_PORT: z.coerce.number().int().positive().default(3001),
+  MCP_ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+  MCP_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(90),
+  // The mcp-server's own publicly reachable base URL, advertised in its
+  // protected-resource metadata. Unset defaults to APP_URL's host/protocol
+  // with MCP_SERVER_PORT substituted in (apps/mcp-server computes this) —
+  // override explicitly if it's deployed behind a different host/path than
+  // that (e.g. one shared reverse-proxied origin with path-based routing).
+  MCP_SERVER_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -2,14 +2,14 @@ import {
   createInvitation,
   ForbiddenError,
   invitationEmail,
-  requireOrganisationMembership,
+  UnauthenticatedError,
 } from "@mail-orbyt/authentication";
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
 import { emailSchema } from "@mail-orbyt/validation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 import { emailSender } from "@/lib/email";
 
 const bodySchema = z.object({
@@ -21,20 +21,18 @@ interface RouteParams {
   params: Promise<{ organisationId: string }>;
 }
 
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "members:manage",
     });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
@@ -57,20 +55,19 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
 }
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   const { organisationId } = await params;
 
-  let membership;
+  let userId: string;
+  let membership: Awaited<ReturnType<typeof authenticateOrganisationRequest>>["membership"];
   try {
-    membership = await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    ({ userId, membership } = await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "members:manage",
-    });
+    }));
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
@@ -90,13 +87,13 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   const organisation = await prisma.organisation.findUniqueOrThrow({
     where: { id: organisationId },
   });
-  const inviter = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } });
+  const inviter = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
   const { invitation, rawToken } = await createInvitation(prisma, {
     organisationId,
     email: parsed.data.email,
     role: parsed.data.role,
-    invitedByUserId: session.user.id,
+    invitedByUserId: userId,
   });
 
   const env = loadEnv();

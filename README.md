@@ -56,6 +56,7 @@ pnpm dev
 - [Meetings, attribution, analytics](docs/analytics.md)
 - [Safety, compliance, export/deletion/retention](docs/compliance.md)
 - [Security audit, load testing, hardening](docs/security-audit.md)
+- [Remote MCP connector](docs/mcp-server.md)
 - [Deployment](docs/deployment.md)
 - [Local development](docs/local-development.md)
 - [Environment variables](docs/environment-variables.md)
@@ -68,10 +69,12 @@ incident response) are added as their corresponding phase lands.
 
 ```
 apps/
-  web/            Next.js App Router — UI and API route handlers
+  web/            Next.js App Router — UI, API route handlers, and the MCP OAuth authorization server
   worker/         BullMQ background job processors
+  mcp-server/     MCP protocol server for the remote Claude connector
 packages/
   database/       Prisma schema and client (only package with direct DB access)
+  mcp-oauth/      OAuth 2.1 authorization-server logic for the MCP connector
   config/         Environment variable validation
   validation/      Shared Zod schemas
   logging/         Structured JSON logger with redaction

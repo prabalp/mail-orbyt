@@ -1,7 +1,7 @@
 # Architecture
 
-Mail Orbyt is a TypeScript pnpm monorepo with two deployable apps and a set
-of domain packages consumed by both.
+Mail Orbyt is a TypeScript pnpm monorepo with three deployable apps and a
+set of domain packages consumed by all of them.
 
 ## System overview
 
@@ -14,6 +14,11 @@ flowchart LR
     subgraph Apps
       Web["apps/web (Next.js App Router)"]
       Worker["apps/worker (BullMQ processors)"]
+      McpServer["apps/mcp-server (MCP protocol server)"]
+    end
+
+    subgraph AI Client
+      Claude[Claude / claude.ai]
     end
 
     subgraph Data
@@ -42,7 +47,24 @@ flowchart LR
     Worker --> ResearchProviders
     Worker --> DNS
     Worker -->|"packages/email-generation only"| AIProvider
+    Claude -->|"OAuth 2.1 (DCR, PKCE)"| Web
+    Claude -->|"MCP Streamable HTTP"| McpServer
+    McpServer -->|"REST API, caller's own bearer token"| Web
+    McpServer -->|"token verification only"| Postgres
 ```
+
+`apps/mcp-server` lets Claude perform the same actions as the web UI. It is
+deliberately a thin protocol adapter, not a second implementation of the
+domain logic: every MCP tool call is translated into an HTTP request against
+`apps/web`'s own REST API, carrying the caller's own OAuth access token, so
+the exact same Zod validation and `requireOrganisationMembership`/permission
+checks the web UI is subject to apply here too. The one exception is token
+verification itself (`packages/mcp-oauth`'s `verifyAccessToken`), which
+`apps/mcp-server` calls directly against `packages/database` — the same
+narrow exception `apps/worker` already has for reaching Postgres directly,
+needed here so an invalid or expired token is rejected before a network
+round-trip to `apps/web`. See `docs/mcp-server.md` for the OAuth flow and
+tool surface.
 
 ## Why a monorepo
 
@@ -57,9 +79,14 @@ product.
 
 ## Package boundaries
 
-- **apps/web** — Next.js App Router UI and route handlers (API). Never
-  imports provider SDKs directly; always goes through a domain package.
+- **apps/web** — Next.js App Router UI and route handlers (API), plus the
+  OAuth 2.1 authorization server backing the MCP connector. Never imports
+  provider SDKs directly; always goes through a domain package.
 - **apps/worker** — BullMQ job processors. Same provider-access rule as web.
+- **apps/mcp-server** — MCP protocol server for the remote Claude connector.
+  Calls `apps/web`'s REST API rather than domain packages directly; the one
+  exception is `packages/database`, used only to verify bearer tokens via
+  `packages/mcp-oauth`.
 - **packages/database** — Prisma schema and client. The only package that
   talks to PostgreSQL directly.
 - **packages/config** — Environment variable loading and validation. The
@@ -74,6 +101,9 @@ product.
   **analytics**, **compliance** — domain services consumed by both apps.
 - **packages/design-system** — Material 3 tokens and React components.
 - **packages/authentication** — Auth.js configuration, session/role helpers.
+- **packages/mcp-oauth** — OAuth 2.1 authorization-server logic (dynamic
+  client registration, PKCE, token issuance/verification/revocation) for the
+  MCP connector, shared by `apps/web` and `apps/mcp-server`.
 - **packages/validation** — Shared Zod schemas and primitives.
 - **packages/logging** — Structured JSON logger with field redaction.
 

@@ -1,0 +1,32 @@
+{
+  "name": "@mail-orbyt/mcp-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch --ignore \"**/node_modules/**\" --ignore \"**/.git/**\" --ignore \"**/.turbo/**\" --env-file=.env src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/index.ts",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@mail-orbyt/authentication": "workspace:*",
+    "@mail-orbyt/config": "workspace:*",
+    "@mail-orbyt/database": "workspace:*",
+    "@mail-orbyt/logging": "workspace:*",
+    "@mail-orbyt/mcp-oauth": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
+    "ioredis": "^5.4.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

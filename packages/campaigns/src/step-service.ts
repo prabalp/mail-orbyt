@@ -134,11 +134,24 @@ export async function reorderSteps(
     );
   }
 
-  await prisma.$transaction(
-    orderedStepIds.map((stepId, index) =>
+  // Two-phase update: writing straight to the final 0..n-1 indices in one
+  // pass collides with `@@unique([campaignId, orderIndex])` the instant a
+  // reorder isn't a no-op — e.g. swapping two steps tries to write step B's
+  // current index into step A while B still holds it. Moving every step to
+  // a disjoint high range first (guaranteed clear of 0..n-1, and of each
+  // other) lets the second pass land on final indices with nothing left to
+  // collide with.
+  await prisma.$transaction([
+    ...orderedStepIds.map((stepId, index) =>
+      prisma.campaignStep.update({
+        where: { id: stepId },
+        data: { orderIndex: orderedStepIds.length + index },
+      }),
+    ),
+    ...orderedStepIds.map((stepId, index) =>
       prisma.campaignStep.update({ where: { id: stepId }, data: { orderIndex: index } }),
     ),
-  );
+  ]);
 
   return prisma.campaignStep.findMany({ where: { campaignId }, orderBy: { orderIndex: "asc" } });
 }

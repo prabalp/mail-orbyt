@@ -3,18 +3,20 @@ import { prisma } from "@mail-orbyt/database";
 import { nonEmptyString } from "@mail-orbyt/validation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateUser } from "@/lib/api-auth";
 
 const bodySchema = z.object({ name: nonEmptyString(120) });
 
-export async function GET(): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
+export async function GET(request: Request): Promise<NextResponse> {
+  let userId: string;
+  try {
+    userId = await authenticateUser(request);
+  } catch {
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
 
   const memberships = await prisma.organisationMembership.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     include: { organisation: true },
     orderBy: { createdAt: "asc" },
   });
@@ -30,8 +32,10 @@ export async function GET(): Promise<NextResponse> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  let userId: string;
+  try {
+    userId = await authenticateUser(request);
+  } catch {
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
 
@@ -43,7 +47,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const organisation = await createOrganisation(prisma, {
     name: parsed.data.name,
-    ownerUserId: session.user.id,
+    ownerUserId: userId,
   });
 
   return NextResponse.json(

@@ -1,9 +1,9 @@
-import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
+import { ForbiddenError, UnauthenticatedError } from "@mail-orbyt/authentication";
 import { CANONICAL_COLUMNS, createOrGetLeadList, enqueueImportJob } from "@mail-orbyt/leads";
 import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 import { redisConnection } from "@/lib/queue";
 
 const columnMappingSchema = z.object(
@@ -29,16 +29,15 @@ interface RouteParams {
   params: Promise<{ organisationId: string }>;
 }
 
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, { userId: session.user.id, organisationId });
+    await authenticateOrganisationRequest(request, { organisationId });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -54,19 +53,18 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
 }
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   const { organisationId } = await params;
 
+  let userId: string;
   try {
-    await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    ({ userId } = await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "leads:manage",
-    });
+    }));
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -91,7 +89,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   const batch = await prisma.importBatch.create({
     data: {
       organisationId,
-      createdByUserId: session.user.id,
+      createdByUserId: userId,
       leadListId: leadList.id,
       fileName: parsed.data.fileName,
       storageKey: parsed.data.storageKey,

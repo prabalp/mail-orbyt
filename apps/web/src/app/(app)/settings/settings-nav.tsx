@@ -9,6 +9,7 @@ const SETTINGS_LINKS = [
   { href: "/settings/email-template", label: "Email template" },
   { href: "/settings/signatures", label: "Signatures" },
   { href: "/settings/ai-provider", label: "AI provider" },
+  { href: "/settings/mcp", label: "MCP connections" },
 ];
 
 export function SettingsNav(): React.ReactElement {

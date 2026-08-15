@@ -24,7 +24,16 @@ export {
 } from "./duplicates";
 export { sanitizeCsvField, buildSanitizedCsv, type CsvExportRow } from "./csv-export";
 export { previewImport, processImportBatch, type ImportPreview } from "./import-batch";
-export { isSuppressed, addSuppressionEntry, type AddSuppressionParams } from "./suppression";
+export {
+  isSuppressed,
+  addSuppressionEntry,
+  listSuppressionEntries,
+  removeSuppressionEntry,
+  checkSuppression,
+  type AddSuppressionParams,
+  type ListSuppressionParams,
+  type SuppressionEntrySummary,
+} from "./suppression";
 export {
   listLeads,
   getLead,

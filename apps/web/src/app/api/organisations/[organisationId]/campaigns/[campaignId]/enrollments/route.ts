@@ -1,8 +1,9 @@
-import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
+import { ForbiddenError, UnauthenticatedError } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
+import { emailSchema } from "@mail-orbyt/validation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 import {
   enrollCampaignLeads,
   enrollCampaignLeadsFromList,
@@ -16,18 +17,22 @@ interface RouteParams {
 const enrollSchema = z.union([
   z.object({ leadIds: z.array(z.string().min(1)).min(1) }),
   z.object({ leadListId: z.string().min(1) }),
+  // Addressing leads by email is how a human (or an AI client acting for
+  // one) actually refers to them — requiring a cuid first forces a lookup
+  // round trip whose only purpose is to translate. Resolution happens
+  // server-side and stays scoped to this organisation.
+  z.object({ leadEmails: z.array(emailSchema).min(1).max(5000) }),
 ]);
 
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId, campaignId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, { userId: session.user.id, organisationId });
+    await authenticateOrganisationRequest(request, { organisationId });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -39,19 +44,17 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
 }
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   const { organisationId, campaignId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "campaigns:manage",
     });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -62,10 +65,42 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
   }
 
-  const result =
-    "leadListId" in body.data
-      ? await enrollCampaignLeadsFromList(organisationId, campaignId, body.data.leadListId)
-      : await enrollCampaignLeads(organisationId, campaignId, body.data.leadIds);
+  if ("leadListId" in body.data) {
+    const result = await enrollCampaignLeadsFromList(
+      organisationId,
+      campaignId,
+      body.data.leadListId,
+    );
+    return NextResponse.json(result, { status: 201 });
+  }
 
+  if ("leadEmails" in body.data) {
+    const leads = await prisma.lead.findMany({
+      where: { organisationId, email: { in: body.data.leadEmails } },
+      select: { id: true, email: true },
+    });
+
+    // Report the addresses that matched nothing rather than silently
+    // enrolling a subset — "enrolled: 3" when you asked for 5 is a bug the
+    // caller cannot see.
+    const found = new Set(leads.map((lead) => lead.email));
+    const notFound = body.data.leadEmails.filter((email) => !found.has(email));
+
+    if (leads.length === 0) {
+      return NextResponse.json(
+        { error: "No leads in this organisation match those email addresses", notFound },
+        { status: 404 },
+      );
+    }
+
+    const result = await enrollCampaignLeads(
+      organisationId,
+      campaignId,
+      leads.map((lead) => lead.id),
+    );
+    return NextResponse.json({ ...result, notFound }, { status: 201 });
+  }
+
+  const result = await enrollCampaignLeads(organisationId, campaignId, body.data.leadIds);
   return NextResponse.json(result, { status: 201 });
 }

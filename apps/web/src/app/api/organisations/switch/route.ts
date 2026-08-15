@@ -2,14 +2,16 @@ import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authe
 import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateUser } from "@/lib/api-auth";
 import { ACTIVE_ORGANISATION_COOKIE } from "@/lib/current-organisation";
 
 const bodySchema = z.object({ organisationId: z.string().min(1) });
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  let userId: string;
+  try {
+    userId = await authenticateUser(request);
+  } catch {
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
 
@@ -24,7 +26,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // before we ever write it into the session cookie.
   try {
     await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+      userId,
       organisationId: parsed.data.organisationId,
     });
   } catch (error) {

@@ -1,9 +1,8 @@
-import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
-import { prisma } from "@mail-orbyt/database";
+import { ForbiddenError, UnauthenticatedError } from "@mail-orbyt/authentication";
 import { DEFAULT_CAMPAIGN_EMAIL_PROMPT } from "@mail-orbyt/email-generation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 import {
   archiveOrganisationCampaign,
   CampaignActivationError,
@@ -35,16 +34,15 @@ const updateSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
 });
 
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId, campaignId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, { userId: session.user.id, organisationId });
+    await authenticateOrganisationRequest(request, { organisationId });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -59,19 +57,17 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
 }
 
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   const { organisationId, campaignId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "campaigns:manage",
     });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -94,20 +90,18 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
 }
 
-export async function DELETE(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function DELETE(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId, campaignId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "campaigns:manage",
     });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;

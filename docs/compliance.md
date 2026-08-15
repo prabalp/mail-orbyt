@@ -24,6 +24,17 @@ proven end-to-end in `tests/integration/compliance.test.ts` — a real reply
 against real Postgres, checked with the same `isSuppressed` function every
 other part of the product uses, both before and after the reply lands.
 
+The suppression list itself had a service layer and no HTTP surface at
+all — everything that could suppress an address had no way to list, remove,
+or check one. `GET/POST/DELETE /api/organisations/:id/suppressions` (see
+`packages/leads/src/suppression.ts`'s `listSuppressionEntries`,
+`removeSuppressionEntry`, `checkSuppression`) closes that, and is exposed as
+four MCP tools (`list_suppressions`, `check_suppression`, `add_suppression`,
+`remove_suppression` — see `docs/mcp-server.md`). Removing an entry is
+audited as `SUPPRESSION_REMOVED`; it should never be done for an
+`UNSUBSCRIBE` entry without explicit human instruction, since un-suppressing
+someone who opted out is a compliance breach, not a preference.
+
 ## Right to access — `exportLeadData`
 
 `packages/compliance/src/export-service.ts` bundles everything the product

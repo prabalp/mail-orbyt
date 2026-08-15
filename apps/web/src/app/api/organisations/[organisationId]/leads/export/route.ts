@@ -1,10 +1,10 @@
-import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
+import { ForbiddenError, UnauthenticatedError } from "@mail-orbyt/authentication";
 import { buildLeadWhere, buildSanitizedCsv } from "@mail-orbyt/leads";
 import { prisma } from "@mail-orbyt/database";
 import type { Prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 
 const EXPORT_COLUMNS = [
   "firstName",
@@ -62,13 +62,12 @@ async function buildCsvResponse(
 }
 
 async function authorize(request: Request, organisationId: string) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   try {
-    await requireOrganisationMembership(prisma, { userId: session.user.id, organisationId });
+    await authenticateOrganisationRequest(request, { organisationId });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }

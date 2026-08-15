@@ -18,6 +18,10 @@
 // OAuthCredential, InboxSettings, SendingDomain, DomainAuthenticationCheck,
 // ScheduledEmail, OutboxMessage, SentEmail, EmailEvent, Conversation, Reply,
 // Meeting, MeetingOutcome, AttributionRecord, RetargetTask, JobFailure.
+//
+// Post-Phase-12 addition: McpOAuthClient, McpAuthorizationCode,
+// McpAccessToken, McpRefreshToken — the OAuth 2.1 authorization server
+// backing the remote MCP connector (apps/mcp-server).
 
 generator client {
   provider = "prisma-client-js"
@@ -68,6 +72,9 @@ model User {
   auditEvents             AuditEvent[]
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  mcpAuthorizationCodes   McpAuthorizationCode[]
+  mcpAccessTokens         McpAccessToken[]
+  mcpRefreshTokens        McpRefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -211,6 +218,9 @@ model Organisation {
   outboxItems        OutboxItem[]
   conversations      Conversation[]
   meetings           Meeting[]
+  mcpAuthorizationCodes McpAuthorizationCode[]
+  mcpAccessTokens       McpAccessToken[]
+  mcpRefreshTokens      McpRefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -282,8 +292,14 @@ enum AuditEventType {
   CAMPAIGN_LAUNCHED
   CAMPAIGN_PAUSED
   SUPPRESSION_CREATED
+  SUPPRESSION_REMOVED
   DATA_EXPORTED
   DATA_DELETED
+  MCP_CLIENT_REGISTERED
+  MCP_AUTHORIZED
+  MCP_TOKEN_REFRESHED
+  MCP_TOKEN_REVOKED
+  MCP_TOOL_INVOKED
 }
 
 model AuditEvent {
@@ -304,6 +320,110 @@ model AuditEvent {
   @@index([userId])
   @@index([type])
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// MCP remote connector — OAuth 2.1 authorization server (public clients,
+// PKCE-only, no client secret). Tokens are opaque, hashed at rest (SHA-256
+// via packages/authentication's hashToken), following the same
+// generate-raw-return-once, store-only-the-hash pattern as Invitation and
+// PasswordResetToken above. scope is a space-separated list of Permission
+// strings (see packages/authentication/src/permissions.ts) plus the bare
+// "profile" scope for membership-only routes.
+// ---------------------------------------------------------------------------
+
+/// A client application registered via Dynamic Client Registration (e.g.
+/// claude.ai's remote MCP connector). Public client only: no client secret
+/// is stored, since the authorization-code exchange is secured by PKCE.
+model McpOAuthClient {
+  id           String   @id @default(cuid())
+  clientId     String   @unique
+  clientName   String
+  redirectUris String[]
+
+  authorizationCodes McpAuthorizationCode[]
+  accessTokens       McpAccessToken[]
+  refreshTokens      McpRefreshToken[]
+
+  createdAt DateTime @default(now())
+}
+
+/// Single-use, short-lived (~60s) code issued after the user approves the
+/// consent screen. codeChallenge/codeChallengeMethod implement PKCE (S256);
+/// consumedAt prevents replay.
+model McpAuthorizationCode {
+  id                  String    @id @default(cuid())
+  codeHash            String    @unique
+  clientId            String
+  userId              String
+  organisationId      String
+  scope               String
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String
+  expiresAt           DateTime
+  consumedAt          DateTime?
+
+  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@index([organisationId])
+}
+
+/// A bearer token accepted both by apps/web's REST API (in place of a
+/// session cookie) and by apps/mcp-server's /mcp endpoint. Bound to exactly
+/// one organisation — a token never grants cross-organisation access even
+/// if the user belongs to several.
+model McpAccessToken {
+  id             String    @id @default(cuid())
+  tokenHash      String    @unique
+  clientId       String
+  userId         String
+  organisationId String
+  scope          String
+  expiresAt      DateTime
+  revokedAt      DateTime?
+
+  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@index([organisationId])
+  @@index([expiresAt])
+}
+
+/// Long-lived (~90d), rotated on every use: refreshAccessToken issues a new
+/// row and sets replacedByTokenHash on this one rather than mutating it in
+/// place, so reuse of an already-rotated refresh token is detectable.
+model McpRefreshToken {
+  id                  String    @id @default(cuid())
+  tokenHash           String    @unique
+  clientId            String
+  userId              String
+  organisationId      String
+  scope               String
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  replacedByTokenHash String?
+
+  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@index([organisationId])
 }
 
 // ---------------------------------------------------------------------------

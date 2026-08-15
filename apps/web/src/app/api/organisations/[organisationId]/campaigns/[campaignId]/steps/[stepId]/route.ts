@@ -1,8 +1,7 @@
-import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
-import { prisma } from "@mail-orbyt/database";
+import { ForbiddenError, UnauthenticatedError } from "@mail-orbyt/authentication";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 import { InvalidStepError, removeCampaignStep, updateCampaignStep } from "@/lib/campaigns";
 
 interface RouteParams {
@@ -17,24 +16,22 @@ const updateStepSchema = z.object({
   manualBody: z.string().max(4000).optional(),
 });
 
-async function requireManage(userId: string, organisationId: string) {
-  await requireOrganisationMembership(prisma, {
-    userId,
+async function requireManage(request: Request, organisationId: string) {
+  await authenticateOrganisationRequest(request, {
     organisationId,
     permission: "campaigns:manage",
   });
 }
 
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   const { organisationId, campaignId, stepId } = await params;
 
   try {
-    await requireManage(session.user.id, organisationId);
+    await requireManage(request, organisationId);
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -57,16 +54,15 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
 }
 
-export async function DELETE(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function DELETE(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId, campaignId, stepId } = await params;
 
   try {
-    await requireManage(session.user.id, organisationId);
+    await requireManage(request, organisationId);
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;

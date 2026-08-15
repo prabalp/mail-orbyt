@@ -1,7 +1,7 @@
 import type { OrganisationRole, PrismaClient } from "@mail-orbyt/database";
 import { recordAuditEvent } from "./audit";
 import { ForbiddenError } from "./errors";
-import { canAssignRole } from "./permissions";
+import { canAssignRole, ROLE_RANK } from "./permissions";
 
 type Prisma = Pick<PrismaClient, "organisationMembership" | "auditEvent">;
 
@@ -17,6 +17,46 @@ async function assertNotLastOwner(
   if (ownerCount <= 1) {
     throw new ForbiddenError("An organisation must always have at least one owner");
   }
+}
+
+export interface MemberSummary {
+  userId: string;
+  email: string;
+  name: string | null;
+  role: OrganisationRole;
+  joinedAt: Date;
+}
+
+/**
+ * The roster a caller needs before they can act on anyone —
+ * `updateMemberRole`/`removeMember` both take a `targetUserId`, and this is
+ * the only way to discover one. Ordered owners-first then by join date so
+ * the people who can act on the organisation read at the top.
+ */
+export async function listMembers(
+  prisma: Pick<PrismaClient, "organisationMembership">,
+  organisationId: string,
+): Promise<MemberSummary[]> {
+  const memberships = await prisma.organisationMembership.findMany({
+    where: { organisationId },
+    include: { user: { select: { email: true, name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Prisma's orderBy on an enum column sorts alphabetically, not by the
+  // application's notion of rank (ROLE_RANK) — OWNER-first requires
+  // sorting in application code instead.
+  const sorted = [...memberships].sort(
+    (a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role],
+  );
+
+  return sorted.map((membership) => ({
+    userId: membership.userId,
+    email: membership.user.email,
+    name: membership.user.name,
+    role: membership.role,
+    joinedAt: membership.createdAt,
+  }));
 }
 
 export interface UpdateMemberRoleParams {

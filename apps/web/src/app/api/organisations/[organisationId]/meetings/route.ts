@@ -1,8 +1,7 @@
-import { ForbiddenError, requireOrganisationMembership } from "@mail-orbyt/authentication";
-import { prisma } from "@mail-orbyt/database";
+import { ForbiddenError, UnauthenticatedError } from "@mail-orbyt/authentication";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 import { createOrganisationMeeting, listOrganisationMeetings } from "@/lib/analytics";
 
 interface RouteParams {
@@ -17,16 +16,15 @@ const createSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId } = await params;
 
   try {
-    await requireOrganisationMembership(prisma, { userId: session.user.id, organisationId });
+    await authenticateOrganisationRequest(request, { organisationId });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -37,19 +35,18 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
 }
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   const { organisationId } = await params;
 
+  let userId: string;
   try {
-    await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    ({ userId } = await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "conversations:review",
-    });
+    }));
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -64,7 +61,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     const meeting = await createOrganisationMeeting({
       organisationId,
       ...body.data,
-      createdByUserId: session.user.id,
+      createdByUserId: userId,
     });
     return NextResponse.json(meeting, { status: 201 });
   } catch {

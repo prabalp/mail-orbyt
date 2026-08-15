@@ -16,6 +16,18 @@ const nextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
+  async rewrites() {
+    // Conventional flat OAuth endpoint paths, aliased to their real routes.
+    // Some MCP clients hardcode a fallback to these paths (relative to the
+    // issuer root) instead of always honoring the discovered metadata's
+    // exact endpoint URLs — serving both keeps us compatible either way.
+    return [
+      { source: "/register", destination: "/api/oauth/register" },
+      { source: "/token", destination: "/api/oauth/token" },
+      { source: "/revoke", destination: "/api/oauth/revoke" },
+      { source: "/authorize", destination: "/oauth/authorize" },
+    ];
+  },
   webpack: (config) => {
     // In this pnpm monorepo, node_modules alone spans 500+ directories
     // (workspace symlinks + the .pnpm store) — watching all of it blows

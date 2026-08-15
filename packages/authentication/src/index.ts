@@ -41,8 +41,10 @@ export {
   type AcceptInvitationParams,
 } from "./invitations";
 export {
+  listMembers,
   updateMemberRole,
   removeMember,
+  type MemberSummary,
   type UpdateMemberRoleParams,
   type RemoveMemberParams,
 } from "./members";

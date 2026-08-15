@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { removeMember, updateMemberRole } from "./members";
+import { listMembers, removeMember, updateMemberRole } from "./members";
 import { ForbiddenError } from "./errors";
 
 function fakePrisma(membership: unknown, ownerCount = 1) {
@@ -13,6 +13,59 @@ function fakePrisma(membership: unknown, ownerCount = 1) {
     auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
   };
 }
+
+describe("listMembers", () => {
+  it("maps memberships to the userId/email/name/role/joinedAt summary shape", async () => {
+    const createdAt = new Date("2026-01-01T00:00:00Z");
+    const prisma = {
+      organisationMembership: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            userId: "user-1",
+            role: "OWNER",
+            createdAt,
+            user: { email: "owner@example.com", name: "Owner Person" },
+          },
+        ]),
+      },
+    };
+
+    await expect(listMembers(prisma, "org-1")).resolves.toEqual([
+      { userId: "user-1", email: "owner@example.com", name: "Owner Person", role: "OWNER", joinedAt: createdAt },
+    ]);
+  });
+
+  it("orders owners first, then by join date within a role", async () => {
+    // Prisma's orderBy on an enum sorts alphabetically (ADMIN, MEMBER, OWNER,
+    // VIEWER) — deliberately fetched by createdAt only and re-sorted by
+    // ROLE_RANK in application code, so this asserts the OUTPUT order rather
+    // than the query shape.
+    const earlierAdmin = {
+      userId: "admin-1",
+      role: "ADMIN",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      user: { email: "admin@example.com", name: null },
+    };
+    const laterOwner = {
+      userId: "owner-1",
+      role: "OWNER",
+      createdAt: new Date("2026-01-02T00:00:00Z"),
+      user: { email: "owner@example.com", name: null },
+    };
+    const prisma = {
+      organisationMembership: {
+        findMany: vi.fn().mockResolvedValue([earlierAdmin, laterOwner]),
+      },
+    };
+
+    const result = await listMembers(prisma, "org-1");
+
+    expect(result.map((member) => member.userId)).toEqual(["owner-1", "admin-1"]);
+    expect(prisma.organisationMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organisationId: "org-1" }, orderBy: { createdAt: "asc" } }),
+    );
+  });
+});
 
 describe("updateMemberRole", () => {
   it("updates the role and records an audit event", async () => {

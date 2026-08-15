@@ -1,13 +1,13 @@
 import {
   ForbiddenError,
   removeMember,
-  requireOrganisationMembership,
+  UnauthenticatedError,
   updateMemberRole,
 } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { authenticateOrganisationRequest } from "@/lib/api-auth";
 
 const bodySchema = z.object({ role: z.enum(["OWNER", "ADMIN", "MEMBER", "VIEWER"]) });
 
@@ -16,20 +16,19 @@ interface RouteParams {
 }
 
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
   const { organisationId, userId } = await params;
 
-  let membership;
+  let actingUserId: string;
+  let membership: Awaited<ReturnType<typeof authenticateOrganisationRequest>>["membership"];
   try {
-    membership = await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    ({ userId: actingUserId, membership } = await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "members:manage",
-    });
+    }));
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -46,7 +45,7 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
       organisationId,
       targetUserId: userId,
       newRole: parsed.data.role,
-      actingUserId: session.user.id,
+      actingUserId,
       actingRole: membership.role,
     });
   } catch (error) {
@@ -58,25 +57,24 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   return NextResponse.json({ status: "ok" });
 }
 
-export async function DELETE(_request: Request, { params }: RouteParams): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
+export async function DELETE(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId, userId } = await params;
 
+  let actingUserId: string;
   try {
-    await requireOrganisationMembership(prisma, {
-      userId: session.user.id,
+    ({ userId: actingUserId } = await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "members:manage",
-    });
+    }));
     await removeMember(prisma, {
       organisationId,
       targetUserId: userId,
-      actingUserId: session.user.id,
+      actingUserId,
     });
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
     if (error instanceof ForbiddenError)
       return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
