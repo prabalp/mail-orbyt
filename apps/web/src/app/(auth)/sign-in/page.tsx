@@ -1,16 +1,26 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Alert, Button, Card, TextInput } from "@mail-orbyt/design-system";
 import { signInAction, signInWithGoogleAction } from "./actions";
 
+/**
+ * Reads `callbackUrl` from the query string — e.g. arriving here mid-flow
+ * from the MCP OAuth consent screen redirecting an unauthenticated visitor
+ * to sign in first, carried through so the corresponding action can send
+ * the user back afterwards. Split out into its own component because
+ * `useSearchParams` opts a page out of static rendering unless the part
+ * that calls it is wrapped in Suspense — without this split, `next build`
+ * fails prerendering this page entirely.
+ */
+function CallbackUrlField(): React.ReactElement {
+  const callbackUrl = useSearchParams().get("callbackUrl") ?? "";
+  return <input type="hidden" name="callbackUrl" value={callbackUrl} />;
+}
+
 export default function SignInPage(): React.ReactElement {
   const [error, formAction, isPending] = useActionState(signInAction, undefined);
-  // Set when arriving here mid-flow (e.g. the MCP OAuth consent screen
-  // redirecting an unauthenticated visitor to sign in first) — carried
-  // through so the corresponding action can send the user back afterwards.
-  const callbackUrl = useSearchParams().get("callbackUrl") ?? "";
 
   return (
     <Card>
@@ -26,7 +36,9 @@ export default function SignInPage(): React.ReactElement {
       ) : null}
 
       <form action={formAction} className="mt-6 flex flex-col gap-4">
-        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+        <Suspense fallback={<input type="hidden" name="callbackUrl" value="" />}>
+          <CallbackUrlField />
+        </Suspense>
         <TextInput label="Email" name="email" type="email" autoComplete="email" required />
         <TextInput
           label="Password"
@@ -41,7 +53,9 @@ export default function SignInPage(): React.ReactElement {
       </form>
 
       <form action={signInWithGoogleAction} className="mt-3">
-        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+        <Suspense fallback={<input type="hidden" name="callbackUrl" value="" />}>
+          <CallbackUrlField />
+        </Suspense>
         <Button type="submit" variant="outlined" className="w-full">
           Continue with Google
         </Button>
