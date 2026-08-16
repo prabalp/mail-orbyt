@@ -106,6 +106,14 @@ scope and reaches `fetch` once it holds it).
 - **Error normalization** (`registry.ts`'s `ToolRequestError`): upstream
   4xx/5xx responses are mapped to a message carrying the field-level detail
   and a `retryable` flag (5xx/429 vs. 4xx), plus guidance for 401/403/404.
+- **JSON Schema dialect fix** (`schema-dialect-fix.ts`): the SDK's own
+  Zod→JSON-Schema conversion hardcodes `$schema: draft-07`, which at least
+  one real MCP client rejects outright — every call to a tool with a
+  declared `outputSchema` fails before it reaches the handler, for every
+  such tool, silently. `create-server.ts` calls `fixToolSchemaDialect`
+  after every tool is registered to rewrite the advertised dialect to
+  2020-12. Regression-tested end to end in `schema-dialect-fix.test.ts`
+  (constructs a real server and asserts no tool advertises draft-07).
 
 ### Composite tools
 

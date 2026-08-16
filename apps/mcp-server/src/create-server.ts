@@ -15,6 +15,7 @@ import { recordToolInvocation } from "./audit.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
+import { fixToolSchemaDialect } from "./schema-dialect-fix.js";
 
 const logger = createLogger({ service: "mcp-server" });
 
@@ -153,6 +154,11 @@ export function createMcpServer(actor: AuthenticatedActor): McpServer {
 
   registerResources(server, actor);
   registerPrompts(server);
+
+  // Must run after every registerTool call above — it wraps whatever
+  // tools/list handler the SDK's own registerTool set up, and there's
+  // nothing to wrap until at least one tool has been registered.
+  fixToolSchemaDialect(server);
 
   return server;
 }
