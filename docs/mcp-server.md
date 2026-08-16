@@ -71,7 +71,7 @@ holds the exception: tools that call a *composite* apps/web route (one that
 itself orchestrates several services) rather than a 1:1 REST passthrough —
 see "Composite tools" below.
 
-87 route-backed tools plus 1 link tool (`get_gmail_connect_url`), enforced
+89 route-backed tools plus 1 link tool (`get_gmail_connect_url`), enforced
 and covered by `apps/mcp-server/src/tools/registry.test.ts` (descriptor
 integrity — no duplicate names, every scope real, every path param declared,
 every pathTemplate resolves to a real apps/web route) and
@@ -171,6 +171,8 @@ membership-only, no specific permission.
 | **organisations.ts** | | |
 | `list_my_organisations` | profile | RO |
 | `create_organisation` | profile | |
+| `get_organisation` | profile | RO |
+| `delete_organisation` | organisation:delete | ⚠ (erases the entire organisation; requires the exact current name as confirmName) |
 | **companies.ts** | | |
 | `list_companies` | profile | RO |
 | `get_company` | profile | RO |

@@ -38,6 +38,11 @@ Things to know before acting:
     action=delete, remove_member, revoke_mcp_connection) is irreversible.
     Those tools accept dryRun or confirm — use dryRun first, show the count,
     and get explicit human agreement before setting confirm.
+  - delete_organisation is the most destructive tool here: it erases the
+    entire organisation, not one record. It requires the organisation's
+    exact current name typed back as confirmName (call get_organisation
+    first) — never call it without the human explicitly confirming both
+    the name and that they understand everything will be erased.
   - Long-running work (research, CSV import, sending) is queued and returns a
     jobId. Poll get_job_status rather than assuming it finished.
   - Lists are paginated and default to a small page. Ask for more pages rather

@@ -47,4 +47,31 @@ export const ORGANISATION_TOOLS: RouteToolDescriptor[] = [
       slug: z.string().optional(),
     },
   },
+  {
+    name: "get_organisation",
+    title: "Get this organisation",
+    description: "Get this connection's organisation — id, name, and slug. Use this to read the exact current name before calling delete_organisation, which requires it typed back verbatim.",
+    method: "GET",
+    pathTemplate: "/api/organisations/{organisationId}",
+    requiredScope: "profile",
+    inputShape: {},
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    outputShape: {
+      id: z.string().optional(),
+      name: z.string().optional(),
+      slug: z.string().optional(),
+    },
+  },
+  {
+    name: "delete_organisation",
+    title: "Delete this organisation",
+    description: "Permanently delete this connection's organisation and everything scoped to it — every lead, campaign, conversation, connected inbox, and research fact. There is no undo. Requires the OWNER role and the organisation's current exact name (call get_organisation first) as confirmName, matched verbatim server-side — get explicit human confirmation of the name and consequences before calling this.",
+    method: "DELETE",
+    pathTemplate: "/api/organisations/{organisationId}",
+    requiredScope: "organisation:delete",
+    inputShape: {
+      confirmName: z.string().min(1).describe("Must exactly equal the organisation's current name, from get_organisation"),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  },
 ];

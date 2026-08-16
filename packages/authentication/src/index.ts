@@ -31,7 +31,14 @@ export { hasPermission, canAssignRole, ROLE_RANK, type Permission } from "./perm
 export { signUp, EmailAlreadyInUseError, type SignUpParams } from "./signup";
 export { verifyEmail } from "./email-verification";
 export { requestPasswordReset, completePasswordReset } from "./password-reset";
-export { createOrganisation, slugify, type CreateOrganisationParams } from "./organisations";
+export {
+  createOrganisation,
+  deleteOrganisation,
+  slugify,
+  OrganisationNameMismatchError,
+  type CreateOrganisationParams,
+  type DeleteOrganisationParams,
+} from "./organisations";
 export {
   createInvitation,
   acceptInvitation,

@@ -47,6 +47,19 @@ for the exact matrix). Notable rules enforced in `members.ts`:
 - Only an `OWNER` can grant or revoke the `OWNER` role (`canAssignRole`).
 - An organisation can never be left without at least one `OWNER` — demoting
   or removing the last owner is rejected.
+- Only an `OWNER` holds `organisation:delete`. `deleteOrganisation`
+  (`packages/authentication/src/organisations.ts`) is the one place an
+  organisation and everything scoped to it (leads, campaigns, inboxes, all
+  of it) is erased — via the schema's own cascade deletes, not a manual
+  per-table walk. It requires the caller to pass the organisation's exact
+  current name as `confirmName`, checked in the function itself rather than
+  trusted to the route/tool layer, since nothing about this is undoable.
+  The `ORGANISATION_DELETED` audit event is written *without*
+  `organisationId` — `AuditEvent`'s own FK to `Organisation` is
+  `onDelete: Cascade`, so a row that pointed at the org being deleted would
+  vanish in the same transaction, erasing the record of the deletion along
+  with everything else. Exposed at `DELETE /api/organisations/:id` and as
+  the `delete_organisation` MCP tool.
 
 ## Invitations
 
