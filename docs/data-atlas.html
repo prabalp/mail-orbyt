@@ -1,0 +1,644 @@
+<title>Mail Orbyt Data Atlas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #f2f3f5;
+    --surface: #ffffff;
+    --surface-2: #eaecef;
+    --border: #d8dbe0;
+    --text: #1a1d21;
+    --text-dim: #565d66;
+    --text-faint: #87909a;
+    --accent: #1f56a3;
+    --accent-soft: #e3ecf9;
+    --accent-strong: #133a73;
+    --teal: #1d7a72;
+    --teal-soft: #dff0ee;
+    --amber: #a8671a;
+    --amber-soft: #f8ecdb;
+    --red: #b3352c;
+    --red-soft: #f9e4e2;
+    --code-bg: #eef0f3;
+    --shadow: 0 1px 2px rgba(20,24,30,0.04), 0 4px 14px rgba(20,24,30,0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171a;
+      --surface: #1b1f23;
+      --surface-2: #21262b;
+      --border: #2d333a;
+      --text: #e7e8ea;
+      --text-dim: #a2a9b1;
+      --text-faint: #6c7480;
+      --accent: #6ea3e8;
+      --accent-soft: #1c2c42;
+      --accent-strong: #a9c8f5;
+      --teal: #5cc0b5;
+      --teal-soft: #16302d;
+      --amber: #e0a355;
+      --amber-soft: #372812;
+      --red: #e0837b;
+      --red-soft: #3a1c1a;
+      --code-bg: #22272c;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #14171a;
+    --surface: #1b1f23;
+    --surface-2: #21262b;
+    --border: #2d333a;
+    --text: #e7e8ea;
+    --text-dim: #a2a9b1;
+    --text-faint: #6c7480;
+    --accent: #6ea3e8;
+    --accent-soft: #1c2c42;
+    --accent-strong: #a9c8f5;
+    --teal: #5cc0b5;
+    --teal-soft: #16302d;
+    --amber: #e0a355;
+    --amber-soft: #372812;
+    --red: #e0837b;
+    --red-soft: #3a1c1a;
+    --code-bg: #22272c;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-soft); }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace; }
+
+  h1, h2, h3 { text-wrap: balance; font-family: "IBM Plex Mono", ui-monospace, monospace; margin: 0; }
+
+  a { color: var(--accent); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 252px minmax(0, 1fr);
+    max-width: 1280px;
+    margin: 0 auto;
+    align-items: start;
+  }
+
+  nav.toc {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 28px 16px 40px 24px;
+    border-right: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  nav.toc .brand {
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  nav.toc .brand-sub {
+    color: var(--text-faint);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 22px;
+  }
+  nav.toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: sec;
+  }
+  nav.toc li { counter-increment: sec; margin-bottom: 2px; }
+  nav.toc a {
+    display: flex;
+    gap: 8px;
+    text-decoration: none;
+    color: var(--text-dim);
+    padding: 5px 8px;
+    border-radius: 6px;
+  }
+  nav.toc a:hover { background: var(--surface-2); color: var(--text); }
+  nav.toc a::before {
+    content: counter(sec, decimal-leading-zero);
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.72rem;
+    padding-top: 1px;
+  }
+  nav.toc .toc-foot {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 0.74rem;
+    color: var(--text-faint);
+  }
+
+  main { padding: 44px 40px 100px; min-width: 0; }
+
+  header.hero {
+    margin-bottom: 40px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent);
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  header.hero h1 {
+    font-size: clamp(1.6rem, 2.4vw, 2.15rem);
+    font-weight: 700;
+    max-width: 20ch;
+  }
+  header.hero p.lede {
+    max-width: 66ch;
+    color: var(--text-dim);
+    font-size: 1.02rem;
+    margin-top: 14px;
+  }
+  .meta-row {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    font-size: 0.8rem;
+    color: var(--text-faint);
+  }
+  .meta-row span b { color: var(--text-dim); font-weight: 600; }
+
+  /* pipeline diagram */
+  .pipeline-wrap {
+    overflow-x: auto;
+    margin: 34px 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    padding: 22px 8px;
+  }
+  .pipeline-caption {
+    font-size: 0.78rem;
+    color: var(--text-faint);
+    margin-top: 10px;
+    max-width: 72ch;
+  }
+
+  section.domain {
+    padding-top: 54px;
+    border-top: 1px solid var(--border);
+    margin-top: 10px;
+    scroll-margin-top: 20px;
+  }
+  section.domain:first-of-type { border-top: none; padding-top: 0; }
+
+  .domain-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .domain-head h2 { font-size: 1.28rem; }
+  .domain-count {
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    font-family: "IBM Plex Mono", monospace;
+    background: var(--surface-2);
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .domain-note { color: var(--text-dim); max-width: 74ch; margin: 10px 0 22px; font-size: 0.94rem; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .card h3 {
+    font-size: 0.98rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h3 .tbl-icon { color: var(--accent); font-size: 0.85em; }
+  .card p.purpose {
+    font-size: 0.86rem;
+    color: var(--text-dim);
+    margin: 9px 0 12px;
+  }
+  .fields {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+  }
+  .field { display: flex; gap: 8px; align-items: baseline; }
+  .field .fname { color: var(--text); white-space: nowrap; }
+  .field .ftype { color: var(--text-faint); }
+  .field.key .fname { color: var(--accent-strong); font-weight: 600; }
+  .field.fk .fname { color: var(--teal); }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .badge {
+    font-size: 0.68rem;
+    font-family: "IBM Plex Mono", monospace;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--surface-2);
+    color: var(--text-dim);
+  }
+  .badge.enum { background: var(--amber-soft); color: var(--amber); }
+  .badge.sensitive { background: var(--red-soft); color: var(--red); }
+  .badge.rel { background: var(--teal-soft); color: var(--teal); }
+
+  .callout {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 10px 10px 0;
+    padding: 14px 18px;
+    font-size: 0.88rem;
+    margin: 18px 0;
+    color: var(--text);
+  }
+  .callout.warn { border-left-color: var(--red); background: var(--red-soft); }
+  .callout b { font-weight: 600; }
+
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    margin: 14px 0 6px;
+  }
+  table.compare th, table.compare td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.compare th { color: var(--text-faint); font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  table.compare td.rec { color: var(--teal); font-weight: 600; }
+  .tool-wrap { overflow-x: auto; }
+
+  pre.snippet {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  footer.doc-foot {
+    margin-top: 70px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: 0.78rem;
+  }
+
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 20px; }
+    main { padding: 32px 20px 80px; }
+  }
+</style>
+
+<div class="layout">
+  <nav class="toc">
+    <div class="brand">mail-orbyt / data atlas</div>
+    <div class="brand-sub">26 migrations · 1 database</div>
+    <ol>
+      <li><a href="#flow">How a lead becomes a meeting</a></li>
+      <li><a href="#identity">Identity &amp; sessions</a></li>
+      <li><a href="#tenancy">Organisations &amp; membership</a></li>
+      <li><a href="#audit">Audit trail</a></li>
+      <li><a href="#mcp">MCP OAuth server</a></li>
+      <li><a href="#leads">Leads &amp; companies</a></li>
+      <li><a href="#import">CSV import</a></li>
+      <li><a href="#suppression">Suppression</a></li>
+      <li><a href="#research">Research &amp; enrichment</a></li>
+      <li><a href="#drafts">AI email drafts</a></li>
+      <li><a href="#sending">Sending infrastructure</a></li>
+      <li><a href="#campaigns">Campaigns &amp; sequencing</a></li>
+      <li><a href="#outbox">Outbox &amp; delivery</a></li>
+      <li><a href="#conversations">Conversations &amp; replies</a></li>
+      <li><a href="#meetings">Meetings</a></li>
+      <li><a href="#logs">Logs, outside the database</a></li>
+      <li><a href="#tools">Connecting a query tool</a></li>
+    </ol>
+    <div class="toc-foot">Generated from<br><code class="mono">packages/database/prisma/schema.prisma</code></div>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Schema reference</div>
+      <h1>Every table in Mail Orbyt, and why it exists</h1>
+      <p class="lede">One Postgres database, one schema file, 62 tables and 30 enums, organised the way the product actually moves: a lead comes in, gets researched, gets a drafted email, gets enrolled in a campaign, gets sent, gets opened or replied to, and — sometimes — becomes a meeting. Every section below follows that order.</p>
+      <div class="meta-row">
+        <span><b>Engine</b> PostgreSQL 16, one schema, no sharding</span>
+        <span><b>Tenancy</b> every business-data row carries <code class="mono">organisationId</code></span>
+        <span><b>Client</b> Prisma ORM (<code class="mono">packages/database</code>)</span>
+      </div>
+    </header>
+
+    <section id="flow">
+      <div class="pipeline-wrap">
+        <svg viewBox="0 0 1180 230" width="100%" role="img" aria-label="Pipeline from lead import to meeting">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--text-faint)"></path>
+            </marker>
+          </defs>
+          <style>
+            .node rect { fill: var(--surface); stroke: var(--border); stroke-width: 1.3; }
+            .node.emph rect { stroke: var(--accent); }
+            .node text.t { font: 600 13px "IBM Plex Mono", monospace; fill: var(--text); }
+            .node text.s { font: 400 10.5px "IBM Plex Sans", sans-serif; fill: var(--text-faint); }
+            .lbl { font: 500 10px "IBM Plex Mono", monospace; fill: var(--text-faint); }
+            .flowline { stroke: var(--text-faint); stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+            .branch { stroke: var(--teal); stroke-width: 1.3; fill: none; marker-end: url(#arrow); stroke-dasharray: 3 3; }
+          </style>
+
+          <g class="node"><rect x="10" y="70" width="140" height="60" rx="10"></rect>
+            <text x="80" y="94" text-anchor="middle" class="t">Lead</text>
+            <text x="80" y="112" text-anchor="middle" class="s">imported via CSV</text></g>
+
+          <g class="node"><rect x="200" y="70" width="150" height="60" rx="10"></rect>
+            <text x="275" y="94" text-anchor="middle" class="t">ResearchFact</text>
+            <text x="275" y="112" text-anchor="middle" class="s">deterministic, no AI</text></g>
+
+          <g class="node"><rect x="400" y="70" width="160" height="60" rx="10"></rect>
+            <text x="480" y="94" text-anchor="middle" class="t">EmailDraft</text>
+            <text x="480" y="112" text-anchor="middle" class="s">AI, from a fact snapshot</text></g>
+
+          <g class="node emph"><rect x="610" y="70" width="170" height="60" rx="10"></rect>
+            <text x="695" y="94" text-anchor="middle" class="t">CampaignEnrollment</text>
+            <text x="695" y="112" text-anchor="middle" class="s">a lead in a sequence</text></g>
+
+          <g class="node"><rect x="830" y="70" width="150" height="60" rx="10"></rect>
+            <text x="905" y="94" text-anchor="middle" class="t">OutboxItem</text>
+            <text x="905" y="112" text-anchor="middle" class="s">one scheduled send</text></g>
+
+          <g class="node"><rect x="1030" y="10" width="140" height="55" rx="10"></rect>
+            <text x="1100" y="33" text-anchor="middle" class="t">EmailOpenEvent</text>
+            <text x="1100" y="50" text-anchor="middle" class="s">pixel hit</text></g>
+
+          <g class="node"><rect x="1030" y="150" width="140" height="60" rx="10"></rect>
+            <text x="1100" y="174" text-anchor="middle" class="t">Conversation</text>
+            <text x="1100" y="192" text-anchor="middle" class="s">a reply arrives</text></g>
+
+          <g class="node"><rect x="790" y="150" width="150" height="60" rx="10"></rect>
+            <text x="865" y="174" text-anchor="middle" class="t">Meeting</text>
+            <text x="865" y="192" text-anchor="middle" class="s">qualified, by a human</text></g>
+
+          <path class="flowline" d="M150,100 L200,100"></path>
+          <path class="flowline" d="M350,100 L400,100"></path>
+          <path class="flowline" d="M560,100 L610,100"></path>
+          <path class="flowline" d="M780,100 L830,100"></path>
+          <path class="flowline" d="M980,95 C1000,80 1010,55 1030,40"></path>
+          <path class="flowline" d="M980,110 C1000,130 1010,155 1030,168"></path>
+          <path class="branch" d="M1030,178 C960,190 900,185 865,180"></path>
+
+          <text x="175" y="60" text-anchor="middle" class="lbl">CSV → LeadList</text>
+          <text x="375" y="60" text-anchor="middle" class="lbl">website / search / news</text>
+          <text x="585" y="60" text-anchor="middle" class="lbl">ResearchSnapshot</text>
+          <text x="805" y="60" text-anchor="middle" class="lbl">step by step</text>
+          <text x="1005" y="65" text-anchor="middle" class="lbl">open</text>
+          <text x="1005" y="140" text-anchor="middle" class="lbl">reply →<tspan x="1005" dy="12">pauses ALL campaigns</tspan></text>
+        </svg>
+      </div>
+      <p class="pipeline-caption">A reply is the one event that overrides everything: <code class="mono">Conversation</code> is keyed by (org, lead, inbox) rather than by campaign, and a genuine reply exits <em>every</em> active enrollment for that lead — not just the campaign that sent it. Suppression (§7) and the AI-boundary rule (research is deterministic, only drafting uses AI) both apply throughout this flow but aren't shown as nodes since they're gates, not steps.</p>
+    </section>
+
+    <section class="domain" id="identity">
+      <div class="domain-head"><h2>1 · Identity &amp; sessions</h2><span class="domain-count">7 tables</span></div>
+      <p class="domain-note">Auth.js's adapter tables plus two homegrown token tables. A user's <em>login</em> credentials here are completely separate from the Gmail <em>sending</em> credentials in §10 — the product's rule is that these two token types must never share storage.</p>
+      <div class="grid">
+        <div class="card"><h3>User</h3><p class="purpose">One row per person. <code class="mono">passwordHash</code> is null for Google-only sign-ins.</p>
+          <div class="fields">
+            <div class="field key"><span class="fname">id</span></div>
+            <div class="field"><span class="fname">email</span><span class="ftype">unique</span></div>
+            <div class="field"><span class="fname">passwordChangedAt</span><span class="ftype">invalidates old JWTs</span></div>
+          </div></div>
+        <div class="card"><h3>Account</h3><p class="purpose">Auth.js OAuth link — Google <em>login</em> only.</p>
+          <div class="fields"><div class="field fk"><span class="fname">userId</span></div></div>
+          <div class="badges"><span class="badge sensitive">tokens</span></div></div>
+        <div class="card"><h3>Session</h3><p class="purpose">Present for adapter compliance; actual auth uses JWT, not DB sessions.</p></div>
+        <div class="card"><h3>VerificationToken</h3><p class="purpose">Required by Auth.js's type contract; unused (no magic-link provider).</p></div>
+        <div class="card"><h3>PasswordResetToken</h3><p class="purpose">Single-use, expiring. Raw token shown once; only its identity is stored.</p>
+          <div class="fields"><div class="field fk"><span class="fname">userId</span></div></div></div>
+        <div class="card"><h3>EmailVerificationToken</h3><p class="purpose">Same shape as password reset, for confirming a new account's email.</p></div>
+      </div>
+    </section>
+
+    <section class="domain" id="tenancy">
+      <div class="domain-head"><h2>2 · Organisations &amp; membership</h2><span class="domain-count">3 tables</span></div>
+      <p class="domain-note">Every business using Mail Orbyt is an <code class="mono">Organisation</code> row. This is the tenancy boundary — nearly every table from §6 onward hangs off <code class="mono">organisationId</code>, and every API route checks it before touching a row.</p>
+      <div class="grid">
+        <div class="card"><h3>Organisation</h3><p class="purpose">The tenant. Also holds org-level AI configuration and prompt overrides.</p>
+          <div class="fields">
+            <div class="field key"><span class="fname">id</span></div>
+            <div class="field"><span class="fname">slug</span><span class="ftype">unique</span></div>
+            <div class="field"><span class="fname">aiProviderKind</span><span class="ftype">GEMINI | OPENAI_COMPATIBLE</span></div>
+            <div class="field"><span class="fname">aiProviderApiKey</span><span class="ftype">AES-256-GCM encrypted</span></div>
+          </div>
+          <div class="badges"><span class="badge enum">AiProviderKind</span><span class="badge sensitive">encrypted key</span></div></div>
+        <div class="card"><h3>OrganisationMembership</h3><p class="purpose">Join table: which users belong to which org, with what role.</p>
+          <div class="fields"><div class="field fk"><span class="fname">organisationId</span></div><div class="field fk"><span class="fname">userId</span></div><div class="field"><span class="fname">role</span></div></div>
+          <div class="badges"><span class="badge enum">OrganisationRole: OWNER·ADMIN·MEMBER·VIEWER</span></div></div>
+        <div class="card"><h3>Invitation</h3><p class="purpose">Pending/accepted/revoked invite by email, tokenised.</p>
+          <div class="badges"><span class="badge enum">InvitationStatus</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="audit">
+      <div class="domain-head"><h2>3 · Audit trail</h2><span class="domain-count">1 table</span></div>
+      <p class="domain-note">The durable, queryable security/compliance log — separate from the process logs in §16. There's no audit UI yet; this table is meant to be queried directly during an investigation.</p>
+      <div class="grid">
+        <div class="card"><h3>AuditEvent</h3><p class="purpose">One row per security-relevant action: login, invites, membership changes, campaign launch/pause, suppression, data export/deletion, org deletion, MCP token lifecycle.</p>
+          <div class="fields">
+            <div class="field"><span class="fname">type</span></div>
+            <div class="field"><span class="fname">metadata</span><span class="ftype">json — never tokens or email bodies</span></div>
+            <div class="field"><span class="fname">createdAt</span><span class="ftype">indexed, for time-range queries</span></div>
+          </div>
+          <div class="badges"><span class="badge enum">22-value AuditEventType</span></div></div>
+      </div>
+      <div class="callout"><b>Handy query:</b> <code class="mono">select type, count(*) from "AuditEvent" where "organisationId" = '…' group by 1 order by 2 desc;</code> — a fast way to see what's actually happening in an org.</div>
+    </section>
+
+    <section class="domain" id="mcp">
+      <div class="domain-head"><h2>4 · MCP OAuth server</h2><span class="domain-count">4 tables</span></div>
+      <p class="domain-note">A self-hosted OAuth 2.1 authorization server (PKCE, public clients only) so Claude's remote MCP connector can act with the same permissions as the web UI. Every token is bound to exactly one organisation — never cross-tenant.</p>
+      <div class="grid">
+        <div class="card"><h3>McpOAuthClient</h3><p class="purpose">A registered client app (e.g. claude.ai), via Dynamic Client Registration.</p></div>
+        <div class="card"><h3>McpAuthorizationCode</h3><p class="purpose">Single-use, ~60s lived, PKCE S256.</p></div>
+        <div class="card"><h3>McpAccessToken</h3><p class="purpose">Bearer token; hashed at rest (SHA-256), raw value shown once.</p><div class="badges"><span class="badge sensitive">hashed</span></div></div>
+        <div class="card"><h3>McpRefreshToken</h3><p class="purpose">~90d, rotated on use — reuse of an already-rotated token is detectable via <code class="mono">replacedByTokenHash</code>.</p></div>
+      </div>
+    </section>
+
+    <section class="domain" id="leads">
+      <div class="domain-head"><h2>5 · Leads &amp; companies</h2><span class="domain-count">6 tables</span></div>
+      <p class="domain-note">The core CRM objects. <code class="mono">fieldSources</code> on both Lead and Company is provenance-tracking: it records where each field's current value came from (manual entry, CSV, or a research provider) without needing a join.</p>
+      <div class="grid">
+        <div class="card"><h3>Lead</h3><p class="purpose">A prospect. Deduplicated by (org, email) — nulls allowed to coexist.</p>
+          <div class="fields"><div class="field fk"><span class="fname">companyId</span></div><div class="field"><span class="fname">status</span></div></div>
+          <div class="badges"><span class="badge enum">LeadStatus: ACTIVE·ARCHIVED</span></div></div>
+        <div class="card"><h3>Company</h3><p class="purpose">An organisation the lead works for. One per (org, domain).</p></div>
+        <div class="card"><h3>LeadCompany</h3><p class="purpose">Many-to-many history — e.g. a previous employer surfaced by research.</p></div>
+        <div class="card"><h3>LeadList</h3><p class="purpose">A named group of leads; every CSV import creates or reuses one.</p></div>
+        <div class="card"><h3>LeadListMembership</h3><p class="purpose">Join table, list ↔ lead.</p></div>
+        <div class="card"><h3>DataSource</h3><p class="purpose">Registry of provenance kinds referenced by <code class="mono">fieldSources</code>.</p><div class="badges"><span class="badge enum">DataSourceKind</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="import">
+      <div class="domain-head"><h2>6 · CSV import</h2><span class="domain-count">2 tables</span></div>
+      <div class="grid">
+        <div class="card"><h3>ImportBatch</h3><p class="purpose">One CSV upload: column mapping, duplicate strategy, running counts.</p>
+          <div class="badges"><span class="badge enum">ImportBatchStatus</span><span class="badge enum">DuplicateStrategy</span></div></div>
+        <div class="card"><h3>ImportRow</h3><p class="purpose">One spreadsheet row. Unique on (batch, rowNumber) so a retry can safely upsert instead of duplicating.</p><div class="badges"><span class="badge enum">ImportRowStatus</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="suppression">
+      <div class="domain-head"><h2>7 · Suppression</h2><span class="domain-count">1 table</span></div>
+      <p class="domain-note">The do-not-contact list, checked before every send and every campaign enrollment.</p>
+      <div class="grid">
+        <div class="card"><h3>SuppressionEntry</h3><p class="purpose">One email or domain, with a reason.</p>
+          <div class="fields"><div class="field"><span class="fname">type</span></div><div class="field"><span class="fname">reason</span></div></div>
+          <div class="badges"><span class="badge enum">SuppressionType: EMAIL·DOMAIN</span><span class="badge enum">6-value SuppressionReason</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="research">
+      <div class="domain-head"><h2>8 · Research &amp; enrichment</h2><span class="domain-count">9 tables</span></div>
+      <p class="domain-note"><b>No table in this section is ever written to by an AI model</b> — extraction is deterministic (JSON-LD, Open Graph, keyword frequency). This is a hard product rule, enforced by an architecture test. A <code class="mono">ResearchJob</code> fans out to provider runs, which produce sources, which get parsed into facts.</p>
+      <div class="grid">
+        <div class="card"><h3>ResearchJob</h3><p class="purpose">One research request for a lead or company.</p><div class="badges"><span class="badge enum">ResearchJobStatus</span></div></div>
+        <div class="card"><h3>ResearchProviderRun</h3><p class="purpose">One provider's attempt within a job (website/search/news/rss/enrichment).</p><div class="badges"><span class="badge enum">ResearchProviderKind</span></div></div>
+        <div class="card"><h3>ResearchSource</h3><p class="purpose">One fetched URL, kept as a living row across reruns (not one row per run).</p></div>
+        <div class="card"><h3>ResearchPageText</h3><p class="purpose">Full stripped page text — the one deliberate exception to "never raw text", kept isolated so keyword extraction can rerun without refetching.</p><div class="badges"><span class="badge sensitive">full text</span></div></div>
+        <div class="card"><h3>ResearchKeywordRun</h3><p class="purpose">One keyword-extraction attempt, deterministic or AI, over a page's text.</p><div class="badges"><span class="badge enum">KeywordExtractionMode</span></div></div>
+        <div class="card"><h3>ResearchDocument</h3><p class="purpose">Structured extraction only — never raw HTML/text. One row per source; reruns overwrite.</p><div class="badges"><span class="badge enum">7-value ExtractionMethod</span></div></div>
+        <div class="card"><h3>ResearchFact</h3><p class="purpose">One claim about a lead/company, with confidence, source, and a user-confirm/reject workflow.</p><div class="badges"><span class="badge enum">ResearchFactStatus</span></div></div>
+        <div class="card"><h3>ResearchFactEvidence</h3><p class="purpose">Extra corroborating sources beyond a fact's primary one.</p></div>
+        <div class="card"><h3>ResearchSnapshot</h3><p class="purpose">Frozen copy of confirmed facts at the moment an email is drafted — so a draft's inputs stay reproducible even if facts change later.</p></div>
+      </div>
+    </section>
+
+    <section class="domain" id="drafts">
+      <div class="domain-head"><h2>9 · AI email drafts</h2><span class="domain-count">1 table</span></div>
+      <div class="grid">
+        <div class="card"><h3>EmailDraft</h3><p class="purpose">One AI-generated draft, traceable to the exact <code class="mono">ResearchSnapshot</code> it was written from. A regeneration links back via <code class="mono">basedOnDraftId</code> rather than copying the snapshot.</p>
+          <div class="fields"><div class="field fk"><span class="fname">researchSnapshotId</span></div><div class="field"><span class="fname">generationType</span></div></div>
+          <div class="badges"><span class="badge enum">INITIAL·FOLLOW_UP·CLOSE_THE_LOOP</span><span class="badge enum">EmailDraftStatus</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="sending">
+      <div class="domain-head"><h2>10 · Sending infrastructure</h2><span class="domain-count">4 tables</span></div>
+      <div class="grid">
+        <div class="card"><h3>Inbox</h3><p class="purpose">A connected Gmail mailbox. Own OAuth tokens, encrypted separately from login (Account/§1). <code class="mono">sendCooldownUntil</code> is the atomic per-inbox send throttle.</p>
+          <div class="badges"><span class="badge sensitive">encrypted tokens</span><span class="badge enum">InboxStatus</span></div></div>
+        <div class="card"><h3>Signature</h3><p class="purpose">Reusable signature block, shared org-wide; one marked default.</p></div>
+        <div class="card"><h3>DomainDnsCheck</h3><p class="purpose">SPF/DKIM/DMARC deliverability status for a sending domain.</p><div class="badges"><span class="badge enum">DnsCheckStatus ×3</span></div></div>
+        <div class="card"><h3>TrackingDomain</h3><p class="purpose">An org's own CNAME for serving the open-tracking pixel (shipped this week). One per org; verified via CNAME + TXT before the reverse proxy issues TLS for it.</p><div class="badges"><span class="badge enum">TrackingDomainStatus</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="campaigns">
+      <div class="domain-head"><h2>11 · Campaigns &amp; sequencing</h2><span class="domain-count">4 tables</span></div>
+      <div class="grid">
+        <div class="card"><h3>Campaign</h3><p class="purpose">Sending days/window, inbox cooldown, and prompt overrides, in the campaign's own timezone.</p><div class="badges"><span class="badge enum">CampaignStatus</span></div></div>
+        <div class="card"><h3>CampaignStep</h3><p class="purpose">One step in the sequence. Advances purely on "no reply within N days" — never on reply content.</p><div class="badges"><span class="badge enum">SequenceStepType</span></div></div>
+        <div class="card"><h3>CampaignInbox</h3><p class="purpose">The rotation pool: many-to-many, inbox ↔ campaign.</p></div>
+        <div class="card"><h3>CampaignEnrollment</h3><p class="purpose">One lead's progress through a campaign. A lead already suppressed at enroll time is still enrolled — as SUPPRESSED, visibly, not silently dropped.</p><div class="badges"><span class="badge enum">6-value CampaignEnrollmentStatus</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="outbox">
+      <div class="domain-head"><h2>12 · Outbox &amp; delivery</h2><span class="domain-count">2 tables</span></div>
+      <div class="grid">
+        <div class="card"><h3>OutboxItem</h3><p class="purpose">One scheduled/sent email. Unique on (campaign, lead, step) — the idempotency guarantee that makes the scheduler safely re-runnable. Its own <code class="mono">id</code> doubles as the pixel token.</p>
+          <div class="fields"><div class="field"><span class="fname">openCount</span></div><div class="field"><span class="fname">firstOpenedAt</span></div></div>
+          <div class="badges"><span class="badge enum">6-value OutboxItemStatus</span></div></div>
+        <div class="card"><h3>EmailOpenEvent</h3><p class="purpose">One row per pixel hit (IP/UA), alongside OutboxItem's summary counters — for later bot-prefetch filtering.</p></div>
+      </div>
+    </section>
+
+    <section class="domain" id="conversations">
+      <div class="domain-head"><h2>13 · Conversations &amp; replies</h2><span class="domain-count">2 tables</span></div>
+      <p class="domain-note">Keyed by (org, lead, inbox) — <b>not</b> by campaign. A reply always hands control to a human across every one of that lead's active sequences, per the product's human-safety principle.</p>
+      <div class="grid">
+        <div class="card"><h3>Conversation</h3><p class="purpose">One Gmail thread with a lead.</p><div class="badges"><span class="badge enum">OPEN·CLOSED</span></div></div>
+        <div class="card"><h3>ConversationMessage</h3><p class="purpose">One message, classified by deterministic keyword rules only — reply classification is an explicit AI-forbidden use case.</p><div class="badges"><span class="badge enum">ReplyClassification</span></div></div>
+      </div>
+    </section>
+
+    <section class="domain" id="meetings">
+      <div class="domain-head"><h2>14 · Meetings</h2><span class="domain-count">1 table</span></div>
+      <div class="grid">
+        <div class="card"><h3>Meeting</h3><p class="purpose">A manually-logged booked call — no calendar integration. <code class="mono">qualified</code> is a human judgment call, never inferred, and feeds the product's primary metric: qualified meetings ÷ unique prospects contacted.</p><div class="badges"><span class="badge enum">MeetingStatus</span></div></div>
+        <div class="card"><h3>FeatureFlag</h3><p class="purpose">Operational kill switches (also used for <code class="mono">EMERGENCY_STOP</code>-style toggles).</p></div>
+      </div>
+    </section>
+
+    <section class="domain" id="logs">
+      <div class="domain-head"><h2>15 · Logs, outside the database</h2></div>
+      <p class="domain-note">Two different things both get called "logs" here, and it's worth keeping them straight:</p>
+      <table class="compare">
+        <tr><th>What</th><th>Where it lives</th><th>What it's for</th></tr>
+        <tr><td class="mono"><b>AuditEvent</b> (§3)</td><td>Postgres, queryable with SQL</td><td>Security/compliance history — who did what, permanently kept</td></tr>
+        <tr><td>Structured JSON logs</td><td>stdout → pm2 → <code class="mono">~/.pm2/logs/&lt;app&gt;-{out,error}.log</code> on each VPS</td><td>Operational tracing (request handling, worker ticks, job failures) — not queryable, rotated/ephemeral</td></tr>
+      </table>
+      <p class="domain-note">The app logger (<code class="mono">packages/logging</code>) emits one JSON line per event with <code class="mono">service</code>, <code class="mono">level</code>, <code class="mono">message</code>, and context fields, and automatically redacts anything that looks like a token or secret before it's written. On <code class="mono">orbytflow-vps</code>, tail it live with <code class="mono">pm2 logs mail-orbyt-worker</code>, or read a specific file directly.</p>
+    </section>
+
+    <section class="domain" id="tools">
+      <div class="domain-head"><h2>16 · Connecting a query tool</h2></div>
+      <p class="domain-note">You're running this for several businesses, each with its own Postgres on its own VPS. The one thing worth fixing before picking a tool: <b>don't connect to a database port directly over the internet.</b> Every one of the options below supports an SSH tunnel — connect through the SSH key you already have, and the database port itself never needs to be reachable from outside the box at all.</p>
+
+      <div class="tool-wrap"><table class="compare">
+        <tr><th>Tool</th><th>Cost</th><th>Where it runs</th><th>Best for</th></tr>
+        <tr><td><b>DBeaver</b> Community</td><td>Free, open source</td><td>Desktop app (Mac/Win/Linux)</td><td class="rec">Recommended default — one app, one connection tree with a folder per business, built-in SSH tunnel per connection, and it auto-draws an ER diagram from the foreign keys, which is the fastest way to actually see this schema's shape</td></tr>
+        <tr><td><b>Beekeeper Studio</b> Community</td><td>Free, open source</td><td>Desktop app</td><td>Lighter and prettier than DBeaver if you don't need the ER diagram — same SSH-tunnel-per-connection model</td></tr>
+        <tr><td><b>SQLTools</b> extension</td><td>Free</td><td>Inside VS Code / Cursor</td><td>If you want query results next to your code instead of a separate app — same editor you already deploy from</td></tr>
+        <tr><td><b>pgAdmin 4</b></td><td>Free, self-hosted</td><td>Docker container, browser-based</td><td>Only worth it if several people need shared, no-install browser access — otherwise it's more setup than the desktop options for no real benefit here</td></tr>
+      </table></div>
+
+      <p class="domain-note" style="margin-top:22px;">Setting up DBeaver against <code class="mono">orbytflow-vps</code>, concretely:</p>
+      <pre class="snippet">New Connection → PostgreSQL
+  Main:  host localhost · port 5432 · database mail_orbyt · user mail_orbyt
+  SSH:   ☑ Use SSH tunnel
+         host 200.141.5.32 · user root · auth "public key" → point at your existing key
+</pre>
+      <p class="domain-note">DBeaver opens the SSH connection first, then talks to Postgres through it as if it were local — the "host" field above is <code class="mono">localhost</code> because, from the tunnel's far end, it is. Duplicate the connection once per business/VPS and rename each one; that's the whole multi-tenant setup. Give the DB user read-only access for exploration if you want a safety net beyond your own care with <code class="mono">UPDATE</code>/<code class="mono">DELETE</code>.</p>
+
+      <div class="callout"><b>On the firewall change made this session:</b> <code class="mono">orbytflow-vps</code> had Postgres/Redis/MinIO reachable on the open internet with no firewall — now closed to everything except SSH/HTTP/HTTPS. The SSH-tunnel setup above works identically whether or not that port is reachable directly, which is exactly the point: the tool never needs the database port exposed to use it.</div>
+    </section>
+
+    <footer class="doc-foot">Generated from <code class="mono">packages/database/prisma/schema.prisma</code> at commit <code class="mono">39a7f49</code>. Field lists above are illustrative, not exhaustive — open the schema file for every column.</footer>
+  </main>
+</div>
