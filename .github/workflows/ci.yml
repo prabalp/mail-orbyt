@@ -76,11 +76,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Typecheck
-        run: pnpm typecheck
-
       - name: Generate Prisma client
         run: pnpm db:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Run database migrations
         run: pnpm --filter @mail-orbyt/database db:migrate:deploy
