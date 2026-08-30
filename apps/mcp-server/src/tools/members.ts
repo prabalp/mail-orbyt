@@ -41,7 +41,12 @@ export const MEMBER_TOOLS: RouteToolDescriptor[] = [
       userId: z.string().min(1).describe("From list_members — the user's id, not their email"),
       role: z.enum(["OWNER", "ADMIN", "MEMBER", "VIEWER"]),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "remove_member",
@@ -52,6 +57,11 @@ export const MEMBER_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/members/{userId}",
     requiredScope: "members:manage",
     inputShape: { userId: z.string().min(1).describe("From list_members") },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
 ];

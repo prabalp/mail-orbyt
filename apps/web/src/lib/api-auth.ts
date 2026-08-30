@@ -1,4 +1,9 @@
-import { ForbiddenError, requireOrganisationMembership, UnauthenticatedError, type Permission } from "@mail-orbyt/authentication";
+import {
+  ForbiddenError,
+  requireOrganisationMembership,
+  UnauthenticatedError,
+  type Permission,
+} from "@mail-orbyt/authentication";
 import { prisma, type OrganisationMembership } from "@mail-orbyt/database";
 import { scopeIncludes, verifyAccessToken, PROFILE_SCOPE } from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";

@@ -40,7 +40,12 @@ export const INVITATION_TOOLS: RouteToolDescriptor[] = [
       role: z.enum(["ADMIN", "MEMBER", "VIEWER"]),
     },
     // Not idempotent: each call mints a fresh invitation and sends another email.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       id: z.string().optional(),
       email: z.string().optional(),

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { createOrganisation, deleteOrganisation, OrganisationNameMismatchError, slugify } from "./organisations";
+import {
+  createOrganisation,
+  deleteOrganisation,
+  OrganisationNameMismatchError,
+  slugify,
+} from "./organisations";
 
 describe("slugify", () => {
   it("lowercases and hyphenates", () => {

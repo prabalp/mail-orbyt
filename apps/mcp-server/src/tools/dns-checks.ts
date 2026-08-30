@@ -17,7 +17,12 @@ export const DNS_CHECK_TOOLS: RouteToolDescriptor[] = [
     // it performs real DNS TXT lookups against the public resolver. It writes
     // only by upserting the single check record keyed by (organisation,
     // domain), so re-running it is idempotent and destroys nothing.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     outputShape: {
       id: z.string().optional(),
       domain: z.string().optional(),

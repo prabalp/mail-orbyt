@@ -8,6 +8,7 @@ const SETTINGS_LINKS = [
   { href: "/settings/members", label: "Members" },
   { href: "/settings/email-template", label: "Email template" },
   { href: "/settings/signatures", label: "Signatures" },
+  { href: "/settings/tracking", label: "Tracking" },
   { href: "/settings/ai-provider", label: "AI provider" },
   { href: "/settings/mcp", label: "MCP connections" },
   { href: "/settings/organisation", label: "Organisation" },

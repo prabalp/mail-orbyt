@@ -31,8 +31,10 @@ export interface AiEmailGenerator {
 }
 
 interface AiConfig {
+  kind: "GEMINI" | "OPENAI_COMPATIBLE";
   apiKey: string;
   model: string;
+  baseUrl?: string;
   maxOutputTokens: number;
 }
 
@@ -46,13 +48,30 @@ interface AiConfig {
 export interface AiConfigOverride {
   apiKey?: string;
   model?: string;
+  /** Which provider protocol apiKey/model are for. Omitted means GEMINI. */
+  kind?: "GEMINI" | "OPENAI_COMPATIBLE";
+  /** Base URL for a custom OpenAI-compatible endpoint. Required (with apiKey) when kind is OPENAI_COMPATIBLE — there is no environment fallback for a custom endpoint. */
+  baseUrl?: string;
 }
 
 function getAiConfig(override?: AiConfigOverride): AiConfig | undefined {
   const env = loadEnv();
+
+  if (override?.kind === "OPENAI_COMPATIBLE") {
+    if (!override.apiKey || !override.model || !override.baseUrl) return undefined;
+    return {
+      kind: "OPENAI_COMPATIBLE",
+      apiKey: override.apiKey,
+      model: override.model,
+      baseUrl: override.baseUrl,
+      maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
+    };
+  }
+
   const apiKey = override?.apiKey || env.AI_PROVIDER_API_KEY;
   if (!apiKey) return undefined;
   return {
+    kind: "GEMINI",
     apiKey,
     model: override?.model || env.AI_PROVIDER_MODEL,
     maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
@@ -143,13 +162,123 @@ class GeminiEmailGenerator implements AiEmailGenerator {
 }
 
 /**
- * Returns the Gemini-backed generator for these overrides (the
- * organisation's own key/model where set, the environment's otherwise), or
- * throws AiNotConfiguredError if neither supplies a key.
+ * A generator for any provider that speaks the OpenAI Chat Completions wire
+ * format (POST {baseUrl}/chat/completions, Bearer auth, {model, messages,
+ * response_format}) — the de facto common denominator most hosted vendors,
+ * gateways, and self-hosted stacks (vLLM, Ollama, LM Studio, OpenRouter,
+ * Azure OpenAI, ...) speak natively or via a compatibility shim. Built on
+ * plain fetch, not a vendor SDK, so this stays outside the AI-SDK boundary
+ * enforced by tests/architecture/ai-boundary.test.ts.
+ */
+class OpenAiCompatibleEmailGenerator implements AiEmailGenerator {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly apiKey: string,
+    private readonly model: string,
+    private readonly maxOutputTokens: number,
+  ) {}
+
+  async complete(params: { system: string; user: string }): Promise<GeneratedEmail> {
+    const content = await callOpenAiCompatible(
+      this.baseUrl,
+      this.apiKey,
+      this.model,
+      this.maxOutputTokens,
+      [
+        { role: "system", content: params.system },
+        { role: "user", content: params.user },
+      ],
+    );
+
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(content);
+    } catch (error) {
+      throw new AiGenerationFailedError(error);
+    }
+
+    return generatedEmailSchema.parse(parsedJson);
+  }
+}
+
+/** Strips a trailing slash so callers can save a base URL either way. */
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "");
+}
+
+/**
+ * The shared HTTP call behind both OpenAiCompatibleEmailGenerator and the
+ * verifyAiCredentials custom-provider path — returns the assistant message's
+ * raw text content, or throws AiGenerationFailedError with the provider's
+ * own error text on any non-2xx or malformed response.
+ */
+async function callOpenAiCompatible(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  maxTokens: number,
+  messages: { role: "system" | "user"; content: string }[],
+): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(`${normalizeBaseUrl(baseUrl)}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        response_format: { type: "json_object" },
+        max_tokens: maxTokens,
+      }),
+    });
+  } catch (error) {
+    throw new AiGenerationFailedError(error);
+  }
+
+  const bodyText = await response.text();
+  if (!response.ok) {
+    throw new AiGenerationFailedError(
+      new Error(describeOpenAiCompatibleError(response.status, bodyText)),
+    );
+  }
+
+  let parsed: { choices?: { message?: { content?: string } }[] };
+  try {
+    parsed = JSON.parse(bodyText) as typeof parsed;
+  } catch (error) {
+    throw new AiGenerationFailedError(error);
+  }
+
+  const content = parsed.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new AiGenerationFailedError(
+      new Error("AI provider response did not include the expected structured output."),
+    );
+  }
+  return content;
+}
+
+/**
+ * Returns the generator for these overrides — Gemini (the organisation's own
+ * key/model where set, the environment's otherwise) or a custom
+ * OpenAI-compatible endpoint (organisation-only; there is no environment
+ * fallback for a custom base URL) — or throws AiNotConfiguredError if
+ * neither resolves.
  */
 export function getAiEmailGenerator(override?: AiConfigOverride): AiEmailGenerator {
   const config = getAiConfig(override);
   if (!config) throw new AiNotConfiguredError();
+  if (config.kind === "OPENAI_COMPATIBLE") {
+    return new OpenAiCompatibleEmailGenerator(
+      config.baseUrl!,
+      config.apiKey,
+      config.model,
+      config.maxOutputTokens,
+    );
+  }
   const client = getGeminiClient(config.apiKey);
   return new GeminiEmailGenerator(client, config.model, config.maxOutputTokens);
 }
@@ -165,7 +294,32 @@ export async function verifyAiCredentials(
   override: AiConfigOverride,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const config = getAiConfig(override);
-  if (!config) return { ok: false, message: "No API key was provided." };
+  if (!config) {
+    return {
+      ok: false,
+      message:
+        override?.kind === "OPENAI_COMPATIBLE"
+          ? "An API key, base URL, and model are all required for a custom provider."
+          : "No API key was provided.",
+    };
+  }
+
+  if (config.kind === "OPENAI_COMPATIBLE") {
+    try {
+      const content = await callOpenAiCompatible(config.baseUrl!, config.apiKey, config.model, 8, [
+        { role: "user", content: "Reply with the single word: ok" },
+      ]);
+      if (!content) {
+        return { ok: false, message: "The provider accepted the request but returned no output." };
+      }
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 
   try {
     const response = await getGeminiClient(config.apiKey).models.generateContent({
@@ -180,6 +334,28 @@ export async function verifyAiCredentials(
   } catch (error) {
     return { ok: false, message: describeProviderError(error) };
   }
+}
+
+/**
+ * Turns a raw HTTP failure from a custom OpenAI-compatible endpoint into
+ * plain wording, the same job describeProviderError does for Gemini's
+ * SDK-shaped errors below — but keyed off the HTTP status, since a custom
+ * endpoint's response body has no fixed shape to pattern-match on.
+ */
+function describeOpenAiCompatibleError(status: number, bodyText: string): string {
+  if (status === 401 || status === 403) {
+    return "That API key was rejected by the provider. Check it was copied in full.";
+  }
+  if (status === 404) {
+    return "The provider returned 404 — check the base URL and that the model ID exists on it.";
+  }
+  if (status === 429) {
+    return "This key's quota is exhausted or being rate-limited. It's valid, but the provider is refusing requests right now.";
+  }
+  const trimmed = bodyText.trim();
+  return trimmed
+    ? `The provider returned ${status}: ${trimmed.slice(0, 300)}`
+    : `The provider returned ${status} with no further detail.`;
 }
 
 /**

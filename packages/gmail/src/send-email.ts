@@ -16,6 +16,13 @@ export interface OutboundMessage {
   to: string;
   subject: string;
   body: string;
+  /**
+   * Pre-built `<img>` tag for open tracking (see @mail-orbyt/tracking's
+   * buildPixelImgTag), appended only to the HTML part below — never to the
+   * plain-text part. Undefined when the sending organisation has no
+   * verified tracking domain, in which case the email is unchanged.
+   */
+  pixelImgTag?: string;
 }
 
 export interface SendResult {
@@ -80,14 +87,15 @@ function linkifyToHtml(text: string): string {
  * each client's own plain-text reflow behavior. Markdown `[label](url)`
  * links and bare URLs become clickable `<a>` tags (see linkifyToHtml).
  */
-export function textToHtml(text: string): string {
+export function textToHtml(text: string, pixelImgTag?: string): string {
   const linked = linkifyToHtml(text);
   const paragraphs = linked
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.split("\n").join("<br>"))
     .map((paragraph) => `<p style="margin:0 0 1em 0;">${paragraph}</p>`)
     .join("\n");
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a;">\n${paragraphs}\n</div>`;
+  const trailer = pixelImgTag ? `\n${pixelImgTag}` : "";
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a;">\n${paragraphs}${trailer}\n</div>`;
 }
 
 /**
@@ -108,14 +116,17 @@ function buildRfc2822Message(from: string, message: OutboundMessage): string {
   ];
 
   const parts = [
-    ['Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: 8bit", "", message.body].join(
-      "\r\n",
-    ),
+    [
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      message.body,
+    ].join("\r\n"),
     [
       'Content-Type: text/html; charset="UTF-8"',
       "Content-Transfer-Encoding: 8bit",
       "",
-      textToHtml(message.body),
+      textToHtml(message.body, message.pixelImgTag),
     ].join("\r\n"),
   ];
 

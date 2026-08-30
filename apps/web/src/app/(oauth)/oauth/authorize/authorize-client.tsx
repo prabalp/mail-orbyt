@@ -46,8 +46,8 @@ export function AuthorizeClient({
     <Card>
       <h1 className="text-xl font-semibold text-on-surface">Connect {clientName}</h1>
       <p className="mt-1 text-sm text-on-surface-variant">
-        {clientName} wants to access Mail Orbyt on your behalf. You can revoke this at any time
-        from Settings &rarr; MCP connections.
+        {clientName} wants to access Mail Orbyt on your behalf. You can revoke this at any time from
+        Settings &rarr; MCP connections.
       </p>
 
       <div className="mt-4">

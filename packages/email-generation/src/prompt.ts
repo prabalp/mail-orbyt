@@ -82,6 +82,13 @@ export function buildGenerateEmailPrompt(input: GenerateEmailInput): {
     factsBlock(input.facts),
   ];
 
+  if (input.stepInstructions?.trim()) {
+    lines.push(
+      "",
+      `Additional instructions for this specific email, on top of the campaign instructions above: ${input.stepInstructions.trim()}`,
+    );
+  }
+
   if (input.websiteText) {
     lines.push(
       "",

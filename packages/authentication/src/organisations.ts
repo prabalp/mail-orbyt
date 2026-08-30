@@ -102,7 +102,9 @@ export async function deleteOrganisation(
   prisma: Pick<PrismaClient, "organisation" | "auditEvent">,
   params: DeleteOrganisationParams,
 ): Promise<boolean> {
-  const organisation = await prisma.organisation.findUnique({ where: { id: params.organisationId } });
+  const organisation = await prisma.organisation.findUnique({
+    where: { id: params.organisationId },
+  });
   if (!organisation) return false;
 
   if (params.confirmName !== organisation.name) {

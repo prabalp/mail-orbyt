@@ -1,0 +1,33 @@
+# Example Caddy config for serving per-organisation tracking-pixel domains
+# with on-demand TLS. Each org CNAMEs a subdomain they own (e.g.
+# track.acme.example) to this proxy's public hostname; Caddy asks the app
+# whether to issue a certificate for that hostname before doing so, and the
+# app only approves domains the org has verified ownership of (Settings >
+# Tracking, backed by packages/tracking). Adjust `web:3000` to wherever
+# apps/web actually runs.
+
+{
+	on_demand_tls {
+		ask http://web:3000/api/internal/tracking-domains/ask
+		# Caddy's on_demand_tls "ask" request carries no custom headers, so if
+		# you need the shared-secret check in the ask route to actually gate
+		# anything, put this Caddy instance on a private network the app
+		# already trusts (e.g. same docker-compose network) and skip the
+		# secret, or front the ask endpoint with a proxy that injects it.
+	}
+}
+
+:443 {
+	tls {
+		on_demand
+	}
+	reverse_proxy web:3000
+}
+
+# Your own primary app domain(s) should NOT go through on-demand TLS — give
+# them their own explicit site block with a normal, pre-issued certificate,
+# e.g.:
+#
+# app.yourdomain.com {
+# 	reverse_proxy web:3000
+# }

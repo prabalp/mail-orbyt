@@ -69,7 +69,9 @@ function AppShellInner({
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        setError(typeof body?.error === "string" ? body.error : "Couldn't create the organisation.");
+        setError(
+          typeof body?.error === "string" ? body.error : "Couldn't create the organisation.",
+        );
         return;
       }
       const created = (await response.json()) as { id: string };
@@ -114,7 +116,7 @@ function AppShellInner({
       >
         <div className="flex flex-col gap-4">
           <p className="text-sm text-on-surface-variant">
-            You&apos;ll be its owner. Your other organisations — and your access to them — are
+            You&apos;ll be its owner. Your other organisations, and your access to them, are
             unaffected.
           </p>
           {error ? (

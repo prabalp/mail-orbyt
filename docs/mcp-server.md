@@ -51,7 +51,7 @@ apps/mcp-server --Bearer token--> apps/web REST API
    for an access token (~1h) and refresh token (~90d, rotated on every use).
 5. Every subsequent call — to `apps/mcp-server`'s `/mcp` endpoint, or
    directly to `apps/web`'s REST API — carries `Authorization: Bearer
-   <access token>`. A token is bound to exactly one organisation; it can
+<access token>`. A token is bound to exactly one organisation; it can
    never reach a different one even if the user belongs to several.
 
 Users can review and revoke active connections at **Settings → MCP
@@ -67,7 +67,7 @@ data-driven descriptor — method, path template, Zod input shape, required
 scope, MCP annotations, and (for reads) an output schema — consumed by a
 single generic handler (`apps/mcp-server/src/tools/registry.ts`) rather than
 one hand-written function per tool. `apps/mcp-server/src/tools/composite.ts`
-holds the exception: tools that call a *composite* apps/web route (one that
+holds the exception: tools that call a _composite_ apps/web route (one that
 itself orchestrates several services) rather than a 1:1 REST passthrough —
 see "Composite tools" below.
 
@@ -123,15 +123,15 @@ collapse the common chains into one call, backed by a route in apps/web
 that does the orchestration server-side — the MCP layer itself stays a thin
 passthrough, same as every other tool:
 
-| Tool | Backing route | Replaces |
-| --- | --- | --- |
-| `create_campaign_with_sequence` | `POST .../campaigns/with-sequence` | create_campaign + add_campaign_step ×N + set_campaign_inboxes + enroll_leads_in_campaign |
-| `get_campaign_overview` | `GET .../campaigns/{id}/overview` | get_campaign + list_campaign_enrollments + analytics for one campaign |
-| `get_org_overview` | `GET .../overview` | list_inboxes + list_campaigns + list_conversations + analytics, summarized |
-| `retarget_leads` | `POST .../campaigns/{id}/retarget` | list_campaign_retargetable_leads + enroll_leads_in_campaign |
-| `find_lead` | `GET .../leads` (search) | resolving a name/email to a leadId before any other lead tool |
-| `connect_inbox` / `get_inbox_connection_status` | `GET .../inboxes/connect-guide` | get_gmail_connect_url + a hand-written checklist + manual polling |
-| `get_job_status` | `GET .../jobs/{kind}/{jobId}` | three different polling shapes (ResearchJob, ImportBatch, ResearchKeywordRun) unified onto one |
+| Tool                                            | Backing route                      | Replaces                                                                                       |
+| ----------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `create_campaign_with_sequence`                 | `POST .../campaigns/with-sequence` | create_campaign + add_campaign_step ×N + set_campaign_inboxes + enroll_leads_in_campaign       |
+| `get_campaign_overview`                         | `GET .../campaigns/{id}/overview`  | get_campaign + list_campaign_enrollments + analytics for one campaign                          |
+| `get_org_overview`                              | `GET .../overview`                 | list_inboxes + list_campaigns + list_conversations + analytics, summarized                     |
+| `retarget_leads`                                | `POST .../campaigns/{id}/retarget` | list_campaign_retargetable_leads + enroll_leads_in_campaign                                    |
+| `find_lead`                                     | `GET .../leads` (search)           | resolving a name/email to a leadId before any other lead tool                                  |
+| `connect_inbox` / `get_inbox_connection_status` | `GET .../inboxes/connect-guide`    | get_gmail_connect_url + a hand-written checklist + manual polling                              |
+| `get_job_status`                                | `GET .../jobs/{kind}/{jobId}`      | three different polling shapes (ResearchJob, ImportBatch, ResearchKeywordRun) unified onto one |
 
 `create_campaign_with_sequence` rolls back (archives) the campaign if any
 step after creation fails, so a failed assembly never leaves a half-built
@@ -147,131 +147,131 @@ Every tool, grouped by the file it's defined in. `RO` = read-only,
 `⚠` = destructive. Scope is the `requiredScope` — `profile` means
 membership-only, no specific permission.
 
-| Tool | Scope | |
-| --- | --- | --- |
-| **leads.ts** | | |
-| `list_leads` | profile | RO |
-| `bulk_update_leads` | leads:manage | ⚠ (can hard-delete) |
-| `get_lead` | profile | RO |
-| `delete_lead` | leads:manage | ⚠ |
-| `list_lead_email_drafts` | profile | RO |
-| `generate_lead_email_draft` | campaigns:manage | |
-| `list_lead_emails` | profile | RO |
-| `export_lead_data` | leads:manage | RO |
-| `get_lead_research` | profile | RO |
-| `start_lead_research` | research:review | |
-| `get_lead_research_keywords` | profile | RO |
-| `start_lead_research_keywords` | research:review | |
-| `export_leads` | profile | RO (CSV) |
-| `export_selected_leads` | profile | RO (CSV) |
-| `list_lead_import_batches` | profile | RO |
-| `preview_lead_import` | leads:manage | |
-| `confirm_lead_import` | leads:manage | |
-| `get_lead_import_batch` | profile | RO |
-| **organisations.ts** | | |
-| `list_my_organisations` | profile | RO |
-| `create_organisation` | profile | |
-| `get_organisation` | profile | RO |
-| `delete_organisation` | organisation:delete | ⚠ (erases the entire organisation; requires the exact current name as confirmName) |
-| **companies.ts** | | |
-| `list_companies` | profile | RO |
-| `get_company` | profile | RO |
-| `get_company_research` | profile | RO |
-| `start_company_research` | research:review | |
-| `get_company_research_keywords` | profile | RO |
-| `start_company_research_keywords` | research:review | |
-| **campaigns.ts** | | |
-| `list_campaigns` | profile | RO |
-| `create_campaign` | campaigns:manage | |
-| `get_campaign` | profile | RO |
-| `update_campaign` | campaigns:manage | |
-| `archive_campaign` | campaigns:manage | (reversible) |
-| `add_campaign_step` | campaigns:manage | |
-| `reorder_campaign_steps` | campaigns:manage | |
-| `update_campaign_step` | campaigns:manage | |
-| `delete_campaign_step` | campaigns:manage | ⚠ |
-| `list_campaign_enrollments` | profile | RO |
-| `enroll_leads_in_campaign` | campaigns:manage | |
-| `unenroll_lead_from_campaign` | campaigns:manage | (reversible) |
-| `set_campaign_inboxes` | campaigns:manage | |
-| `list_campaign_retargetable_leads` | profile | RO |
-| `force_send_campaign_now` | campaigns:manage | ⚠ (sends real email; non-prod only) |
-| `send_campaign_test` | campaigns:manage | ⚠ (sends real email) |
-| **conversations.ts** | | |
-| `list_conversations` | conversations:review | RO |
-| `get_conversation` | conversations:review | RO |
-| **research.ts** | | |
-| `list_research_jobs` | profile | RO |
-| `update_research_fact` | research:review | |
-| **analytics.ts** | | |
-| `get_analytics` | analytics:view | RO |
-| **meetings.ts** | | |
-| `list_meetings` | profile | RO |
-| `create_meeting` | conversations:review | |
-| `update_meeting` | conversations:review | |
-| **inboxes.ts** | | |
-| `list_inboxes` | profile | RO |
-| `update_inbox_send_limit` | inboxes:manage | |
-| `disconnect_inbox` | inboxes:manage | ⚠ |
-| **signatures.ts** | | |
-| `list_signatures` | profile | RO |
-| `create_signature` | inboxes:manage | |
-| `update_signature` | inboxes:manage | |
-| `delete_signature` | inboxes:manage | ⚠ |
-| **members.ts** | | |
-| `list_members` | profile | RO |
-| `update_member_role` | members:manage | |
-| `remove_member` | members:manage | ⚠ |
-| **invitations.ts** | | |
-| `list_invitations` | members:manage | RO |
-| `invite_member` | members:manage | |
-| **settings.ts** | | |
-| `get_ai_provider_settings` | profile | RO |
-| `update_ai_provider_settings` | campaigns:manage | |
-| `get_email_template_settings` | profile | RO |
-| `update_email_template_settings` | campaigns:manage | |
-| `preview_email_prompt` | profile | RO |
-| **compliance.ts** | | |
-| `purge_stale_data` | organisation:delete | ⚠ |
-| **dns-checks.ts** | | |
-| `check_domain_dns` | inboxes:manage | live external DNS lookup |
-| **lead-lists.ts** | | |
-| `list_lead_lists` | profile | RO |
-| `create_lead_list` | leads:manage | |
-| **email-drafts.ts** | | |
-| `approve_email_draft` | campaigns:manage | |
-| `delete_email_draft` | campaigns:manage | ⚠ |
-| **suppressions.ts** | | |
-| `list_suppressions` | profile | RO |
-| `check_suppression` | profile | RO |
-| `add_suppression` | leads:manage | |
-| `remove_suppression` | leads:manage | ⚠ |
-| **mcp-connections.ts** | | |
-| `list_mcp_connections` | profile | RO |
-| `revoke_mcp_connection` | profile | ⚠ (can end the calling connection itself) |
-| **composite.ts** | | |
-| `create_campaign_with_sequence` | campaigns:manage | |
-| `get_campaign_overview` | profile | RO |
-| `get_org_overview` | profile | RO |
-| `retarget_leads` | campaigns:manage | |
-| `find_lead` | profile | RO |
-| `connect_inbox` | inboxes:manage | RO (builds a link only) |
-| `get_inbox_connection_status` | profile | RO |
-| `get_job_status` | profile | RO |
-| **gmail.ts** (link tool) | | |
-| `get_gmail_connect_url` | inboxes:manage | RO (builds a link only) |
+| Tool                               | Scope                |                                                                                    |
+| ---------------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| **leads.ts**                       |                      |                                                                                    |
+| `list_leads`                       | profile              | RO                                                                                 |
+| `bulk_update_leads`                | leads:manage         | ⚠ (can hard-delete)                                                                |
+| `get_lead`                         | profile              | RO                                                                                 |
+| `delete_lead`                      | leads:manage         | ⚠                                                                                  |
+| `list_lead_email_drafts`           | profile              | RO                                                                                 |
+| `generate_lead_email_draft`        | campaigns:manage     |                                                                                    |
+| `list_lead_emails`                 | profile              | RO                                                                                 |
+| `export_lead_data`                 | leads:manage         | RO                                                                                 |
+| `get_lead_research`                | profile              | RO                                                                                 |
+| `start_lead_research`              | research:review      |                                                                                    |
+| `get_lead_research_keywords`       | profile              | RO                                                                                 |
+| `start_lead_research_keywords`     | research:review      |                                                                                    |
+| `export_leads`                     | profile              | RO (CSV)                                                                           |
+| `export_selected_leads`            | profile              | RO (CSV)                                                                           |
+| `list_lead_import_batches`         | profile              | RO                                                                                 |
+| `preview_lead_import`              | leads:manage         |                                                                                    |
+| `confirm_lead_import`              | leads:manage         |                                                                                    |
+| `get_lead_import_batch`            | profile              | RO                                                                                 |
+| **organisations.ts**               |                      |                                                                                    |
+| `list_my_organisations`            | profile              | RO                                                                                 |
+| `create_organisation`              | profile              |                                                                                    |
+| `get_organisation`                 | profile              | RO                                                                                 |
+| `delete_organisation`              | organisation:delete  | ⚠ (erases the entire organisation; requires the exact current name as confirmName) |
+| **companies.ts**                   |                      |                                                                                    |
+| `list_companies`                   | profile              | RO                                                                                 |
+| `get_company`                      | profile              | RO                                                                                 |
+| `get_company_research`             | profile              | RO                                                                                 |
+| `start_company_research`           | research:review      |                                                                                    |
+| `get_company_research_keywords`    | profile              | RO                                                                                 |
+| `start_company_research_keywords`  | research:review      |                                                                                    |
+| **campaigns.ts**                   |                      |                                                                                    |
+| `list_campaigns`                   | profile              | RO                                                                                 |
+| `create_campaign`                  | campaigns:manage     |                                                                                    |
+| `get_campaign`                     | profile              | RO                                                                                 |
+| `update_campaign`                  | campaigns:manage     |                                                                                    |
+| `archive_campaign`                 | campaigns:manage     | (reversible)                                                                       |
+| `add_campaign_step`                | campaigns:manage     |                                                                                    |
+| `reorder_campaign_steps`           | campaigns:manage     |                                                                                    |
+| `update_campaign_step`             | campaigns:manage     |                                                                                    |
+| `delete_campaign_step`             | campaigns:manage     | ⚠                                                                                  |
+| `list_campaign_enrollments`        | profile              | RO                                                                                 |
+| `enroll_leads_in_campaign`         | campaigns:manage     |                                                                                    |
+| `unenroll_lead_from_campaign`      | campaigns:manage     | (reversible)                                                                       |
+| `set_campaign_inboxes`             | campaigns:manage     |                                                                                    |
+| `list_campaign_retargetable_leads` | profile              | RO                                                                                 |
+| `force_send_campaign_now`          | campaigns:manage     | ⚠ (sends real email; non-prod only)                                                |
+| `send_campaign_test`               | campaigns:manage     | ⚠ (sends real email)                                                               |
+| **conversations.ts**               |                      |                                                                                    |
+| `list_conversations`               | conversations:review | RO                                                                                 |
+| `get_conversation`                 | conversations:review | RO                                                                                 |
+| **research.ts**                    |                      |                                                                                    |
+| `list_research_jobs`               | profile              | RO                                                                                 |
+| `update_research_fact`             | research:review      |                                                                                    |
+| **analytics.ts**                   |                      |                                                                                    |
+| `get_analytics`                    | analytics:view       | RO                                                                                 |
+| **meetings.ts**                    |                      |                                                                                    |
+| `list_meetings`                    | profile              | RO                                                                                 |
+| `create_meeting`                   | conversations:review |                                                                                    |
+| `update_meeting`                   | conversations:review |                                                                                    |
+| **inboxes.ts**                     |                      |                                                                                    |
+| `list_inboxes`                     | profile              | RO                                                                                 |
+| `update_inbox_send_limit`          | inboxes:manage       |                                                                                    |
+| `disconnect_inbox`                 | inboxes:manage       | ⚠                                                                                  |
+| **signatures.ts**                  |                      |                                                                                    |
+| `list_signatures`                  | profile              | RO                                                                                 |
+| `create_signature`                 | inboxes:manage       |                                                                                    |
+| `update_signature`                 | inboxes:manage       |                                                                                    |
+| `delete_signature`                 | inboxes:manage       | ⚠                                                                                  |
+| **members.ts**                     |                      |                                                                                    |
+| `list_members`                     | profile              | RO                                                                                 |
+| `update_member_role`               | members:manage       |                                                                                    |
+| `remove_member`                    | members:manage       | ⚠                                                                                  |
+| **invitations.ts**                 |                      |                                                                                    |
+| `list_invitations`                 | members:manage       | RO                                                                                 |
+| `invite_member`                    | members:manage       |                                                                                    |
+| **settings.ts**                    |                      |                                                                                    |
+| `get_ai_provider_settings`         | profile              | RO                                                                                 |
+| `update_ai_provider_settings`      | campaigns:manage     |                                                                                    |
+| `get_email_template_settings`      | profile              | RO                                                                                 |
+| `update_email_template_settings`   | campaigns:manage     |                                                                                    |
+| `preview_email_prompt`             | profile              | RO                                                                                 |
+| **compliance.ts**                  |                      |                                                                                    |
+| `purge_stale_data`                 | organisation:delete  | ⚠                                                                                  |
+| **dns-checks.ts**                  |                      |                                                                                    |
+| `check_domain_dns`                 | inboxes:manage       | live external DNS lookup                                                           |
+| **lead-lists.ts**                  |                      |                                                                                    |
+| `list_lead_lists`                  | profile              | RO                                                                                 |
+| `create_lead_list`                 | leads:manage         |                                                                                    |
+| **email-drafts.ts**                |                      |                                                                                    |
+| `approve_email_draft`              | campaigns:manage     |                                                                                    |
+| `delete_email_draft`               | campaigns:manage     | ⚠                                                                                  |
+| **suppressions.ts**                |                      |                                                                                    |
+| `list_suppressions`                | profile              | RO                                                                                 |
+| `check_suppression`                | profile              | RO                                                                                 |
+| `add_suppression`                  | leads:manage         |                                                                                    |
+| `remove_suppression`               | leads:manage         | ⚠                                                                                  |
+| **mcp-connections.ts**             |                      |                                                                                    |
+| `list_mcp_connections`             | profile              | RO                                                                                 |
+| `revoke_mcp_connection`            | profile              | ⚠ (can end the calling connection itself)                                          |
+| **composite.ts**                   |                      |                                                                                    |
+| `create_campaign_with_sequence`    | campaigns:manage     |                                                                                    |
+| `get_campaign_overview`            | profile              | RO                                                                                 |
+| `get_org_overview`                 | profile              | RO                                                                                 |
+| `retarget_leads`                   | campaigns:manage     |                                                                                    |
+| `find_lead`                        | profile              | RO                                                                                 |
+| `connect_inbox`                    | inboxes:manage       | RO (builds a link only)                                                            |
+| `get_inbox_connection_status`      | profile              | RO                                                                                 |
+| `get_job_status`                   | profile              | RO                                                                                 |
+| **gmail.ts** (link tool)           |                      |                                                                                    |
+| `get_gmail_connect_url`            | inboxes:manage       | RO (builds a link only)                                                            |
 
 ## Configuration
 
 New environment variables (see `.env.example`, validated in
 `packages/config/src/env.ts`):
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `MCP_SERVER_PORT` | `3001` | Port `apps/mcp-server` listens on |
-| `MCP_ACCESS_TOKEN_TTL_MINUTES` | `60` | Access token lifetime |
-| `MCP_REFRESH_TOKEN_TTL_DAYS` | `90` | Refresh token lifetime |
-| `MCP_SERVER_URL` | `APP_URL`'s host with `MCP_SERVER_PORT` substituted in | `apps/mcp-server`'s own public URL, advertised in its protected-resource metadata — override if it's deployed behind a different host/path than that (e.g. a single reverse-proxied origin with path-based routing) |
+| Variable                       | Default                                                | Purpose                                                                                                                                                                                                             |
+| ------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MCP_SERVER_PORT`              | `3001`                                                 | Port `apps/mcp-server` listens on                                                                                                                                                                                   |
+| `MCP_ACCESS_TOKEN_TTL_MINUTES` | `60`                                                   | Access token lifetime                                                                                                                                                                                               |
+| `MCP_REFRESH_TOKEN_TTL_DAYS`   | `90`                                                   | Refresh token lifetime                                                                                                                                                                                              |
+| `MCP_SERVER_URL`               | `APP_URL`'s host with `MCP_SERVER_PORT` substituted in | `apps/mcp-server`'s own public URL, advertised in its protected-resource metadata — override if it's deployed behind a different host/path than that (e.g. a single reverse-proxied origin with path-based routing) |
 
 `apps/mcp-server` also reuses `REDIS_URL` for per-connection rate limiting
 (120 requests/60s per client+user+organisation — see `src/rate-limit.ts`);

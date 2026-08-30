@@ -31,7 +31,9 @@ export async function fetchOrganisationJson(
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Mail Orbyt returned HTTP ${response.status} for ${path}: ${text.slice(0, 300)}`);
+    throw new Error(
+      `Mail Orbyt returned HTTP ${response.status} for ${path}: ${text.slice(0, 300)}`,
+    );
   }
   return text || "{}";
 }

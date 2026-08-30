@@ -6,7 +6,11 @@ import { createHash } from "node:crypto";
  * see McpOAuthClient) relies entirely on PKCE to prove that whoever
  * exchanges the code is the same party that started the flow.
  */
-export function verifyPkce(codeVerifier: string, codeChallenge: string, codeChallengeMethod: string): boolean {
+export function verifyPkce(
+  codeVerifier: string,
+  codeChallenge: string,
+  codeChallengeMethod: string,
+): boolean {
   if (codeChallengeMethod !== "S256") return false;
   if (!codeVerifier) return false;
   const computed = createHash("sha256").update(codeVerifier).digest("base64url");

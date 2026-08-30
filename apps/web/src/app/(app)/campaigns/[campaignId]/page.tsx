@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   Checkbox,
+  Dialog,
   EmptyState,
   PageHeader,
   Select,
@@ -64,7 +65,7 @@ const RECOMMENDED_SCHEDULE = {
 /** Per-inbox gap options. Off is offered because a one-off internal blast is a legitimate (if unhealthy) choice. */
 const COOLDOWN_OPTIONS = [0, 1, 2, 3, 5, 10, 15, 30, 60].map((minutes) => ({
   value: String(minutes),
-  label: minutes === 0 ? "Off — send as fast as possible" : `${minutes} min`,
+  label: minutes === 0 ? "Off: send as fast as possible" : `${minutes} min`,
 }));
 
 const COMMON_TIMEZONES = [
@@ -150,6 +151,7 @@ interface Step {
   delayDays: number;
   useAiGeneration: boolean;
   callToActionOverride: string | null;
+  stepInstructions: string | null;
   manualSubject: string | null;
   manualBody: string | null;
 }
@@ -211,6 +213,12 @@ export default function CampaignDetailPage(): React.ReactElement {
   const [newStepType, setNewStepType] = useState<Step["stepType"]>("INITIAL");
   const [newCallToAction, setNewCallToAction] = useState("book a 15 minute intro call");
   const [addingStep, setAddingStep] = useState(false);
+
+  const [editingStep, setEditingStep] = useState<Step | null>(null);
+  const [editDelayDays, setEditDelayDays] = useState("0");
+  const [editCallToAction, setEditCallToAction] = useState("");
+  const [editStepInstructions, setEditStepInstructions] = useState("");
+  const [savingStep, setSavingStep] = useState(false);
 
   const [leadSearch, setLeadSearch] = useState("");
   const [leadResults, setLeadResults] = useState<LeadSearchResult[]>([]);
@@ -367,6 +375,41 @@ export default function CampaignDetailPage(): React.ReactElement {
       }
     } finally {
       setAddingStep(false);
+    }
+  }
+
+  function handleOpenEditStep(step: Step) {
+    setEditingStep(step);
+    setEditDelayDays(String(step.delayDays));
+    setEditCallToAction(step.callToActionOverride ?? "");
+    setEditStepInstructions(step.stepInstructions ?? "");
+  }
+
+  async function handleSaveStep() {
+    if (!editingStep) return;
+    setSavingStep(true);
+    try {
+      const response = await fetch(
+        `/api/organisations/${organisationId}/campaigns/${campaignId}/steps/${editingStep.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            delayDays: Number(editDelayDays),
+            callToActionOverride: editCallToAction,
+            stepInstructions: editStepInstructions,
+          }),
+        },
+      );
+      if (response.ok) {
+        setEditingStep(null);
+        await load();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not update step", "error");
+      }
+    } finally {
+      setSavingStep(false);
     }
   }
 
@@ -619,7 +662,7 @@ export default function CampaignDetailPage(): React.ReactElement {
             <p className="text-sm font-medium text-on-surface">Currently active schedule</p>
             {scheduleHasUnsavedEdits ? (
               <span className="text-xs text-on-surface-variant">
-                Unsaved edits below — save to apply
+                Unsaved edits below: save to apply
               </span>
             ) : null}
           </div>
@@ -701,11 +744,11 @@ export default function CampaignDetailPage(): React.ReactElement {
           </div>
           <p className="text-sm text-on-surface-variant">
             Emails for this campaign only send on the selected days, within this time window, in the
-            chosen timezone. Recommended default: weekdays, 9:00–17:00, your local timezone — adjust
+            chosen timezone. Recommended default: weekdays, 9:00–17:00, your local timezone; adjust
             as needed before or after going live.
           </p>
           <p className="text-sm text-on-surface-variant">
-            The gap applies to each inbox separately — one inbox waits that long between its own
+            The gap applies to each inbox separately: one inbox waits that long between its own
             emails instead of sending a whole batch at once, which is what mailbox providers treat
             as spam. Inboxes don&apos;t wait on each other: with three inboxes in the pool and a 3
             min gap, roughly three emails go out every 3 minutes, one from each.
@@ -715,8 +758,8 @@ export default function CampaignDetailPage(): React.ReactElement {
 
       <CollapsibleCard title="Send test email">
         <p className="mb-4 text-sm text-on-surface-variant">
-          Sends this campaign&apos;s first step to 1-2 addresses you control — exactly what a real
-          prospect would receive — so you can check formatting, signature, and tone before going
+          Sends this campaign&apos;s first step to 1-2 addresses you control, exactly what a real
+          prospect would receive, so you can check formatting, signature, and tone before going
           live. This never enrolls a real lead or affects campaign progress.
         </p>
         <div className="flex flex-wrap items-end gap-3">
@@ -792,6 +835,9 @@ export default function CampaignDetailPage(): React.ReactElement {
                     >
                       Down
                     </Button>
+                    <Button variant="text" onClick={() => handleOpenEditStep(step)}>
+                      Edit
+                    </Button>
                     <Button variant="text" onClick={() => handleRemoveStep(step.id)}>
                       Remove
                     </Button>
@@ -799,9 +845,14 @@ export default function CampaignDetailPage(): React.ReactElement {
                 </div>
                 <p className="mt-2 text-sm text-on-surface-variant">
                   {step.useAiGeneration
-                    ? `AI-generated — call to action: "${step.callToActionOverride ?? "(default)"}"`
-                    : `Manual — "${step.manualSubject}"`}
+                    ? `AI-generated, call to action: "${step.callToActionOverride ?? "(default)"}"`
+                    : `Manual: "${step.manualSubject}"`}
                 </p>
+                {step.stepInstructions ? (
+                  <p className="mt-1 text-sm text-on-surface-variant italic">
+                    Step prompt: &ldquo;{step.stepInstructions}&rdquo;
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -828,6 +879,84 @@ export default function CampaignDetailPage(): React.ReactElement {
           </Button>
         </div>
       </Card>
+
+      <Dialog
+        open={editingStep !== null}
+        onClose={() => setEditingStep(null)}
+        title={editingStep ? `Edit step: ${editingStep.stepType.replace(/_/g, " ")}` : "Edit step"}
+        footer={
+          <>
+            <Button variant="outlined" onClick={() => setEditingStep(null)}>
+              Cancel
+            </Button>
+            <Button loading={savingStep} onClick={handleSaveStep}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        {editingStep ? (
+          <div className="flex flex-col gap-4">
+            <div>
+              <h4 className="text-sm font-medium text-on-surface">Condition</h4>
+              {editingStep.orderIndex === 0 ? (
+                <p className="mt-1 text-sm text-on-surface-variant">
+                  Sent immediately when a lead is enrolled — the first step has no wait condition.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-1 text-sm text-on-surface-variant">
+                    This step fires only if the lead has <strong>not replied</strong> to the
+                    previous step within the wait below. Any reply, at any point, immediately exits
+                    the lead from this sequence and hands the thread to a person — this step never
+                    runs after a reply.
+                  </p>
+                  <TextInput
+                    label="Wait (days, no reply)"
+                    type="number"
+                    min={0}
+                    max={60}
+                    value={editDelayDays}
+                    onChange={(event) => setEditDelayDays(event.target.value)}
+                  />
+                </>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium text-on-surface">Thread</h4>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                Always sent as a new email thread with its own subject, never a reply in the
+                previous thread — so a follow-up landing in spam doesn&rsquo;t take the earlier
+                messages down with it. The AI is still told what the prior email said, so this one
+                reads as a continuation, not a cold restart.
+              </p>
+            </div>
+
+            {editingStep.useAiGeneration ? (
+              <>
+                <TextInput
+                  label="Call to action"
+                  value={editCallToAction}
+                  onChange={(event) => setEditCallToAction(event.target.value)}
+                />
+                <TextArea
+                  label="Prompt — what should this step do differently?"
+                  placeholder={`e.g. "This is a bump after no reply. Try a new angle — mention a case study instead of the original pitch. Keep it to two sentences and don't restate the CTA."`}
+                  value={editStepInstructions}
+                  onChange={(event) => setEditStepInstructions(event.target.value)}
+                  rows={5}
+                />
+              </>
+            ) : (
+              <p className="text-sm text-on-surface-variant">
+                This step uses a manual template, so it has no AI prompt to configure. Edit the
+                subject/body via the API or MCP tools.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </Dialog>
 
       <Card>
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sending inbox pool</h3>
@@ -860,8 +989,8 @@ export default function CampaignDetailPage(): React.ReactElement {
           campaign generates, and the QA pass checks the draft against it.
         </p>
         <p className="mt-2 text-sm text-on-surface-variant">
-          The safety rules — facts-only personalisation, no invented claims, no fabricated URLs, no
-          self-written signature — always apply on top of this and cannot be relaxed here. Leave it
+          The safety rules (facts-only personalisation, no invented claims, no fabricated URLs, no
+          self-written signature) always apply on top of this and cannot be relaxed here. Leave it
           empty to fall back to the organisation default in Settings.
         </p>
         <div className="mt-4">
@@ -946,7 +1075,7 @@ export default function CampaignDetailPage(): React.ReactElement {
             {leadResults.map((lead) => (
               <Checkbox
                 key={lead.id}
-                label={`${[lead.firstName, lead.lastName].filter(Boolean).join(" ") || "(no name)"} — ${lead.email ?? "no email"}`}
+                label={`${[lead.firstName, lead.lastName].filter(Boolean).join(" ") || "(no name)"} (${lead.email ?? "no email"})`}
                 checked={selectedLeadIds.has(lead.id)}
                 onChange={(event) => {
                   setSelectedLeadIds((prev) => {

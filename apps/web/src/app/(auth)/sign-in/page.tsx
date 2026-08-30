@@ -1,25 +1,22 @@
 "use client";
 
-import { Suspense, useActionState } from "react";
-import { useSearchParams } from "next/navigation";
+import { use, useActionState } from "react";
 import { Alert, Button, Card, TextInput } from "@mail-orbyt/design-system";
 import { signInAction, signInWithGoogleAction } from "./actions";
 
-/**
- * Reads `callbackUrl` from the query string — e.g. arriving here mid-flow
- * from the MCP OAuth consent screen redirecting an unauthenticated visitor
- * to sign in first, carried through so the corresponding action can send
- * the user back afterwards. Split out into its own component because
- * `useSearchParams` opts a page out of static rendering unless the part
- * that calls it is wrapped in Suspense — without this split, `next build`
- * fails prerendering this page entirely.
- */
-function CallbackUrlField(): React.ReactElement {
-  const callbackUrl = useSearchParams().get("callbackUrl") ?? "";
-  return <input type="hidden" name="callbackUrl" value={callbackUrl} />;
+interface SignInPageProps {
+  searchParams: Promise<{ callbackUrl?: string }>;
 }
 
-export default function SignInPage(): React.ReactElement {
+export default function SignInPage({ searchParams }: SignInPageProps): React.ReactElement {
+  // Next.js passes `searchParams` to page components as a promise (even
+  // Client Components), unwrapped here with `use()` instead of
+  // `useSearchParams()` + Suspense: that combination caused a hydration
+  // mismatch (React's auto-injected form-action-ref hidden input differed
+  // between the server's resolved render and the client's initial
+  // Suspense fallback). Reading it as a plain prop avoids the client/server
+  // branch entirely.
+  const callbackUrl = use(searchParams).callbackUrl ?? "";
   const [error, formAction, isPending] = useActionState(signInAction, undefined);
 
   return (
@@ -36,9 +33,7 @@ export default function SignInPage(): React.ReactElement {
       ) : null}
 
       <form action={formAction} className="mt-6 flex flex-col gap-4">
-        <Suspense fallback={<input type="hidden" name="callbackUrl" value="" />}>
-          <CallbackUrlField />
-        </Suspense>
+        <input type="hidden" name="callbackUrl" value={callbackUrl} />
         <TextInput label="Email" name="email" type="email" autoComplete="email" required />
         <TextInput
           label="Password"
@@ -53,9 +48,7 @@ export default function SignInPage(): React.ReactElement {
       </form>
 
       <form action={signInWithGoogleAction} className="mt-3">
-        <Suspense fallback={<input type="hidden" name="callbackUrl" value="" />}>
-          <CallbackUrlField />
-        </Suspense>
+        <input type="hidden" name="callbackUrl" value={callbackUrl} />
         <Button type="submit" variant="outlined" className="w-full">
           Continue with Google
         </Button>

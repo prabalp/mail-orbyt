@@ -86,6 +86,15 @@ const envSchema = z.object({
   // Email sending safety
   EMERGENCY_STOP: booleanEnvVar(false),
 
+  // Open-tracking pixel: per-organisation custom domains (packages/tracking).
+  // TRACKING_CNAME_TARGET is the stable hostname orgs CNAME their tracking
+  // subdomain to (this app's reverse proxy). INTERNAL_ASK_SECRET guards the
+  // proxy's on-demand-TLS "ask" callback so it isn't a public oracle for
+  // which domains are configured. Both optional: unset simply means no
+  // organisation can verify a tracking domain yet.
+  TRACKING_CNAME_TARGET: z.string().min(1).optional(),
+  INTERNAL_ASK_SECRET: z.string().min(1).optional(),
+
   // Observability
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 

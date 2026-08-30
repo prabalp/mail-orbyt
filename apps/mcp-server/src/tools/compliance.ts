@@ -5,7 +5,8 @@ export const COMPLIANCE_TOOLS: RouteToolDescriptor[] = [
   {
     name: "purge_stale_data",
     title: "Purge stale data",
-    description: "Manually purge stale discarded email drafts and import rows past the retention window.",
+    description:
+      "Manually purge stale discarded email drafts and import rows past the retention window.",
     method: "POST",
     pathTemplate: "/api/organisations/{organisationId}/compliance/retention-purge",
     requiredScope: "organisation:delete",
@@ -14,7 +15,12 @@ export const COMPLIANCE_TOOLS: RouteToolDescriptor[] = [
     },
     // Hard deletes with no undo, and the cutoff moves with wall-clock time —
     // a second run with the same arguments purges more.
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       discardedDraftsDeleted: z.number().optional(),
       importRowsDeleted: z.number().optional(),

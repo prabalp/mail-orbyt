@@ -96,6 +96,7 @@ All of the above are implemented as deterministic code in
    modules, which still own every call. Both fields fall back independently
    to `AI_PROVIDER_API_KEY` / `AI_PROVIDER_MODEL`, and a key that fails to
    decrypt falls back rather than failing the send.
+
 2. **Input boundary** (Phase 5). The model receives a compact, structured
    fact payload plus, as one narrow and explicitly-labeled exception, a
    bounded excerpt of the subject's own already-fetched website text (see

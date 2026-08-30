@@ -75,11 +75,20 @@ export const SUPPRESSION_TOOLS: RouteToolDescriptor[] = [
       type: z.enum(["EMAIL", "DOMAIN"]).optional().describe("Defaults to EMAIL"),
       value: z.string().min(1).describe("The email address, or the bare domain for type=DOMAIN"),
       reason: z.enum(SUPPRESSION_REASONS),
-      note: z.string().max(500).optional().describe("Free-text context for whoever reviews this later"),
+      note: z
+        .string()
+        .max(500)
+        .optional()
+        .describe("Free-text context for whoever reviews this later"),
     },
     // Idempotent by (type, value): re-adding an existing entry updates its
     // reason rather than creating a duplicate.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "remove_suppression",
@@ -93,6 +102,11 @@ export const SUPPRESSION_TOOLS: RouteToolDescriptor[] = [
       type: z.enum(["EMAIL", "DOMAIN"]).optional().describe("Defaults to EMAIL"),
       value: z.string().min(1),
     },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
 ];

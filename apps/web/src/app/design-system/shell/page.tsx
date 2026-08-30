@@ -36,7 +36,7 @@ export default function ShellPreviewPage(): React.ReactElement {
         <Breadcrumbs items={[{ label: "Leads", href: "/leads" }, { label: "Jane Doe" }]} />
       }
     >
-      <PageHeader title="Leads" description="Shell layout preview — demo data only." />
+      <PageHeader title="Leads" description="Shell layout preview, demo data only." />
       <Card className="mt-6">
         <p className="text-sm text-on-surface-variant">
           This page demonstrates the responsive application shell (Phase 1). Lead data, navigation

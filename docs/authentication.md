@@ -54,7 +54,7 @@ for the exact matrix). Notable rules enforced in `members.ts`:
   per-table walk. It requires the caller to pass the organisation's exact
   current name as `confirmName`, checked in the function itself rather than
   trusted to the route/tool layer, since nothing about this is undoable.
-  The `ORGANISATION_DELETED` audit event is written *without*
+  The `ORGANISATION_DELETED` audit event is written _without_
   `organisationId` — `AuditEvent`'s own FK to `Organisation` is
   `onDelete: Cascade`, so a row that pointed at the org being deleted would
   vanish in the same transaction, erasing the record of the deletion along

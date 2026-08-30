@@ -52,7 +52,12 @@ export const INBOX_TOOLS: RouteToolDescriptor[] = [
       inboxId: z.string().min(1),
       dailySendLimit: z.number().int().min(1).max(500),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: inboxShape.shape,
   },
   {
@@ -65,7 +70,12 @@ export const INBOX_TOOLS: RouteToolDescriptor[] = [
     inputShape: { inboxId: z.string().min(1) },
     // Destructive: Google's refresh token is revoked, so reconnecting means
     // a human re-running the OAuth consent flow.
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { ...inboxShape.shape, disconnectedAt: z.string().nullable().optional() },
   },
 ];

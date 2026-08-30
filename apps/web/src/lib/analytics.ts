@@ -1,8 +1,5 @@
 import {
   createMeeting,
-  getCampaignMetricsBreakdown,
-  getQualifiedMeetingRate,
-  getReplyRate,
   listMeetings,
   updateMeeting,
   type CreateMeetingParams,
@@ -24,13 +21,4 @@ export async function updateOrganisationMeeting(
   patch: UpdateMeetingParams,
 ) {
   return updateMeeting(prisma, organisationId, meetingId, patch);
-}
-
-export async function getOrganisationAnalytics(organisationId: string) {
-  const [overall, replyRate, campaigns] = await Promise.all([
-    getQualifiedMeetingRate(prisma, { organisationId }),
-    getReplyRate(prisma, { organisationId }),
-    getCampaignMetricsBreakdown(prisma, organisationId),
-  ]);
-  return { overall, replyRate, campaigns };
 }

@@ -67,7 +67,7 @@ export function OrganisationClient({
         <Card className="border-error/40">
           <h2 className="text-lg font-medium text-error">Danger zone</h2>
           <p className="mt-1 text-sm text-on-surface-variant">
-            Permanently delete {organisationName} and everything in it — leads, campaigns,
+            Permanently delete {organisationName} and everything in it: leads, campaigns,
             conversations, connected inboxes, research, all of it. This cannot be undone.
           </p>
           <div className="mt-4">
@@ -87,8 +87,8 @@ export function OrganisationClient({
           >
             <div className="flex flex-col gap-4">
               <Alert tone="error" title="This is permanent">
-                Every lead, campaign, conversation, connected inbox, and research fact belonging
-                to this organisation will be erased immediately. There is no undo and no recovery
+                Every lead, campaign, conversation, connected inbox, and research fact belonging to
+                this organisation will be erased immediately. There is no undo and no recovery
                 window.
               </Alert>
               {error ? (

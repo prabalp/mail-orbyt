@@ -144,7 +144,11 @@ describe("removeSuppressionEntry", () => {
     prisma.suppressionEntry.deleteMany.mockResolvedValue({ count: 0 });
 
     await expect(
-      removeSuppressionEntry(prisma, { organisationId: "org-1", type: "EMAIL", value: "nobody@example.com" }),
+      removeSuppressionEntry(prisma, {
+        organisationId: "org-1",
+        type: "EMAIL",
+        value: "nobody@example.com",
+      }),
     ).resolves.toBe(false);
     expect(prisma.auditEvent.create).not.toHaveBeenCalled();
   });

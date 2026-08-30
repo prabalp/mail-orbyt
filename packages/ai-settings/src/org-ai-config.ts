@@ -14,6 +14,10 @@ type Prisma = Pick<PrismaClient, "organisation">;
 export interface AiConfigOverride {
   apiKey?: string;
   model?: string;
+  /** Which provider protocol apiKey/model are for. Omitted means GEMINI (the historical default). */
+  kind?: "GEMINI" | "OPENAI_COMPATIBLE";
+  /** Base URL for a custom OpenAI-compatible endpoint. Only meaningful when kind is OPENAI_COMPATIBLE; not secret. */
+  baseUrl?: string;
 }
 
 /**
@@ -34,17 +38,24 @@ export async function resolveOrgAiConfig(
 ): Promise<AiConfigOverride & { decryptionFailed?: true }> {
   const organisation = await prisma.organisation.findUnique({
     where: { id: organisationId },
-    select: { aiProviderApiKey: true, aiProviderModel: true },
+    select: {
+      aiProviderApiKey: true,
+      aiProviderModel: true,
+      aiProviderKind: true,
+      aiProviderBaseUrl: true,
+    },
   });
   if (!organisation) return {};
 
   const model = organisation.aiProviderModel ?? undefined;
-  if (!organisation.aiProviderApiKey) return { model };
+  const kind = organisation.aiProviderKind;
+  const baseUrl = organisation.aiProviderBaseUrl ?? undefined;
+  if (!organisation.aiProviderApiKey) return { model, kind, baseUrl };
 
   try {
-    return { apiKey: decryptSecret(organisation.aiProviderApiKey), model };
+    return { apiKey: decryptSecret(organisation.aiProviderApiKey), model, kind, baseUrl };
   } catch (error) {
     if (!(error instanceof SecretDecryptionError)) throw error;
-    return { model, decryptionFailed: true };
+    return { model, kind, baseUrl, decryptionFailed: true };
   }
 }

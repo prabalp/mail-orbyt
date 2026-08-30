@@ -138,6 +138,9 @@ importers:
       '@mail-orbyt/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@mail-orbyt/tracking':
+        specifier: workspace:*
+        version: link:../../packages/tracking
       '@mail-orbyt/validation':
         specifier: workspace:*
         version: link:../../packages/validation
@@ -644,6 +647,9 @@ importers:
       '@mail-orbyt/research':
         specifier: workspace:*
         version: link:../research
+      '@mail-orbyt/tracking':
+        specifier: workspace:*
+        version: link:../tracking
       bullmq:
         specifier: ^5.34.2
         version: 5.81.2
@@ -669,6 +675,19 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.716.0
         version: 3.1095.0
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/tracking:
+    dependencies:
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
     devDependencies:
       typescript:
         specifier: ^5.7.2

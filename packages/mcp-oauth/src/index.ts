@@ -19,10 +19,7 @@ export {
   type RegisterClientParams,
   type RegisteredClient,
 } from "./client-registration";
-export {
-  createAuthorizationCode,
-  type CreateAuthorizationCodeParams,
-} from "./authorization-code";
+export { createAuthorizationCode, type CreateAuthorizationCodeParams } from "./authorization-code";
 export {
   exchangeAuthorizationCode,
   refreshAccessToken,

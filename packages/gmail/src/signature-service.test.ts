@@ -33,7 +33,8 @@ function fakePrisma(signatures: Record<string, unknown>[] = []) {
         return found;
       }),
       updateMany: vi.fn().mockImplementation(({ where, data }) => {
-        for (const s of store) if (s.organisationId === where.organisationId) Object.assign(s, data);
+        for (const s of store)
+          if (s.organisationId === where.organisationId) Object.assign(s, data);
         return { count: store.length };
       }),
       delete: vi.fn().mockImplementation(({ where }) => {

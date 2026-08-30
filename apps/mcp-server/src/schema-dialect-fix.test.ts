@@ -35,7 +35,11 @@ describe("tool schema dialect", () => {
     expect(handler).toBeDefined();
 
     const result = (await handler!({ method: "tools/list", params: {} }, {})) as {
-      tools: Array<{ name: string; inputSchema?: { $schema?: string }; outputSchema?: { $schema?: string } }>;
+      tools: Array<{
+        name: string;
+        inputSchema?: { $schema?: string };
+        outputSchema?: { $schema?: string };
+      }>;
     };
 
     expect(result.tools.length).toBeGreaterThan(0);

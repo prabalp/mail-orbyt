@@ -19,6 +19,8 @@ interface RouteParams {
 const bodySchema = z.object({
   apiKey: z.string().max(400).optional(),
   model: z.string().max(200).optional(),
+  kind: z.enum(["GEMINI", "OPENAI_COMPATIBLE"]).optional(),
+  baseUrl: z.union([z.string().url().max(500), z.literal("")]).optional(),
 });
 
 /** The shape both GET and PATCH return. Deliberately carries a masked hint rather than the key — nothing here is secret. */
@@ -29,6 +31,8 @@ async function settingsPayload(organisationId: string) {
     apiKeyHint: config.apiKey ? maskSecret(config.apiKey) : null,
     keyDecryptionFailed: config.decryptionFailed ?? false,
     model: config.model ?? null,
+    kind: config.kind ?? "GEMINI",
+    baseUrl: config.baseUrl ?? null,
     usingEnvironmentKey: !config.apiKey,
     environmentKeyAvailable: environment.keyAvailable,
     environmentModel: environment.model,
@@ -77,15 +81,38 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
 
   const existing = await resolveOrgAiConfig(prisma, organisationId);
   const model = parsed.data.model?.trim() || undefined;
+  const kind = parsed.data.kind ?? existing.kind ?? "GEMINI";
   // An omitted apiKey means "keep what's stored"; "" means "clear it".
   const clearingKey = parsed.data.apiKey === "";
   const newKey = parsed.data.apiKey?.trim() || undefined;
   const effectiveKey = clearingKey ? undefined : (newKey ?? existing.apiKey);
+  // baseUrl follows the same three-valued convention as apiKey, but it's not
+  // secret, so "existing" is simply what GET already returned to the form.
+  const clearingBaseUrl = parsed.data.baseUrl === "";
+  const newBaseUrl = parsed.data.baseUrl?.trim() || undefined;
+  const effectiveBaseUrl =
+    kind === "OPENAI_COMPATIBLE"
+      ? clearingBaseUrl
+        ? undefined
+        : (newBaseUrl ?? existing.baseUrl)
+      : undefined;
+
+  if (kind === "OPENAI_COMPATIBLE" && !effectiveBaseUrl) {
+    return NextResponse.json(
+      { error: "A base URL is required for a custom OpenAI-compatible provider." },
+      { status: 400 },
+    );
+  }
 
   // Verify the exact pair that will actually be used — including the case
   // where only the model changed and the key came from the environment, since
   // a model can be valid for one key's plan and not another's.
-  const verification = await verifyAiCredentials({ apiKey: effectiveKey, model });
+  const verification = await verifyAiCredentials({
+    apiKey: effectiveKey,
+    model,
+    kind,
+    baseUrl: effectiveBaseUrl,
+  });
   if (!verification.ok) {
     return NextResponse.json({ error: verification.message }, { status: 400 });
   }
@@ -97,6 +124,8 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
         ? {}
         : { aiProviderApiKey: newKey ? encryptSecret(newKey) : null }),
       aiProviderModel: model ?? null,
+      aiProviderKind: kind,
+      aiProviderBaseUrl: kind === "OPENAI_COMPATIBLE" ? (effectiveBaseUrl ?? null) : null,
     },
   });
 

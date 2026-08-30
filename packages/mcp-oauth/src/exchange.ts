@@ -1,5 +1,9 @@
 import type { PrismaClient } from "@mail-orbyt/database";
-import { hashToken, isTokenExpired, requireOrganisationMembership } from "@mail-orbyt/authentication";
+import {
+  hashToken,
+  isTokenExpired,
+  requireOrganisationMembership,
+} from "@mail-orbyt/authentication";
 import { OAuthGrantError } from "./errors";
 import { verifyPkce } from "./pkce";
 import { intersectScopes, parseScope } from "./scopes";
@@ -15,7 +19,10 @@ type ExchangePrisma = Pick<
   | "$transaction"
 >;
 
-async function resolveClientOrThrow(prisma: Pick<PrismaClient, "mcpOAuthClient">, clientId: string) {
+async function resolveClientOrThrow(
+  prisma: Pick<PrismaClient, "mcpOAuthClient">,
+  clientId: string,
+) {
   const client = await prisma.mcpOAuthClient.findUnique({ where: { clientId } });
   if (!client) throw new OAuthGrantError("invalid_client", "Unknown client");
   return client;
@@ -74,7 +81,10 @@ export async function exchangeAuthorizationCode(
   });
 
   return prisma.$transaction(async (tx) => {
-    await tx.mcpAuthorizationCode.update({ where: { id: code.id }, data: { consumedAt: new Date() } });
+    await tx.mcpAuthorizationCode.update({
+      where: { id: code.id },
+      data: { consumedAt: new Date() },
+    });
     return issueTokenPair(tx, {
       clientRowId: client.id,
       userId: code.userId,

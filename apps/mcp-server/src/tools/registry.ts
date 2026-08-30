@@ -229,7 +229,11 @@ export function buildToolHandler(descriptor: RouteToolDescriptor) {
       // A transport-level failure (apps/web down, DNS, socket reset) is
       // always worth retrying — distinguish it from a 4xx the same way.
       const message = error instanceof Error ? error.message : String(error);
-      throw new ToolRequestError(`${descriptor.name} could not reach Mail Orbyt: ${message}`, 0, true);
+      throw new ToolRequestError(
+        `${descriptor.name} could not reach Mail Orbyt: ${message}`,
+        0,
+        true,
+      );
     }
 
     const text = await response.text();
@@ -255,7 +259,10 @@ export interface LinkToolDescriptor {
   requiredScope: Permission | typeof PROFILE_SCOPE;
   annotations?: ToolAnnotations;
   outputShape?: OutputShape;
-  buildResult: (input: Record<string, unknown>, actor: AuthenticatedActor) => string | Promise<string>;
+  buildResult: (
+    input: Record<string, unknown>,
+    actor: AuthenticatedActor,
+  ) => string | Promise<string>;
 }
 
 export function buildLinkToolHandler(descriptor: LinkToolDescriptor) {

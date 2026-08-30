@@ -47,6 +47,11 @@ export const MCP_CONNECTION_TOOLS: RouteToolDescriptor[] = [
     inputShape: {
       clientId: z.string().min(1).describe("From list_mcp_connections"),
     },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
 ];

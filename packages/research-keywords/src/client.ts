@@ -27,22 +27,39 @@ export class AiKeywordExtractionFailedError extends Error {
 }
 
 interface AiConfig {
+  kind: "GEMINI" | "OPENAI_COMPATIBLE";
   apiKey: string;
   model: string;
+  baseUrl?: string;
   maxOutputTokens: number;
 }
 
-/** Per-organisation key/model overrides — see the identically-named type in packages/email-generation/src/client.ts. */
+/** Per-organisation key/model/provider overrides — see the identically-named type in packages/email-generation/src/client.ts. */
 export interface AiConfigOverride {
   apiKey?: string;
   model?: string;
+  kind?: "GEMINI" | "OPENAI_COMPATIBLE";
+  baseUrl?: string;
 }
 
 function getAiConfig(override?: AiConfigOverride): AiConfig | undefined {
   const env = loadEnv();
+
+  if (override?.kind === "OPENAI_COMPATIBLE") {
+    if (!override.apiKey || !override.model || !override.baseUrl) return undefined;
+    return {
+      kind: "OPENAI_COMPATIBLE",
+      apiKey: override.apiKey,
+      model: override.model,
+      baseUrl: override.baseUrl,
+      maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
+    };
+  }
+
   const apiKey = override?.apiKey || env.AI_PROVIDER_API_KEY;
   if (!apiKey) return undefined;
   return {
+    kind: "GEMINI",
     apiKey,
     model: override?.model || env.AI_PROVIDER_MODEL,
     maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
@@ -105,11 +122,68 @@ async function callGemini(
   return parsed.keywords.filter((k): k is string => typeof k === "string");
 }
 
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "");
+}
+
 /**
- * Calls Gemini to extract keywords from already-saved page text. Only
- * keywords that literally occur in `text` (case-insensitive) are kept —
- * everything else is dropped rather than trusted, so a fact this produces
- * can still be traced to a deterministic slice of the saved source text.
+ * Same OpenAI Chat Completions wire format as the sibling adapter in
+ * packages/email-generation/src/client.ts — see that file's
+ * OpenAiCompatibleEmailGenerator doc comment for why this format is the
+ * pragmatic "any LLM" common denominator. Plain fetch, no SDK, so it stays
+ * outside the AI-SDK boundary enforced by tests/architecture/ai-boundary.test.ts.
+ */
+async function callOpenAiCompatible(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  maxOutputTokens: number,
+  text: string,
+): Promise<string[]> {
+  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: `${SYSTEM_INSTRUCTION} Respond with a JSON object of the exact shape {"keywords": string[]} and nothing else.`,
+        },
+        { role: "user", content: text },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: maxOutputTokens,
+    }),
+  });
+
+  const bodyText = await response.text();
+  if (!response.ok) {
+    throw new Error(`AI provider returned ${response.status}: ${bodyText.slice(0, 300)}`);
+  }
+
+  const parsedResponse = JSON.parse(bodyText) as { choices?: { message?: { content?: string } }[] };
+  const content = parsedResponse.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("AI provider response did not include the expected structured output.");
+  }
+  const parsed = JSON.parse(content) as { keywords?: unknown };
+  if (!Array.isArray(parsed.keywords)) {
+    throw new Error("AI provider response was missing a keywords array.");
+  }
+  return parsed.keywords.filter((k): k is string => typeof k === "string");
+}
+
+/**
+ * Calls the configured AI provider (Gemini, or an organisation's own
+ * OpenAI-compatible endpoint) to extract keywords from already-saved page
+ * text. Only keywords that literally occur in `text` (case-insensitive) are
+ * kept — everything else is dropped rather than trusted, so a fact this
+ * produces can still be traced to a deterministic slice of the saved source
+ * text.
  */
 export async function extractKeywordsWithAi(
   text: string,
@@ -120,8 +194,21 @@ export async function extractKeywordsWithAi(
 
   let keywords: string[];
   try {
-    const client = getGeminiClient(config.apiKey);
-    keywords = await callGemini(client, config.model, config.maxOutputTokens, text);
+    keywords =
+      config.kind === "OPENAI_COMPATIBLE"
+        ? await callOpenAiCompatible(
+            config.baseUrl!,
+            config.apiKey,
+            config.model,
+            config.maxOutputTokens,
+            text,
+          )
+        : await callGemini(
+            getGeminiClient(config.apiKey),
+            config.model,
+            config.maxOutputTokens,
+            text,
+          );
   } catch (error) {
     throw new AiKeywordExtractionFailedError(error);
   }

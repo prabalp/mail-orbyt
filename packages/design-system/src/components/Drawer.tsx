@@ -39,7 +39,6 @@ export function Drawer({
     if (!resizable || !resizeStorageKey) return;
     const stored = Number(window.localStorage.getItem(resizeStorageKey));
     if (stored) setWidth(Math.min(maxWidth, Math.max(minWidth, stored)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resizable, resizeStorageKey]);
 
   useEffect(() => {
@@ -55,10 +54,7 @@ export function Drawer({
     if (!resizable) return;
     function handleMouseMove(event: MouseEvent) {
       if (!draggingRef.current) return;
-      const next =
-        side === "right"
-          ? window.innerWidth - event.clientX
-          : event.clientX;
+      const next = side === "right" ? window.innerWidth - event.clientX : event.clientX;
       setWidth(Math.min(maxWidth, Math.max(minWidth, next)));
     }
     function handleMouseUp() {

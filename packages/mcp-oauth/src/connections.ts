@@ -54,7 +54,12 @@ export async function revokeConnection(
   if (!client) return;
 
   const now = new Date();
-  const scope = { userId: params.userId, clientId: client.id, organisationId: params.organisationId, revokedAt: null };
+  const scope = {
+    userId: params.userId,
+    clientId: client.id,
+    organisationId: params.organisationId,
+    revokedAt: null,
+  };
   await prisma.mcpAccessToken.updateMany({ where: scope, data: { revokedAt: now } });
   await prisma.mcpRefreshToken.updateMany({ where: scope, data: { revokedAt: now } });
 }

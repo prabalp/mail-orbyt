@@ -20,7 +20,7 @@ export default async function SignaturesPage(): Promise<React.ReactElement> {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Signatures"
-        description="Shared across every connected inbox — the default signature is appended to every AI-generated email, whichever inbox sends it."
+        description="Shared across every connected inbox: the default signature is appended to every AI-generated email, whichever inbox sends it."
       />
       <SettingsNav />
       <SignaturesClient

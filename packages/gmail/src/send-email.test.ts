@@ -69,6 +69,47 @@ describe("sendFromInbox", () => {
     expect(decoded).toContain("<p style=");
   });
 
+  it("appends the pixel img tag to the HTML part only, never the plain-text part", async () => {
+    const { encryptToken } = await import("./token-crypto");
+    const { sendFromInbox } = await import("./send-email");
+
+    const inbox = {
+      id: "inbox-1",
+      emailAddress: "alex@acme.example",
+      encryptedAccessToken: encryptToken("valid-access-token"),
+      encryptedRefreshToken: encryptToken("refresh-token"),
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    };
+    const prisma = {
+      inbox: { findUniqueOrThrow: vi.fn().mockResolvedValue(inbox) },
+    } as never;
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ id: "gmail-message-id-123", threadId: "gmail-thread-id-456" }),
+      );
+    const pixelImgTag = '<img src="https://track.acme.example/o/item1.gif" width="1" height="1">';
+
+    await sendFromInbox(
+      prisma,
+      "inbox-1",
+      {
+        to: "prospect@example.com",
+        subject: "Hi",
+        body: "Would you be open to a quick call?",
+        pixelImgTag,
+      },
+      fetchImpl,
+    );
+
+    const call = fetchImpl.mock.calls[0]!;
+    const body = JSON.parse((call[1] as RequestInit).body as string) as { raw: string };
+    const decoded = Buffer.from(body.raw, "base64").toString("utf8");
+    const [plainPart, htmlPart] = decoded.split("Content-Type: text/html");
+    expect(htmlPart).toContain(pixelImgTag);
+    expect(plainPart).not.toContain(pixelImgTag);
+  });
+
   it("throws GmailSendError when the response is missing a thread id", async () => {
     const { encryptToken } = await import("./token-crypto");
     const { sendFromInbox, GmailSendError } = await import("./send-email");
@@ -117,13 +158,13 @@ describe("textToHtml", () => {
   it("wraps each blank-line-separated paragraph in its own <p> and converts single breaks to <br>", async () => {
     const { textToHtml } = await import("./send-email");
     const html = textToHtml("First paragraph.\n\nSecond line one\nSecond line two.");
-    expect(html).toContain("<p style=\"margin:0 0 1em 0;\">First paragraph.</p>");
+    expect(html).toContain('<p style="margin:0 0 1em 0;">First paragraph.</p>');
     expect(html).toContain("Second line one<br>Second line two.");
   });
 
   it("HTML-escapes special characters", async () => {
     const { textToHtml } = await import("./send-email");
-    const html = textToHtml("Tom & Jerry <are> \"friends\"");
+    const html = textToHtml('Tom & Jerry <are> "friends"');
     expect(html).toContain("Tom &amp; Jerry &lt;are&gt; &quot;friends&quot;");
   });
 
@@ -149,5 +190,18 @@ describe("textToHtml", () => {
     const html = textToHtml("[A&B](https://example.com?a=1&b=2)");
     expect(html).toContain('href="https://example.com?a=1&amp;b=2"');
     expect(html).toContain(">A&amp;B</a>");
+  });
+
+  it("appends the pixel img tag when given one", async () => {
+    const { textToHtml } = await import("./send-email");
+    const tag = '<img src="https://track.acme.example/o/item1.gif" width="1" height="1">';
+    const html = textToHtml("Hello there.", tag);
+    expect(html).toContain(tag);
+  });
+
+  it("omits any pixel markup when none is given", async () => {
+    const { textToHtml } = await import("./send-email");
+    const html = textToHtml("Hello there.");
+    expect(html).not.toContain("<img");
   });
 });

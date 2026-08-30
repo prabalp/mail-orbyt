@@ -29,7 +29,8 @@ export const LEAD_LIST_TOOLS: RouteToolDescriptor[] = [
   {
     name: "create_lead_list",
     title: "Create lead list",
-    description: "Create a new lead list, either from an explicit set of lead IDs or from a filter.",
+    description:
+      "Create a new lead list, either from an explicit set of lead IDs or from a filter.",
     method: "POST",
     pathTemplate: "/api/organisations/{organisationId}/lead-lists",
     requiredScope: "leads:manage",
@@ -48,7 +49,12 @@ export const LEAD_LIST_TOOLS: RouteToolDescriptor[] = [
     },
     // Idempotent by name: a repeat call reuses the existing list rather than
     // creating a second one, and membership inserts skip duplicates.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: {
       leadList: leadListShape.optional(),
       added: z.number().optional().describe("How many leads this call newly added to the list"),

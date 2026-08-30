@@ -23,7 +23,7 @@ export default async function AiProviderPage(): Promise<React.ReactElement> {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="AI provider"
-        description="Use your own Gemini API key and model instead of this deployment's defaults."
+        description="Use your own AI provider (Gemini, or any OpenAI-compatible endpoint) instead of this deployment's defaults."
       />
       <SettingsNav />
       <AiProviderClient
@@ -33,6 +33,8 @@ export default async function AiProviderPage(): Promise<React.ReactElement> {
         apiKeyHint={config.apiKey ? maskSecret(config.apiKey) : null}
         keyDecryptionFailed={config.decryptionFailed ?? false}
         model={config.model ?? null}
+        kind={config.kind ?? "GEMINI"}
+        baseUrl={config.baseUrl ?? null}
         environmentKeyAvailable={environment.keyAvailable}
         environmentModel={environment.model}
       />

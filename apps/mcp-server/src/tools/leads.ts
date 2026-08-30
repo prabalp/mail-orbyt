@@ -122,7 +122,8 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
   {
     name: "list_leads",
     title: "List leads",
-    description: "List leads for the organisation, with pagination, search, status and lead-list filters.",
+    description:
+      "List leads for the organisation, with pagination, search, status and lead-list filters.",
     method: "GET",
     pathTemplate: "/api/organisations/{organisationId}/leads",
     requiredScope: "profile",
@@ -147,16 +148,28 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "leads:manage",
     inputShape: {
       action: z.enum(["archive", "unarchive", "delete"]),
-      leadIds: z.array(z.string().min(1)).min(1).max(50000).optional().describe("Explicit lead IDs — omit to use `filter` instead"),
+      leadIds: z
+        .array(z.string().min(1))
+        .min(1)
+        .max(50000)
+        .optional()
+        .describe("Explicit lead IDs — omit to use `filter` instead"),
       filter: z
         .object(filterFields)
         .optional()
-        .describe("Apply the action to every lead matching this filter — omit to use `leadIds` instead"),
+        .describe(
+          "Apply the action to every lead matching this filter — omit to use `leadIds` instead",
+        ),
     },
     // Destructive because action can be "delete" — a hard, cascading erase.
     // Archive/unarchive are reversible, but the hint has to describe the
     // worst thing this one tool can do.
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: {
       updated: z.number().optional(),
       deleted: z.number().optional(),
@@ -179,17 +192,24 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
   {
     name: "delete_lead",
     title: "Delete lead",
-    description: "Permanently erase a lead and all data derived from it (GDPR erasure) — cascades through enrollments, outbox items, conversations, meetings, and research.",
+    description:
+      "Permanently erase a lead and all data derived from it (GDPR erasure) — cascades through enrollments, outbox items, conversations, meetings, and research.",
     method: "DELETE",
     pathTemplate: "/api/organisations/{organisationId}/leads/{leadId}",
     requiredScope: "leads:manage",
     inputShape: { leadId: z.string().min(1) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "list_lead_email_drafts",
     title: "List a lead's email drafts",
-    description: "List AI-generated email drafts for a lead, and whether AI generation is configured for this organisation.",
+    description:
+      "List AI-generated email drafts for a lead, and whether AI generation is configured for this organisation.",
     method: "GET",
     pathTemplate: "/api/organisations/{organisationId}/leads/{leadId}/email-drafts",
     requiredScope: "profile",
@@ -203,7 +223,8 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
   {
     name: "generate_lead_email_draft",
     title: "Generate email draft",
-    description: "Generate a new AI email draft for a lead (initial outreach, follow-up, or close-the-loop).",
+    description:
+      "Generate a new AI email draft for a lead (initial outreach, follow-up, or close-the-loop).",
     method: "POST",
     pathTemplate: "/api/organisations/{organisationId}/leads/{leadId}/email-drafts",
     requiredScope: "campaigns:manage",
@@ -211,11 +232,20 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
       leadId: z.string().min(1),
       generationType: z.enum(["INITIAL", "FOLLOW_UP", "CLOSE_THE_LOOP"]),
       callToAction: z.string().min(1).max(300),
-      basedOnDraftId: z.string().min(1).optional().describe("Regenerate from this earlier draft rather than starting fresh"),
+      basedOnDraftId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Regenerate from this earlier draft rather than starting fresh"),
     },
     // Not idempotent: each call bills a model round-trip and stores another
     // draft row.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     // The created draft is returned flat, not wrapped.
     outputShape: draftShape.shape,
   },
@@ -303,7 +333,12 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "research:review",
     inputShape: { leadId: z.string().min(1) },
     // Not idempotent: every call enqueues another research job.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       id: z.string().optional(),
       status: z.string().optional(),
@@ -333,7 +368,12 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "research:review",
     inputShape: { leadId: z.string().min(1) },
     // Not idempotent: every call enqueues another extraction run.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: { researchSourceId: z.string().optional() },
   },
   {
@@ -385,7 +425,12 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
     },
     // Creates no lead rows, but does upload the file — and each call stores
     // it under a fresh storageKey, so it isn't idempotent either.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       storageKey: z.string().optional(),
       fileName: z.string().optional(),
@@ -409,7 +454,8 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
   {
     name: "confirm_lead_import",
     title: "Confirm a CSV lead import",
-    description: "Confirm a previewed CSV import: creates/reuses a lead list and enqueues the import job.",
+    description:
+      "Confirm a previewed CSV import: creates/reuses a lead list and enqueues the import job.",
     method: "POST",
     pathTemplate: "/api/organisations/{organisationId}/leads/import",
     requiredScope: "leads:manage",
@@ -425,7 +471,12 @@ export const LEAD_TOOLS: RouteToolDescriptor[] = [
     },
     // Not idempotent: the lead list is reused by name, but each call creates
     // another ImportBatch and re-runs the import.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       id: z.string().optional(),
       status: z.string().optional(),

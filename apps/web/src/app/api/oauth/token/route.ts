@@ -1,6 +1,10 @@
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
-import { exchangeAuthorizationCode, OAuthGrantError, refreshAccessToken } from "@mail-orbyt/mcp-oauth";
+import {
+  exchangeAuthorizationCode,
+  OAuthGrantError,
+  refreshAccessToken,
+} from "@mail-orbyt/mcp-oauth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { clientIpFrom, rateLimiter } from "@/lib/rate-limit";
@@ -22,7 +26,10 @@ const refreshTokenSchema = z.object({
   client_id: z.string().min(1),
 });
 
-const bodySchema = z.discriminatedUnion("grant_type", [authorizationCodeSchema, refreshTokenSchema]);
+const bodySchema = z.discriminatedUnion("grant_type", [
+  authorizationCodeSchema,
+  refreshTokenSchema,
+]);
 
 function oauthError(code: string, status: number): NextResponse {
   return NextResponse.json({ error: code }, { status });

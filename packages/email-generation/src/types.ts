@@ -26,6 +26,8 @@ export const generateEmailInputSchema = z.object({
   senderCompanyName: z.string().min(1),
   /** What the sender is trying to get the recipient to do — provided by the user, never inferred by the model. */
   callToAction: z.string().min(1),
+  /** Free-text guidance for THIS email only (e.g. "try a new angle: a case study"), layered on top of campaignPrompt — see CampaignStep.stepInstructions. */
+  stepInstructions: z.string().max(1000).optional(),
   facts: z.array(allowedFactSchema).max(20),
   /** Required for FOLLOW_UP and CLOSE_THE_LOOP — the email this one continues from. */
   priorEmail: priorEmailSchema.optional(),

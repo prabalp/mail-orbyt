@@ -6,7 +6,10 @@ import { prisma } from "@mail-orbyt/database";
 import { createAuthorizationCode, intersectScopes } from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";
 
-function appendCallback(url: URL, params: { code?: string; error?: string; state: string }): string {
+function appendCallback(
+  url: URL,
+  params: { code?: string; error?: string; state: string },
+): string {
   if (params.code) url.searchParams.set("code", params.code);
   if (params.error) url.searchParams.set("error", params.error);
   if (params.state) url.searchParams.set("state", params.state);

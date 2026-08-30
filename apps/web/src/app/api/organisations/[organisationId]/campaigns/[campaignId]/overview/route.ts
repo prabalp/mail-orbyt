@@ -88,8 +88,6 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
       byStatus: enrollmentsByStatus,
     },
     pendingSends: campaign.pendingSends,
-    stats: canViewAnalytics
-      ? { emailsSent: sentCount, replyRate, ...qualifiedMeetingRate }
-      : null,
+    stats: canViewAnalytics ? { emailsSent: sentCount, replyRate, ...qualifiedMeetingRate } : null,
   });
 }

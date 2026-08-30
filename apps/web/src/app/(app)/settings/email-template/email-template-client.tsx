@@ -95,7 +95,7 @@ export function EmailTemplateClient({
 
         <TextArea
           label="Default campaign prompt"
-          helperText="Used by campaigns that have no prompt of their own. Say which recipient data emails may use, how they should be formatted, and the voice to write in — the safety rules below always apply on top and cannot be relaxed here."
+          helperText="Used by campaigns that have no prompt of their own. Say which recipient data emails may use, how they should be formatted, and the voice to write in; the safety rules below always apply on top and cannot be relaxed here."
           rows={10}
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
@@ -105,7 +105,7 @@ export function EmailTemplateClient({
 
         <TextInput
           label="Calendly booking link"
-          helperText="Embedded verbatim in every AI-generated email's call to action — never altered or paraphrased by the model."
+          helperText="Embedded verbatim in every AI-generated email's call to action: never altered or paraphrased by the model."
           type="url"
           value={link}
           onChange={(e) => setLink(e.target.value)}
@@ -119,7 +119,7 @@ export function EmailTemplateClient({
             <p className="text-xs text-on-surface-variant">
               Two prompts run per email: generation writes the draft, then QA reviews it. Both hold
               only the safety rules that no campaign may relax (never invent facts, no real URLs,
-              plain text, no self-written signature) — what an email says and how it is formatted
+              plain text, no self-written signature); what an email says and how it is formatted
               belongs in the campaign prompt above. Editing these replaces those safety rules
               entirely; loosen them and generated emails may start failing the app&apos;s automatic
               fact/URL validation instead of sending. &quot;Reset to default&quot; restores the
@@ -192,7 +192,7 @@ export function EmailTemplateClient({
             <p className="text-xs text-on-surface-variant">
               This is the exact prompt-building code real drafts use, rendered against sample
               recipient/company data (with your current, possibly-unsaved instructions and link
-              above) — not a real lead's data.
+              above), not a real lead's data.
             </p>
             <details className="rounded-md-md border border-outline/30 p-3" open>
               <summary className="cursor-pointer text-sm font-medium text-on-surface-variant">

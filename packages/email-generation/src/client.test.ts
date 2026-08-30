@@ -213,3 +213,140 @@ describe("verifyAiCredentials", () => {
     expect(result.ok === false && result.message).toMatch(/reasoning disabled/i);
   });
 });
+
+function jsonResponse(body: unknown, ok = true, status = 200) {
+  return { ok, status, text: async () => JSON.stringify(body) } as Response;
+}
+
+describe("OpenAI-compatible custom provider", () => {
+  const OPENAI_OVERRIDE = {
+    kind: "OPENAI_COMPATIBLE" as const,
+    apiKey: "sk-custom",
+    model: "llama-3.1-70b",
+    baseUrl: "https://api.custom-llm.example/v1",
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    envOverride = {};
+  });
+
+  it("is not configured without a base URL, even with an apiKey and model", async () => {
+    const { isAiConfigured } = await import("./client");
+    expect(
+      isAiConfigured({ kind: "OPENAI_COMPATIBLE", apiKey: "sk-custom", model: "llama-3.1-70b" }),
+    ).toBe(false);
+  });
+
+  it("is not configured with a base URL but no environment fallback for the key", async () => {
+    const { isAiConfigured } = await import("./client");
+    expect(
+      isAiConfigured({ kind: "OPENAI_COMPATIBLE", baseUrl: "https://api.example.com/v1" }),
+    ).toBe(false);
+  });
+
+  it("posts to {baseUrl}/chat/completions with Bearer auth and parses the assistant message", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        choices: [{ message: { content: JSON.stringify({ subject: "Hi", body: "Body" }) } }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAiEmailGenerator } = await import("./client");
+
+    const result = await getAiEmailGenerator(OPENAI_OVERRIDE).complete({
+      system: "sys",
+      user: "usr",
+    });
+
+    expect(result).toEqual({ subject: "Hi", body: "Body" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.custom-llm.example/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer sk-custom" }),
+      }),
+    );
+    const requestBody = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(requestBody).toMatchObject({ model: "llama-3.1-70b" });
+    vi.unstubAllGlobals();
+  });
+
+  it("strips a trailing slash from a saved base URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        choices: [{ message: { content: JSON.stringify({ subject: "Hi", body: "Body" }) } }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAiEmailGenerator } = await import("./client");
+
+    await getAiEmailGenerator({
+      ...OPENAI_OVERRIDE,
+      baseUrl: "https://api.custom-llm.example/v1/",
+    }).complete({ system: "sys", user: "usr" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.custom-llm.example/v1/chat/completions",
+      expect.anything(),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("wraps a non-2xx response in AiGenerationFailedError with a plain-English reason", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({}, false, 401)));
+    const { getAiEmailGenerator, AiGenerationFailedError } = await import("./client");
+
+    await expect(
+      getAiEmailGenerator(OPENAI_OVERRIDE).complete({ system: "sys", user: "usr" }),
+    ).rejects.toThrow(AiGenerationFailedError);
+    vi.unstubAllGlobals();
+  });
+
+  it("wraps malformed JSON content in AiGenerationFailedError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: "not json" } }] })),
+    );
+    const { getAiEmailGenerator, AiGenerationFailedError } = await import("./client");
+
+    await expect(
+      getAiEmailGenerator(OPENAI_OVERRIDE).complete({ system: "sys", user: "usr" }),
+    ).rejects.toThrow(AiGenerationFailedError);
+    vi.unstubAllGlobals();
+  });
+
+  it("verifyAiCredentials reports ok on a successful custom-provider call", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: "ok" } }] })),
+    );
+    const { verifyAiCredentials } = await import("./client");
+    expect(await verifyAiCredentials(OPENAI_OVERRIDE)).toEqual({ ok: true });
+    vi.unstubAllGlobals();
+  });
+
+  it("verifyAiCredentials explains a 404 as a base-URL/model problem", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({}, false, 404)));
+    const { verifyAiCredentials } = await import("./client");
+    const result = await verifyAiCredentials(OPENAI_OVERRIDE);
+    expect(result.ok === false && result.message).toMatch(/base URL and that the model ID/i);
+    vi.unstubAllGlobals();
+  });
+
+  it("verifyAiCredentials fails without a network call when the base URL is missing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { verifyAiCredentials } = await import("./client");
+    const result = await verifyAiCredentials({
+      kind: "OPENAI_COMPATIBLE",
+      apiKey: "sk-custom",
+      model: "llama-3.1-70b",
+    });
+    expect(result.ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});

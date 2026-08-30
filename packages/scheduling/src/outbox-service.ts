@@ -2,6 +2,7 @@ import type { PrismaClient } from "@mail-orbyt/database";
 import { isSuppressed } from "@mail-orbyt/leads";
 import type { AiEmailGenerator } from "@mail-orbyt/email-generation";
 import { resolveDefaultSignatureText, resolveInboxSenderName } from "@mail-orbyt/gmail";
+import { buildPixelImgTag, getVerifiedTrackingDomain } from "@mail-orbyt/tracking";
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
 import { markInboxSent, pickNextInbox } from "./inbox-rotation";
 import { materializeStepContent } from "./content";
@@ -21,6 +22,7 @@ type Prisma = Pick<
   | "researchPageText"
   | "signature"
   | "inbox"
+  | "trackingDomain"
 >;
 
 const MAX_ATTEMPTS = 3;
@@ -61,7 +63,7 @@ export interface ProcessOutboxItemDeps {
   resolveAiGenerator: (organisationId: string) => Promise<AiEmailGenerator | undefined>;
   sendEmail: (
     inboxId: string,
-    message: { to: string; subject: string; body: string },
+    message: { to: string; subject: string; body: string; pixelImgTag?: string },
   ) => Promise<{ messageId: string; threadId: string }>;
   /**
    * Resolves organisation-level context for AI-generated copy — deferred to
@@ -226,7 +228,14 @@ export async function processOutboxItem(
   });
 
   try {
-    const result = await deps.sendEmail(inbox.id, { to: item.lead.email, subject, body });
+    const trackingDomain = await getVerifiedTrackingDomain(prisma, item.organisationId);
+    const pixelImgTag = trackingDomain ? buildPixelImgTag(trackingDomain, item.id) : undefined;
+    const result = await deps.sendEmail(inbox.id, {
+      to: item.lead.email,
+      subject,
+      body,
+      pixelImgTag,
+    });
     const sentAt = deps.now ?? new Date();
     // Deliberately swallowed: the email is already gone, so letting this
     // throw into the catch below would mark a completed send as retryable

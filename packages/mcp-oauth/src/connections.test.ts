@@ -62,12 +62,18 @@ describe("listActiveConnections", () => {
 describe("revokeConnection", () => {
   it("revokes only tokens for the given user/client/organisation", async () => {
     const prisma = {
-      mcpOAuthClient: { findUnique: vi.fn().mockResolvedValue({ id: "client-row-1", clientId: "mcp_abc" }) },
+      mcpOAuthClient: {
+        findUnique: vi.fn().mockResolvedValue({ id: "client-row-1", clientId: "mcp_abc" }),
+      },
       mcpAccessToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       mcpRefreshToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     };
 
-    await revokeConnection(prisma, { userId: "user-1", clientId: "mcp_abc", organisationId: "org-1" });
+    await revokeConnection(prisma, {
+      userId: "user-1",
+      clientId: "mcp_abc",
+      organisationId: "org-1",
+    });
 
     const expectedWhere = {
       userId: "user-1",
@@ -92,7 +98,11 @@ describe("revokeConnection", () => {
       mcpRefreshToken: { updateMany: vi.fn() },
     };
 
-    await revokeConnection(prisma, { userId: "user-1", clientId: "unknown", organisationId: "org-1" });
+    await revokeConnection(prisma, {
+      userId: "user-1",
+      clientId: "unknown",
+      organisationId: "org-1",
+    });
 
     expect(prisma.mcpAccessToken.updateMany).not.toHaveBeenCalled();
   });

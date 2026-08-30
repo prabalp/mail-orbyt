@@ -14,6 +14,7 @@ export interface AddStepParams {
   delayDays?: number;
   useAiGeneration?: boolean;
   callToActionOverride?: string;
+  stepInstructions?: string;
   manualSubject?: string;
   manualBody?: string;
 }
@@ -57,6 +58,7 @@ export async function addStep(
       delayDays: params.delayDays ?? 0,
       useAiGeneration: params.useAiGeneration ?? true,
       callToActionOverride: params.callToActionOverride,
+      stepInstructions: params.stepInstructions,
       manualSubject: params.manualSubject,
       manualBody: params.manualBody,
     },

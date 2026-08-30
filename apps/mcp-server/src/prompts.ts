@@ -16,7 +16,8 @@ export function registerPrompts(server: McpServer): void {
     "plan_campaign",
     {
       title: "Plan a campaign",
-      description: "Draft a multi-step outbound sequence for a lead list, ready to review before launch.",
+      description:
+        "Draft a multi-step outbound sequence for a lead list, ready to review before launch.",
       argsSchema: {
         leadListName: z.string().describe("The lead list to target, by name"),
         offer: z.string().describe("What you're offering and the call to action you want"),
@@ -62,7 +63,8 @@ Note: you cannot send replies — I write those myself in Gmail. Give me what I 
     "draft_follow_up",
     {
       title: "Draft a follow-up",
-      description: "Generate a follow-up email for a specific lead, grounded in their research facts.",
+      description:
+        "Generate a follow-up email for a specific lead, grounded in their research facts.",
       argsSchema: {
         lead: z.string().describe("The lead's name or email address"),
         angle: z.string().optional().describe("Any particular angle or call to action to use"),
@@ -84,7 +86,8 @@ Note: you cannot send replies — I write those myself in Gmail. Give me what I 
     "onboard_inbox",
     {
       title: "Onboard my first inbox",
-      description: "Walk through connecting a Google Workspace sending inbox and verifying it can send.",
+      description:
+        "Walk through connecting a Google Workspace sending inbox and verifying it can send.",
       argsSchema: {},
     },
     () =>

@@ -6,7 +6,6 @@ import { COMPANY_TOOLS } from "./companies.js";
 import { CAMPAIGN_TOOLS } from "./campaigns.js";
 import { CONVERSATION_TOOLS } from "./conversations.js";
 import { RESEARCH_TOOLS } from "./research.js";
-import { ANALYTICS_TOOLS } from "./analytics.js";
 import { MEETING_TOOLS } from "./meetings.js";
 import { INBOX_TOOLS } from "./inboxes.js";
 import { SIGNATURE_TOOLS } from "./signatures.js";
@@ -28,7 +27,6 @@ export const ALL_TOOLS: RouteToolDescriptor[] = [
   ...CAMPAIGN_TOOLS,
   ...CONVERSATION_TOOLS,
   ...RESEARCH_TOOLS,
-  ...ANALYTICS_TOOLS,
   ...MEETING_TOOLS,
   ...INBOX_TOOLS,
   ...SIGNATURE_TOOLS,

@@ -208,7 +208,7 @@ export default function ImportLeadsPage(): React.ReactElement {
           <h2 className="text-lg font-medium text-on-surface">Upload a CSV file</h2>
           <p className="mt-1 text-sm text-on-surface-variant">
             Expected columns: first_name, last_name, title, company, linkedin_url, website_url,
-            email, industry, city, state, country. Column names don&apos;t need to match exactly —
+            email, industry, city, state, country. Column names don&apos;t need to match exactly:
             you&apos;ll confirm the mapping next.
           </p>
           <div className="mt-4">
@@ -306,7 +306,7 @@ export default function ImportLeadsPage(): React.ReactElement {
               <TextInput
                 label="List name"
                 required
-                placeholder="e.g. Series B fintech CTOs — August"
+                placeholder="e.g. Series B fintech CTOs, August"
                 value={leadListName}
                 onChange={(event) => setLeadListName(event.target.value)}
               />
@@ -351,22 +351,22 @@ export default function ImportLeadsPage(): React.ReactElement {
                 value={duplicateStrategy}
                 onChange={setDuplicateStrategy}
                 options={[
-                  { value: "SKIP", label: "Skip — keep the existing lead unchanged" },
+                  { value: "SKIP", label: "Skip: keep the existing lead unchanged" },
                   {
                     value: "UPDATE_BLANKS",
-                    label: "Fill blanks only — never overwrite existing values",
+                    label: "Fill blanks only: never overwrite existing values",
                   },
                   {
                     value: "OVERWRITE",
-                    label: "Overwrite — incoming values replace existing ones",
+                    label: "Overwrite: incoming values replace existing ones",
                   },
                   {
                     value: "REJECT",
-                    label: "Reject — flag as an error, import nothing for that row",
+                    label: "Reject: flag as an error, import nothing for that row",
                   },
                   {
                     value: "ALLOW_SEPARATE",
-                    label: "Allow separate — always create a new lead record",
+                    label: "Allow separate: always create a new lead record",
                   },
                 ]}
               />

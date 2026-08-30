@@ -38,7 +38,12 @@ export const SIGNATURE_TOOLS: RouteToolDescriptor[] = [
       isDefault: z.boolean().optional(),
     },
     // Not idempotent: calling twice creates two signatures.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: signatureShape.shape,
   },
   {
@@ -54,7 +59,12 @@ export const SIGNATURE_TOOLS: RouteToolDescriptor[] = [
       content: z.string().min(1).max(2000).optional(),
       isDefault: z.literal(true).optional(),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: signatureShape.shape,
   },
   {
@@ -65,7 +75,12 @@ export const SIGNATURE_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/signatures/{signatureId}",
     requiredScope: "inboxes:manage",
     inputShape: { signatureId: z.string().min(1) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: signatureShape.shape,
   },
 ];

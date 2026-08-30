@@ -46,9 +46,7 @@ export async function listMembers(
   // Prisma's orderBy on an enum column sorts alphabetically, not by the
   // application's notion of rank (ROLE_RANK) — OWNER-first requires
   // sorting in application code instead.
-  const sorted = [...memberships].sort(
-    (a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role],
-  );
+  const sorted = [...memberships].sort((a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role]);
 
   return sorted.map((membership) => ({
     userId: membership.userId,

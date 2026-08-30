@@ -4,7 +4,12 @@ import { hashToken } from "@mail-orbyt/authentication";
 import { exchangeAuthorizationCode, refreshAccessToken } from "./exchange";
 import { OAuthGrantError } from "./errors";
 
-const CLIENT_ROW = { id: "client-row-1", clientId: "mcp_abc123", clientName: "Claude", redirectUris: ["https://claude.ai/callback"] };
+const CLIENT_ROW = {
+  id: "client-row-1",
+  clientId: "mcp_abc123",
+  clientName: "Claude",
+  redirectUris: ["https://claude.ai/callback"],
+};
 const CODE_VERIFIER = "test-code-verifier";
 const CODE_CHALLENGE = createHash("sha256").update(CODE_VERIFIER).digest("base64url");
 
@@ -13,15 +18,23 @@ function fakePrisma(overrides: Record<string, unknown> = {}) {
     mcpOAuthClient: { findUnique: vi.fn().mockResolvedValue(CLIENT_ROW) },
     mcpAuthorizationCode: { findUnique: vi.fn(), update: vi.fn().mockResolvedValue(undefined) },
     mcpAccessToken: { create: vi.fn().mockResolvedValue(undefined) },
-    mcpRefreshToken: { findUnique: vi.fn(), create: vi.fn().mockResolvedValue(undefined), update: vi.fn().mockResolvedValue(undefined) },
+    mcpRefreshToken: {
+      findUnique: vi.fn(),
+      create: vi.fn().mockResolvedValue(undefined),
+      update: vi.fn().mockResolvedValue(undefined),
+    },
     organisationMembership: {
-      findUnique: vi.fn().mockResolvedValue({ organisationId: "org-1", userId: "user-1", role: "ADMIN" }),
+      findUnique: vi
+        .fn()
+        .mockResolvedValue({ organisationId: "org-1", userId: "user-1", role: "ADMIN" }),
     },
     ...overrides,
   };
   return {
     ...tx,
-    $transaction: vi.fn().mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx)),
+    $transaction: vi
+      .fn()
+      .mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx)),
   };
 }
 

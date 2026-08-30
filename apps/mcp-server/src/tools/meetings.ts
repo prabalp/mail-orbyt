@@ -40,7 +40,12 @@ export const MEETING_TOOLS: RouteToolDescriptor[] = [
     annotations: { readOnlyHint: true, openWorldHint: false },
     outputShape: {
       meetings: z
-        .array(z.object({ ...meetingOutputFields, lead: leadShape }).partial().passthrough())
+        .array(
+          z
+            .object({ ...meetingOutputFields, lead: leadShape })
+            .partial()
+            .passthrough(),
+        )
         .optional(),
     },
   },
@@ -59,7 +64,12 @@ export const MEETING_TOOLS: RouteToolDescriptor[] = [
       notes: z.string().max(2000).optional(),
     },
     // Books a new meeting row each call — twice means two meetings.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: { ...meetingOutputFields },
   },
   {
@@ -75,11 +85,18 @@ export const MEETING_TOOLS: RouteToolDescriptor[] = [
       qualified: z
         .boolean()
         .optional()
-        .describe("The human judgment call feeding the product's core \"qualified meeting rate\" metric"),
+        .describe(
+          'The human judgment call feeding the product\'s core "qualified meeting rate" metric',
+        ),
       notes: z.string().max(2000).optional(),
       scheduledFor: z.string().optional().describe("ISO 8601 datetime"),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { ...meetingOutputFields },
   },
 ];

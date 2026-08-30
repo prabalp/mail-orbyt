@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, EmptyState, TextArea, TextInput, useToast } from "@mail-orbyt/design-system";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  TextArea,
+  TextInput,
+  useToast,
+} from "@mail-orbyt/design-system";
 
 interface Signature {
   id: string;
@@ -188,7 +196,7 @@ export function SignaturesClient({
         ) : (
           <EmptyState
             title="No signatures yet"
-            description="Add one below — the default signature is appended to every AI-generated email, from any connected inbox."
+            description="Add one below: the default signature is appended to every AI-generated email, from any connected inbox."
           />
         )}
 

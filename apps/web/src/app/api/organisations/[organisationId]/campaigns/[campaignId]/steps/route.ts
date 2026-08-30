@@ -13,6 +13,7 @@ const addStepSchema = z.object({
   delayDays: z.number().int().min(0).max(60).optional(),
   useAiGeneration: z.boolean().optional(),
   callToActionOverride: z.string().max(300).optional(),
+  stepInstructions: z.string().max(1000).optional(),
   manualSubject: z.string().max(150).optional(),
   manualBody: z.string().max(4000).optional(),
 });

@@ -36,6 +36,7 @@ export interface MaterializeContentParams {
     stepType: GenerateEmailInput["generationType"];
     useAiGeneration: boolean;
     callToActionOverride: string | null;
+    stepInstructions: string | null;
     manualSubject: string | null;
     manualBody: string | null;
   };
@@ -93,6 +94,7 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
     senderCompanyName: params.senderCompanyName,
     callToAction:
       params.step.callToActionOverride ?? "connect and learn more about your priorities",
+    stepInstructions: params.step.stepInstructions ?? undefined,
     facts,
     priorEmail: params.priorEmail,
     websiteText: pageText?.text,

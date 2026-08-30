@@ -113,7 +113,7 @@ export function LeadEmailHistory({ leadId }: { leadId: string }): React.ReactEle
 
                 {expanded ? (
                   <pre className="mt-3 whitespace-pre-wrap border-t border-outline/15 pt-3 text-xs text-on-surface">
-                    {email.body ?? "(no body recorded — this email was never materialized)"}
+                    {email.body ?? "(no body recorded: this email was never materialized)"}
                   </pre>
                 ) : null}
               </li>

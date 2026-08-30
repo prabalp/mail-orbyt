@@ -11,10 +11,22 @@ const { encryptSecret, maskSecret } = await import("./secret-crypto");
 const { resolveOrgAiConfig } = await import("./org-ai-config");
 
 function prismaReturning(
-  organisation: { aiProviderApiKey: string | null; aiProviderModel: string | null } | null,
+  organisation: {
+    aiProviderApiKey: string | null;
+    aiProviderModel: string | null;
+    aiProviderKind?: "GEMINI" | "OPENAI_COMPATIBLE";
+    aiProviderBaseUrl?: string | null;
+  } | null,
 ) {
   return {
-    organisation: { findUnique: async () => organisation },
+    organisation: {
+      findUnique: async () =>
+        organisation && {
+          aiProviderKind: "GEMINI" as const,
+          aiProviderBaseUrl: null,
+          ...organisation,
+        },
+    },
   } as unknown as Parameters<typeof resolveOrgAiConfig>[0];
 }
 
@@ -27,6 +39,8 @@ describe("resolveOrgAiConfig", () => {
     expect(await resolveOrgAiConfig(prisma, "org1")).toEqual({
       apiKey: "org-secret-key",
       model: "gemini-2.5-pro",
+      kind: "GEMINI",
+      baseUrl: undefined,
     });
   });
 
@@ -34,12 +48,20 @@ describe("resolveOrgAiConfig", () => {
   // bringing a key, since the environment's key stays valid for it.
   it("returns only the model when no key is stored", async () => {
     const prisma = prismaReturning({ aiProviderApiKey: null, aiProviderModel: "gemini-2.5-flash" });
-    expect(await resolveOrgAiConfig(prisma, "org1")).toEqual({ model: "gemini-2.5-flash" });
+    expect(await resolveOrgAiConfig(prisma, "org1")).toEqual({
+      model: "gemini-2.5-flash",
+      kind: "GEMINI",
+      baseUrl: undefined,
+    });
   });
 
   it("returns nothing to override when the organisation has set neither", async () => {
     const prisma = prismaReturning({ aiProviderApiKey: null, aiProviderModel: null });
-    expect(await resolveOrgAiConfig(prisma, "org1")).toEqual({ model: undefined });
+    expect(await resolveOrgAiConfig(prisma, "org1")).toEqual({
+      model: undefined,
+      kind: "GEMINI",
+      baseUrl: undefined,
+    });
   });
 
   it("returns nothing to override for a missing organisation rather than throwing", async () => {
@@ -56,7 +78,24 @@ describe("resolveOrgAiConfig", () => {
     });
     expect(await resolveOrgAiConfig(prisma, "org1")).toEqual({
       model: "gemini-2.5-flash",
+      kind: "GEMINI",
+      baseUrl: undefined,
       decryptionFailed: true,
+    });
+  });
+
+  it("passes through a custom OpenAI-compatible provider's kind and base URL", async () => {
+    const prisma = prismaReturning({
+      aiProviderApiKey: encryptSecret("sk-custom"),
+      aiProviderModel: "llama-3.1-70b",
+      aiProviderKind: "OPENAI_COMPATIBLE",
+      aiProviderBaseUrl: "https://api.custom-llm.example/v1",
+    });
+    expect(await resolveOrgAiConfig(prisma, "org1")).toEqual({
+      apiKey: "sk-custom",
+      model: "llama-3.1-70b",
+      kind: "OPENAI_COMPATIBLE",
+      baseUrl: "https://api.custom-llm.example/v1",
     });
   });
 });

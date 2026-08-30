@@ -30,6 +30,7 @@
     "@mail-orbyt/research-keywords": "workspace:*",
     "@mail-orbyt/scheduling": "workspace:*",
     "@mail-orbyt/storage": "workspace:*",
+    "@mail-orbyt/tracking": "workspace:*",
     "@mail-orbyt/validation": "workspace:*",
     "ioredis": "^5.4.2",
     "lucide-react": "^1.27.0",

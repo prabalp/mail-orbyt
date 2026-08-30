@@ -31,7 +31,13 @@ describe("listMembers", () => {
     };
 
     await expect(listMembers(prisma, "org-1")).resolves.toEqual([
-      { userId: "user-1", email: "owner@example.com", name: "Owner Person", role: "OWNER", joinedAt: createdAt },
+      {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner Person",
+        role: "OWNER",
+        joinedAt: createdAt,
+      },
     ]);
   });
 
@@ -62,7 +68,10 @@ describe("listMembers", () => {
 
     expect(result.map((member) => member.userId)).toEqual(["owner-1", "admin-1"]);
     expect(prisma.organisationMembership.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { organisationId: "org-1" }, orderBy: { createdAt: "asc" } }),
+      expect.objectContaining({
+        where: { organisationId: "org-1" },
+        orderBy: { createdAt: "asc" },
+      }),
     );
   });
 });

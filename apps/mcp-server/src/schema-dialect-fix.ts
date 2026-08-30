@@ -39,7 +39,10 @@ export function fixToolSchemaDialect(server: McpServer): void {
 
   server.server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
     const result = (await original(request, extra)) as {
-      tools?: Array<{ inputSchema?: Record<string, unknown>; outputSchema?: Record<string, unknown> }>;
+      tools?: Array<{
+        inputSchema?: Record<string, unknown>;
+        outputSchema?: Record<string, unknown>;
+      }>;
     };
 
     for (const tool of result.tools ?? []) {

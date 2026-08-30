@@ -127,7 +127,11 @@ export async function generateEmail(
     reviewSystemPromptOverride: parsed.reviewSystemPromptOverride,
   });
   const signatureText = parsed.signatureText ?? "Best,\n{senderName}";
-  return applySignature(applyBookingLink(reviewed, parsed.bookingLink), signatureText, parsed.senderName);
+  return applySignature(
+    applyBookingLink(reviewed, parsed.bookingLink),
+    signatureText,
+    parsed.senderName,
+  );
 }
 
 export { GeneratedEmailValidationError } from "./validator";

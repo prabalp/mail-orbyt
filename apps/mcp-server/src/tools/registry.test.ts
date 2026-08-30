@@ -54,26 +54,34 @@ describe("tool descriptor integrity", () => {
   });
 
   it("every tool name is snake_case", () => {
-    const offenders = allNamed.filter((descriptor) => !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(descriptor.name));
+    const offenders = allNamed.filter(
+      (descriptor) => !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(descriptor.name),
+    );
     expect(offenders.map((descriptor) => descriptor.name)).toEqual([]);
   });
 
   it("every requiredScope is a real permission or the profile scope", () => {
-    const offenders = allNamed.filter((descriptor) => !VALID_PERMISSIONS.has(descriptor.requiredScope));
-    expect(offenders.map((descriptor) => `${descriptor.name}: ${descriptor.requiredScope}`)).toEqual([]);
+    const offenders = allNamed.filter(
+      (descriptor) => !VALID_PERMISSIONS.has(descriptor.requiredScope),
+    );
+    expect(
+      offenders.map((descriptor) => `${descriptor.name}: ${descriptor.requiredScope}`),
+    ).toEqual([]);
   });
 
   it("route descriptors resolve to a real apps/web route file", () => {
-    const missing = ALL_TOOLS.filter((descriptor) => !existsSync(routeFileFor(descriptor.pathTemplate))).map(
-      (descriptor) => `${descriptor.name} -> ${descriptor.pathTemplate}`,
-    );
+    const missing = ALL_TOOLS.filter(
+      (descriptor) => !existsSync(routeFileFor(descriptor.pathTemplate)),
+    ).map((descriptor) => `${descriptor.name} -> ${descriptor.pathTemplate}`);
     expect(missing).toEqual([]);
   });
 
   it("every non-organisationId path param appears in inputShape", () => {
     const offenders: string[] = [];
     for (const descriptor of ALL_TOOLS as RouteToolDescriptor[]) {
-      const params = pathParamNames(descriptor.pathTemplate).filter((name) => name !== "organisationId");
+      const params = pathParamNames(descriptor.pathTemplate).filter(
+        (name) => name !== "organisationId",
+      );
       const missing = params.filter((name) => !(name in descriptor.inputShape));
       if (missing.length > 0) {
         offenders.push(`${descriptor.name}: missing ${missing.join(", ")}`);
@@ -83,9 +91,9 @@ describe("tool descriptor integrity", () => {
   });
 
   it("inputShape never declares organisationId — it is injected from the token", () => {
-    const offenders = ALL_TOOLS.filter((descriptor) => "organisationId" in descriptor.inputShape).map(
-      (descriptor) => descriptor.name,
-    );
+    const offenders = ALL_TOOLS.filter(
+      (descriptor) => "organisationId" in descriptor.inputShape,
+    ).map((descriptor) => descriptor.name);
     expect(offenders).toEqual([]);
   });
 

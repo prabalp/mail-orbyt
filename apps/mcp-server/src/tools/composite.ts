@@ -3,8 +3,19 @@ import type { RouteToolDescriptor } from "./registry.js";
 
 const stepInputSchema = z.object({
   stepType: z.enum(["INITIAL", "FOLLOW_UP", "CLOSE_THE_LOOP"]),
-  delayDays: z.number().int().min(0).max(60).optional().describe("Days after the previous step — omit for the first step"),
-  useAiGeneration: z.boolean().optional().describe("Defaults to true. Set false and provide manualSubject/manualBody for hand-written copy"),
+  delayDays: z
+    .number()
+    .int()
+    .min(0)
+    .max(60)
+    .optional()
+    .describe("Days after the previous step — omit for the first step"),
+  useAiGeneration: z
+    .boolean()
+    .optional()
+    .describe(
+      "Defaults to true. Set false and provide manualSubject/manualBody for hand-written copy",
+    ),
   callToActionOverride: z.string().max(300).optional(),
   manualSubject: z.string().max(150).optional(),
   manualBody: z.string().max(4000).optional(),
@@ -36,20 +47,47 @@ export const COMPOSITE_TOOLS: RouteToolDescriptor[] = [
     inputShape: {
       name: z.string().min(1).max(200),
       description: z.string().max(2000).optional(),
-      timezone: z.string().optional().describe("IANA timezone, e.g. America/New_York — defaults to UTC"),
-      sendingDaysOfWeek: z.array(z.number().int().min(0).max(6)).optional().describe("0=Sunday .. 6=Saturday"),
+      timezone: z
+        .string()
+        .optional()
+        .describe("IANA timezone, e.g. America/New_York — defaults to UTC"),
+      sendingDaysOfWeek: z
+        .array(z.number().int().min(0).max(6))
+        .optional()
+        .describe("0=Sunday .. 6=Saturday"),
       sendingWindowStartMinute: z.number().int().min(0).max(1439).optional(),
       sendingWindowEndMinute: z.number().int().min(0).max(1439).optional(),
       inboxCooldownMinutes: z.number().int().min(0).max(180).optional(),
       emailPromptInstructions: z.string().max(4000).optional(),
-      steps: z.array(stepInputSchema).min(1).max(20).describe("In send order — this becomes each step's position in the sequence"),
-      inboxIds: z.array(z.string().min(1)).optional().describe("From list_inboxes — the sending pool for this campaign"),
-      leadListId: z.string().min(1).optional().describe("Enroll every lead in this list — provide at most one of leadListId or leadIds"),
+      steps: z
+        .array(stepInputSchema)
+        .min(1)
+        .max(20)
+        .describe("In send order — this becomes each step's position in the sequence"),
+      inboxIds: z
+        .array(z.string().min(1))
+        .optional()
+        .describe("From list_inboxes — the sending pool for this campaign"),
+      leadListId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Enroll every lead in this list — provide at most one of leadListId or leadIds"),
       leadIds: z.array(z.string().min(1)).max(50000).optional(),
-      activate: z.boolean().optional().describe("Set the campaign live immediately once assembled — requires at least one step and one inbox"),
+      activate: z
+        .boolean()
+        .optional()
+        .describe(
+          "Set the campaign live immediately once assembled — requires at least one step and one inbox",
+        ),
     },
     // Creates a new campaign every call; never idempotent.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       campaign: z.object(campaignFieldShape).partial().passthrough().optional(),
       enrollment: z
@@ -127,7 +165,11 @@ export const COMPOSITE_TOOLS: RouteToolDescriptor[] = [
         .partial()
         .passthrough()
         .optional(),
-      leads: z.object({ active: z.number(), suppressed: z.number() }).partial().passthrough().optional(),
+      leads: z
+        .object({ active: z.number(), suppressed: z.number() })
+        .partial()
+        .passthrough()
+        .optional(),
       conversationsNeedingReview: z.number().nullable().optional(),
       analytics: z.record(z.string(), z.unknown()).nullable().optional(),
     },
@@ -142,16 +184,26 @@ export const COMPOSITE_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "campaigns:manage",
     inputShape: {
       campaignId: z.string().min(1).describe("The campaign to enroll INTO"),
-      dryRun: z.boolean().optional().describe("Preview the pool and count without enrolling anyone"),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe("Preview the pool and count without enrolling anyone"),
     },
     // Not idempotent: each real (non-dryRun) call enrolls whatever the
     // pool is at that moment, and a lead already enrolled here simply
     // won't be re-matched by the underlying predicate next time.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       dryRun: z.boolean().optional(),
       wouldEnroll: z.number().optional(),
-      leads: z.array(z.object({ id: z.string(), email: z.string() }).partial().passthrough()).optional(),
+      leads: z
+        .array(z.object({ id: z.string(), email: z.string() }).partial().passthrough())
+        .optional(),
       enrolled: z.number().optional(),
       alreadyEnrolled: z.number().optional(),
       suppressed: z.number().optional(),
@@ -166,8 +218,19 @@ export const COMPOSITE_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/leads",
     requiredScope: "profile",
     inputShape: {
-      search: z.string().min(1).describe("A name, email address, or company — matched the same way the leads list search works"),
-      pageSize: z.coerce.number().int().positive().max(50).optional().describe("Defaults to a small page — narrow the search text if this returns too many"),
+      search: z
+        .string()
+        .min(1)
+        .describe(
+          "A name, email address, or company — matched the same way the leads list search works",
+        ),
+      pageSize: z.coerce
+        .number()
+        .int()
+        .positive()
+        .max(50)
+        .optional()
+        .describe("Defaults to a small page — narrow the search text if this returns too many"),
     },
     annotations: { readOnlyHint: true, openWorldHint: false },
     outputShape: {
@@ -238,7 +301,11 @@ export const COMPOSITE_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/jobs/{kind}/{jobId}",
     requiredScope: "profile",
     inputShape: {
-      kind: z.enum(["research", "import", "keywords"]).describe("research: from start_lead_research/start_company_research. import: from confirm_lead_import. keywords: from start_lead_research_keywords/start_company_research_keywords, keyed by researchSourceId"),
+      kind: z
+        .enum(["research", "import", "keywords"])
+        .describe(
+          "research: from start_lead_research/start_company_research. import: from confirm_lead_import. keywords: from start_lead_research_keywords/start_company_research_keywords, keyed by researchSourceId",
+        ),
       jobId: z.string().min(1),
     },
     annotations: { readOnlyHint: true, openWorldHint: false },

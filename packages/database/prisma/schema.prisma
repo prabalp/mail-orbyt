@@ -163,6 +163,11 @@ enum OrganisationRole {
   VIEWER
 }
 
+enum AiProviderKind {
+  GEMINI
+  OPENAI_COMPATIBLE
+}
+
 model Organisation {
   id   String @id @default(cuid())
   name String
@@ -196,6 +201,17 @@ model Organisation {
   /// deployment's AI_PROVIDER_MODEL". Independent of aiProviderApiKey — an
   /// organisation may pin a model without bringing its own key.
   aiProviderModel  String?
+  /// Which provider protocol aiProviderApiKey/aiProviderModel are for.
+  /// GEMINI (default) preserves existing behavior — every org created before
+  /// this field existed is unaffected. OPENAI_COMPATIBLE lets an org point
+  /// at any LLM that speaks the OpenAI Chat Completions wire format (self-
+  /// hosted, OpenRouter, Azure OpenAI, etc.) via aiProviderBaseUrl below.
+  aiProviderKind    AiProviderKind @default(GEMINI)
+  /// Base URL for a custom OpenAI-compatible endpoint (e.g.
+  /// https://api.example.com/v1, or a self-hosted vLLM/Ollama URL). Only
+  /// meaningful when aiProviderKind is OPENAI_COMPATIBLE. Not secret —
+  /// stored in the clear like calendlyUrl.
+  aiProviderBaseUrl String?
 
   memberships        OrganisationMembership[]
   invitations        Invitation[]
@@ -214,6 +230,7 @@ model Organisation {
   inboxes            Inbox[]
   signatures         Signature[]
   domainDnsChecks    DomainDnsCheck[]
+  trackingDomain     TrackingDomain?
   campaigns          Campaign[]
   outboxItems        OutboxItem[]
   conversations      Conversation[]
@@ -1139,6 +1156,34 @@ model DomainDnsCheck {
   @@index([organisationId])
 }
 
+enum TrackingDomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+/// An organisation-owned domain/subdomain (e.g. track.customer.com) used to
+/// serve email-open tracking pixels under the org's own reputation rather
+/// than a shared Orbyt-branded host. verificationToken proves domain
+/// ownership via a DNS TXT record, kept separate from the CNAME that
+/// actually routes pixel traffic to this app — so on-demand TLS issuance
+/// (see the reverse proxy's "ask" callback) only ever happens for a domain
+/// the org has proven it controls. One per organisation for v1.
+model TrackingDomain {
+  id                String               @id @default(cuid())
+  organisationId    String               @unique
+  domain            String               @unique
+  verificationToken String
+  status            TrackingDomainStatus @default(PENDING)
+  lastCheckedAt     DateTime?
+  verifiedAt        DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum CampaignStatus {
   DRAFT
   ACTIVE
@@ -1200,15 +1245,30 @@ enum SequenceStepType {
 /// either generated via AI at send time (Phase 5's generateEmail, using
 /// callToActionOverride if set) or a manually-written template with simple
 /// {{firstName}}-style merge tokens — never both, per useAiGeneration.
+///
+/// The trigger to advance is always "no reply within delayDays" — see
+/// enrollment-progression.ts. There is no reply-classification branch here:
+/// a genuine reply always exits the enrollment to a human-handled
+/// Conversation instead (see Conversation's doc comment), so a step never
+/// needs to know why the lead didn't reply, only that they didn't yet. Every
+/// send is also always a fresh Gmail thread (sendFromInbox sets no
+/// In-Reply-To/References) rather than a reply-in-thread, so a follow-up
+/// landing in spam doesn't take the rest of the chain down with it.
 model CampaignStep {
   id                   String           @id @default(cuid())
   campaignId           String
   orderIndex           Int
   stepType             SequenceStepType
-  /// Days after the previous step (0 for the first step).
+  /// Days after the previous step (0 for the first step) with no reply —
+  /// the sole trigger condition for advancing to this step.
   delayDays            Int              @default(0)
   useAiGeneration      Boolean          @default(true)
   callToActionOverride String?
+  /// Free-text guidance for THIS step only, layered on top of the campaign's
+  /// prompt — e.g. "this is a bump, try a new angle: a case study" or "keep
+  /// to two sentences, no CTA restatement". Distinct from
+  /// callToActionOverride (a single CTA line): see buildGenerateEmailPrompt.
+  stepInstructions     String?
   manualSubject        String?
   manualBody           String?
 
@@ -1312,6 +1372,12 @@ model OutboxItem {
   sentAt         DateTime?
   providerMessageId String?
   providerThreadId  String?
+  /// Open-tracking counters, updated by the pixel-serving route. The
+  /// OutboxItem's own id (unguessable cuid) doubles as the pixel token —
+  /// no separate token column, since a send row already exists 1:1 with a
+  /// single recipient/email.
+  openCount      Int              @default(0)
+  firstOpenedAt  DateTime?
 
   organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   campaign     Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -1319,6 +1385,7 @@ model OutboxItem {
   campaignStep CampaignStep       @relation(fields: [campaignStepId], references: [id], onDelete: Cascade)
   enrollment   CampaignEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   inbox        Inbox?             @relation(fields: [inboxId], references: [id])
+  openEvents   EmailOpenEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1327,6 +1394,24 @@ model OutboxItem {
   @@index([organisationId])
   @@index([status, scheduledFor])
   @@index([inboxId])
+}
+
+/// One row per pixel hit, kept alongside OutboxItem's openCount/firstOpenedAt
+/// summary so raw hits (IP/UA, useful for later bot-prefetch filtering) are
+/// available without bloating the hot OutboxItem row.
+model EmailOpenEvent {
+  id             String   @id @default(cuid())
+  outboxItemId   String
+  organisationId String
+  ipAddress      String?
+  userAgent      String?
+
+  outboxItem OutboxItem @relation(fields: [outboxItemId], references: [id], onDelete: Cascade)
+
+  occurredAt DateTime @default(now())
+
+  @@index([outboxItemId])
+  @@index([organisationId, occurredAt])
 }
 
 enum ConversationStatus {

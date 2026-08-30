@@ -83,6 +83,8 @@ export async function resolveDefaultSignatureText(
   prisma: Prisma,
   organisationId: string,
 ): Promise<string | undefined> {
-  const signature = await prisma.signature.findFirst({ where: { organisationId, isDefault: true } });
+  const signature = await prisma.signature.findFirst({
+    where: { organisationId, isDefault: true },
+  });
   return signature?.content;
 }

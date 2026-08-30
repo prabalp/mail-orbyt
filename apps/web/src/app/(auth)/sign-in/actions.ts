@@ -6,7 +6,11 @@ import { signIn } from "@/lib/auth";
 
 /** Only ever redirects to a same-origin path — a client-supplied callbackUrl is never trusted as an absolute/external URL, which would otherwise be an open redirect. */
 function safeRedirectTarget(callbackUrl: FormDataEntryValue | null): string {
-  if (typeof callbackUrl === "string" && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
+  if (
+    typeof callbackUrl === "string" &&
+    callbackUrl.startsWith("/") &&
+    !callbackUrl.startsWith("//")
+  ) {
     return callbackUrl;
   }
   return "/overview";
@@ -25,7 +29,7 @@ export async function signInAction(
     return undefined;
   } catch (error) {
     if (error instanceof EmailNotVerifiedError) {
-      return "Please verify your email address before signing in — check your inbox for the verification link we sent when you signed up.";
+      return "Please verify your email address before signing in: check your inbox for the verification link we sent when you signed up.";
     }
     if (error instanceof AuthError) {
       return "Incorrect email or password.";

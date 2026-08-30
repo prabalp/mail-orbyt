@@ -13,7 +13,12 @@ export const EMAIL_DRAFT_TOOLS: RouteToolDescriptor[] = [
       draftId: z.string().min(1),
       action: z.literal("approve"),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     // The updated draft is returned flat, not wrapped.
     outputShape: {
       id: z.string().optional(),
@@ -37,6 +42,11 @@ export const EMAIL_DRAFT_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "campaigns:manage",
     inputShape: { draftId: z.string().min(1) },
     // No outputShape: the route answers 204 with an empty body.
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
 ];

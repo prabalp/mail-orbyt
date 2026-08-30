@@ -22,7 +22,8 @@ export const SETTINGS_TOOLS: RouteToolDescriptor[] = [
   {
     name: "get_ai_provider_settings",
     title: "Get AI provider settings",
-    description: "Get the organisation's AI provider settings — masked API key hint, model, and environment defaults.",
+    description:
+      "Get the organisation's AI provider settings — masked API key hint, model, and environment defaults.",
     method: "GET",
     pathTemplate: "/api/organisations/{organisationId}/settings/ai-provider",
     requiredScope: "profile",
@@ -38,10 +39,19 @@ export const SETTINGS_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/settings/ai-provider",
     requiredScope: "campaigns:manage",
     inputShape: {
-      apiKey: z.string().max(400).optional().describe("Omit to keep the existing key — pass an empty string to clear it"),
+      apiKey: z
+        .string()
+        .max(400)
+        .optional()
+        .describe("Omit to keep the existing key — pass an empty string to clear it"),
       model: z.string().max(200).optional(),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: aiProviderShape,
   },
   {
@@ -79,13 +89,19 @@ export const SETTINGS_TOOLS: RouteToolDescriptor[] = [
       generationSystemPrompt: z.string().max(8000).optional(),
       reviewSystemPrompt: z.string().max(8000).optional(),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: emailTemplateShape,
   },
   {
     name: "preview_email_prompt",
     title: "Preview the AI email prompt",
-    description: "Render the exact AI prompt against sample data for preview, without saving anything.",
+    description:
+      "Render the exact AI prompt against sample data for preview, without saving anything.",
     method: "POST",
     pathTemplate: "/api/organisations/{organisationId}/settings/email-template/prompt-preview",
     requiredScope: "profile",

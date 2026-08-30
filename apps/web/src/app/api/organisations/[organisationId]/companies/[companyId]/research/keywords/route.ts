@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   const result = await startKeywordExtractionJob({ organisationId, companyId });
   if (!result) {
     return NextResponse.json(
-      { error: "No saved website text yet — run research first" },
+      { error: "No saved website text yet: run research first" },
       { status: 409 },
     );
   }

@@ -32,7 +32,11 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
     return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ id: organisation.id, name: organisation.name, slug: organisation.slug });
+  return NextResponse.json({
+    id: organisation.id,
+    name: organisation.name,
+    slug: organisation.slug,
+  });
 }
 
 const deleteSchema = z.object({

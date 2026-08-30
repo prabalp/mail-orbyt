@@ -23,7 +23,7 @@ export default async function McpConnectionsPage(): Promise<React.ReactElement> 
     <div className="flex flex-col gap-6">
       <PageHeader
         title="MCP connections"
-        description="Applications you've connected — like Claude — that can act on this organisation on your behalf, scoped to the permissions you granted."
+        description="Applications you've connected (like Claude) that can act on this organisation on your behalf, scoped to the permissions you granted."
       />
       <SettingsNav />
       <McpConnectionsClient

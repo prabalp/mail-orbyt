@@ -48,7 +48,9 @@ describe("buildToolHandler", () => {
       inputShape: {},
     };
 
-    await expect(buildToolHandler(descriptor)({ leadId: "lead_1" }, actor)).rejects.toThrow(ToolScopeError);
+    await expect(buildToolHandler(descriptor)({ leadId: "lead_1" }, actor)).rejects.toThrow(
+      ToolScopeError,
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -67,7 +69,10 @@ describe("buildToolHandler", () => {
 
     // Even if a caller tried to smuggle a different organisationId through
     // input, the path is built from actor.organisationId only.
-    await buildToolHandler(descriptor)({ leadId: "lead_1", organisationId: "someone-elses-org" }, actor);
+    await buildToolHandler(descriptor)(
+      { leadId: "lead_1", organisationId: "someone-elses-org" },
+      actor,
+    );
 
     const [url] = fetchSpy.mock.calls[0]!;
     expect(url).toBe("http://localhost:3000/api/organisations/org_1/leads/lead_1");
@@ -142,9 +147,14 @@ describe("buildToolHandler", () => {
   it("maps a 4xx upstream failure to a non-retryable ToolRequestError with field detail", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse({ error: "Invalid request", details: { fieldErrors: { value: ["Required"] } } }, { status: 400 }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            { error: "Invalid request", details: { fieldErrors: { value: ["Required"] } } },
+            { status: 400 },
+          ),
+        ),
     );
 
     const descriptor: RouteToolDescriptor = {
@@ -156,7 +166,9 @@ describe("buildToolHandler", () => {
       inputShape: {},
     };
 
-    const error = await buildToolHandler(descriptor)({}, actor).catch((e: unknown) => e as ToolRequestError);
+    const error = await buildToolHandler(descriptor)({}, actor).catch(
+      (e: unknown) => e as ToolRequestError,
+    );
     expect(error).toBeInstanceOf(ToolRequestError);
     expect(error.retryable).toBe(false);
     expect(error.status).toBe(400);
@@ -167,9 +179,14 @@ describe("buildToolHandler", () => {
   it("does not append canned guidance that contradicts a specific upstream message", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse({ error: "That user is not a member of this organisation" }, { status: 403 }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            { error: "That user is not a member of this organisation" },
+            { status: 403 },
+          ),
+        ),
     );
 
     const descriptor: RouteToolDescriptor = {
@@ -212,7 +229,10 @@ describe("buildToolHandler", () => {
   });
 
   it("maps a 5xx upstream failure to a retryable ToolRequestError", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: "boom" }, { status: 503 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ error: "boom" }, { status: 503 })),
+    );
 
     const descriptor: RouteToolDescriptor = {
       name: "list_leads",
@@ -223,7 +243,9 @@ describe("buildToolHandler", () => {
       inputShape: {},
     };
 
-    const error = await buildToolHandler(descriptor)({}, actor).catch((e: unknown) => e as ToolRequestError);
+    const error = await buildToolHandler(descriptor)({}, actor).catch(
+      (e: unknown) => e as ToolRequestError,
+    );
     expect(error).toBeInstanceOf(ToolRequestError);
     expect(error.retryable).toBe(true);
     expect(error.status).toBe(503);
@@ -241,7 +263,9 @@ describe("buildToolHandler", () => {
       inputShape: {},
     };
 
-    const error = await buildToolHandler(descriptor)({}, actor).catch((e: unknown) => e as ToolRequestError);
+    const error = await buildToolHandler(descriptor)({}, actor).catch(
+      (e: unknown) => e as ToolRequestError,
+    );
     expect(error).toBeInstanceOf(ToolRequestError);
     expect(error.retryable).toBe(true);
     expect(error.message).toContain("ECONNREFUSED");

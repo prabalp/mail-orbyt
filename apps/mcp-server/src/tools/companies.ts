@@ -127,7 +127,12 @@ export const COMPANY_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "research:review",
     inputShape: { companyId: z.string().min(1) },
     // Not idempotent: every call enqueues another research job.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       id: z.string().optional(),
       status: z.string().optional(),
@@ -157,7 +162,12 @@ export const COMPANY_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "research:review",
     inputShape: { companyId: z.string().min(1) },
     // Not idempotent: every call enqueues another extraction run.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: { researchSourceId: z.string().optional() },
   },
 ];

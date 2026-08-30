@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Badge, Button, Card, EmptyState, PageHeader, Table, TextInput, useToast } from "@mail-orbyt/design-system";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  Table,
+  TextInput,
+  useToast,
+} from "@mail-orbyt/design-system";
 import { Mails } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
 

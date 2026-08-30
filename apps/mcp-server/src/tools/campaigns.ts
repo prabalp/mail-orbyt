@@ -15,6 +15,7 @@ const campaignStepFields = {
   delayDays: z.number().int().min(0).max(60).optional(),
   useAiGeneration: z.boolean().optional(),
   callToActionOverride: z.string().max(300).optional(),
+  stepInstructions: z.string().max(1000).optional(),
   manualSubject: z.string().max(150).optional(),
   manualBody: z.string().max(4000).optional(),
 };
@@ -46,6 +47,7 @@ const stepOutputFields = {
   delayDays: z.number().optional(),
   useAiGeneration: z.boolean().optional(),
   callToActionOverride: z.string().nullable().optional(),
+  stepInstructions: z.string().nullable().optional(),
   manualSubject: z.string().nullable().optional(),
   manualBody: z.string().nullable().optional(),
 };
@@ -124,7 +126,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "campaigns:manage",
     inputShape: { ...campaignScheduleFields },
     // Creates a new row every call, so never idempotent.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: { ...campaignOutputFields },
   },
   {
@@ -174,7 +181,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
         .describe("Campaign-specific AI prompt instructions — pass an empty string to clear it"),
       status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { ...campaignOutputFields },
   },
   {
@@ -187,7 +199,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     inputShape: { campaignId: z.string().min(1) },
     // Not destructive: archiving only sets status=ARCHIVED, and
     // update_campaign can move it back out again. Nothing is deleted.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { ...campaignOutputFields },
   },
   {
@@ -203,7 +220,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
       ...campaignStepFields,
     },
     // Appends a step each call — calling twice adds two touches.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: { ...stepOutputFields },
   },
   {
@@ -218,7 +240,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
       orderedStepIds: z.array(z.string().min(1)),
     },
     // The same ordering applied twice leaves the same orderIndex values.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { steps: z.array(stepShape).optional() },
   },
   {
@@ -233,7 +260,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
       stepId: z.string().min(1),
       ...campaignStepFields,
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { ...stepOutputFields },
   },
   {
@@ -249,7 +281,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     },
     // A hard delete of the row, including its manual subject/body — there is
     // no undo, only re-authoring the step.
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "list_campaign_enrollments",
@@ -265,19 +302,42 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
   {
     name: "enroll_leads_in_campaign",
     title: "Enroll leads in campaign",
-    description: "Enroll leads in a campaign — an explicit list of lead IDs, a set of lead email addresses, or an entire lead list. Provide exactly one of the three.",
+    description:
+      "Enroll leads in a campaign — an explicit list of lead IDs, a set of lead email addresses, or an entire lead list. Provide exactly one of the three.",
     method: "POST",
     pathTemplate: "/api/organisations/{organisationId}/campaigns/{campaignId}/enrollments",
     requiredScope: "campaigns:manage",
     inputShape: {
       campaignId: z.string().min(1),
-      leadIds: z.array(z.string().min(1)).min(1).optional().describe("Explicit lead IDs — provide exactly one of leadIds, leadEmails, or leadListId"),
-      leadEmails: z.array(z.string().email()).min(1).max(5000).optional().describe("Lead email addresses, resolved to ids server-side — provide exactly one of leadIds, leadEmails, or leadListId. The natural choice when you don't already have a leadId (see find_lead)."),
-      leadListId: z.string().min(1).optional().describe("Enroll every lead in this lead list — provide exactly one of leadIds, leadEmails, or leadListId"),
+      leadIds: z
+        .array(z.string().min(1))
+        .min(1)
+        .optional()
+        .describe("Explicit lead IDs — provide exactly one of leadIds, leadEmails, or leadListId"),
+      leadEmails: z
+        .array(z.string().email())
+        .min(1)
+        .max(5000)
+        .optional()
+        .describe(
+          "Lead email addresses, resolved to ids server-side — provide exactly one of leadIds, leadEmails, or leadListId. The natural choice when you don't already have a leadId (see find_lead).",
+        ),
+      leadListId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          "Enroll every lead in this lead list — provide exactly one of leadIds, leadEmails, or leadListId",
+        ),
     },
     // Not idempotent: it creates enrollment rows, and a second call reports
     // the same leads under alreadyEnrolled rather than repeating the work.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       enrolled: z.number().optional(),
       alreadyEnrolled: z.number().optional(),
@@ -299,7 +359,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     },
     // Not destructive: the enrollment is marked EXITED, not deleted — the
     // row, its reason and its history all survive.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { ...enrollmentOutputFields },
   },
   {
@@ -311,11 +376,18 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     requiredScope: "campaigns:manage",
     inputShape: {
       campaignId: z.string().min(1),
-      inboxIds: z.array(z.string().min(1)).describe("The full replacement sending-inbox pool for this campaign"),
+      inboxIds: z
+        .array(z.string().min(1))
+        .describe("The full replacement sending-inbox pool for this campaign"),
     },
     // A whole-pool replacement: sending the same inboxIds again leaves the
     // same pool. Nothing but the join rows is touched, so not destructive.
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: { pool: z.array(campaignInboxShape).optional() },
   },
   {
@@ -341,7 +413,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     // Destructive because it delivers real email to real prospects: there is
     // no unsend, and the send is visible outside the product the instant it
     // lands. Not idempotent either — each call drains whatever is due now.
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       considered: z.number().optional(),
       sent: z.number().optional(),
@@ -365,7 +442,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     // Destructive for the same reason as force_send_campaign_now: it puts
     // real mail in a real mailbox and cannot be unsent. It touches no
     // prospect data, but the outward effect is still irreversible.
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: {
       subject: z.string().optional(),
       body: z.string().optional(),

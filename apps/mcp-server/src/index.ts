@@ -46,12 +46,17 @@ app.get("/.well-known/oauth-protected-resource", (_req, res) => {
 // the real authorization server so such clients work anyway.
 const authServerUrl = env.APP_URL.replace(/\/$/, "");
 
-async function proxyToAuthServer(path: string, req: express.Request, res: express.Response): Promise<void> {
+async function proxyToAuthServer(
+  path: string,
+  req: express.Request,
+  res: express.Response,
+): Promise<void> {
   try {
     const upstream = await fetch(`${authServerUrl}${path}`, {
       method: req.method,
       headers: { "Content-Type": "application/json" },
-      body: req.method === "GET" || req.method === "HEAD" ? undefined : JSON.stringify(req.body ?? {}),
+      body:
+        req.method === "GET" || req.method === "HEAD" ? undefined : JSON.stringify(req.body ?? {}),
     });
     const text = await upstream.text();
     res.status(upstream.status);
@@ -72,31 +77,36 @@ app.get("/authorize", (req, res) => {
   res.redirect(`${authServerUrl}/oauth/authorize${queryString ? `?${queryString}` : ""}`);
 });
 
-app.post("/mcp", mcpAuthMiddleware(), mcpRateLimitMiddleware(), async (req: AuthenticatedRequest, res) => {
-  const actor = req.actor;
-  if (!actor) {
-    // mcpAuthMiddleware already responded in this case; this is unreachable.
-    return;
-  }
-
-  const server = createMcpServer(actor);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-
-  res.on("close", () => {
-    void transport.close();
-    void server.close();
-  });
-
-  try {
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (error) {
-    logger.error("failed to handle MCP request", { error, userId: actor.userId });
-    if (!res.headersSent) {
-      res.status(500).json({ error: "internal_error" });
+app.post(
+  "/mcp",
+  mcpAuthMiddleware(),
+  mcpRateLimitMiddleware(),
+  async (req: AuthenticatedRequest, res) => {
+    const actor = req.actor;
+    if (!actor) {
+      // mcpAuthMiddleware already responded in this case; this is unreachable.
+      return;
     }
-  }
-});
+
+    const server = createMcpServer(actor);
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+
+    res.on("close", () => {
+      void transport.close();
+      void server.close();
+    });
+
+    try {
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      logger.error("failed to handle MCP request", { error, userId: actor.userId });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  },
+);
 
 const httpServer = app.listen(env.MCP_SERVER_PORT, () => {
   logger.info("mcp-server started", {
