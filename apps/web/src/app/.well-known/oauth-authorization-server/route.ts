@@ -1,5 +1,5 @@
 import { loadEnv } from "@mail-orbyt/config";
-import { ALL_SCOPES } from "@mail-orbyt/mcp-oauth";
+import { ALL_SCOPES, TOKEN_EXCHANGE_GRANT_TYPE } from "@mail-orbyt/mcp-oauth";
 import { NextResponse } from "next/server";
 
 /**
@@ -17,9 +17,11 @@ export async function GET(): Promise<NextResponse> {
     token_endpoint: `${issuer}/api/oauth/token`,
     registration_endpoint: `${issuer}/api/oauth/register`,
     revocation_endpoint: `${issuer}/api/oauth/revoke`,
+    introspection_endpoint: `${issuer}/api/oauth/introspect`,
+    introspection_endpoint_auth_methods_supported: ["client_secret_basic"],
     scopes_supported: ALL_SCOPES,
     response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
+    grant_types_supported: ["authorization_code", "refresh_token", TOKEN_EXCHANGE_GRANT_TYPE],
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none"],
   });
