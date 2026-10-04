@@ -75,6 +75,7 @@ model User {
   mcpAuthorizationCodes   McpAuthorizationCode[]
   mcpAccessTokens         McpAccessToken[]
   mcpRefreshTokens        McpRefreshToken[]
+  mcpPlatformGrants       McpPlatformGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -238,6 +239,7 @@ model Organisation {
   mcpAuthorizationCodes McpAuthorizationCode[]
   mcpAccessTokens       McpAccessToken[]
   mcpRefreshTokens      McpRefreshToken[]
+  mcpPlatformGrants     McpPlatformGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -362,6 +364,7 @@ model McpOAuthClient {
   authorizationCodes McpAuthorizationCode[]
   accessTokens       McpAccessToken[]
   refreshTokens      McpRefreshToken[]
+  platformGrants     McpPlatformGrant[]
 
   createdAt DateTime @default(now())
 }
@@ -381,6 +384,10 @@ model McpAuthorizationCode {
   codeChallengeMethod String
   expiresAt           DateTime
   consumedAt          DateTime?
+  /// RFC 8707 audience the token minted from this code is bound to.
+  resource            String    @default("urn:orbyt:mail-orbyt-mcp-server")
+  /// Set when this code was issued under a platform grant (gateway flow).
+  platformGrantId     String?
 
   client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -398,18 +405,25 @@ model McpAuthorizationCode {
 /// one organisation — a token never grants cross-organisation access even
 /// if the user belongs to several.
 model McpAccessToken {
-  id             String    @id @default(cuid())
-  tokenHash      String    @unique
-  clientId       String
-  userId         String
-  organisationId String
-  scope          String
-  expiresAt      DateTime
-  revokedAt      DateTime?
+  id              String    @id @default(cuid())
+  tokenHash       String    @unique
+  clientId        String
+  userId          String
+  organisationId  String
+  scope           String
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  /// RFC 8707 audience (`aud`) this token was minted for. A resource server
+  /// must reject any token whose resource is not its own URI.
+  resource        String    @default("urn:orbyt:mail-orbyt-mcp-server")
+  /// The platform grant this token was issued/exchanged under, if any.
+  /// Revoking the grant revokes every token carrying its id.
+  platformGrantId String?
 
-  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation  Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  platformGrant McpPlatformGrant? @relation(fields: [platformGrantId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
@@ -432,16 +446,69 @@ model McpRefreshToken {
   expiresAt           DateTime
   revokedAt           DateTime?
   replacedByTokenHash String?
+  resource            String    @default("urn:orbyt:mail-orbyt-mcp-server")
+  platformGrantId     String?
 
-  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation  Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  platformGrant McpPlatformGrant? @relation(fields: [platformGrantId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@index([clientId])
   @@index([userId])
   @@index([organisationId])
+}
+
+/// The single per-(user, client) consent record for the Orbyt platform
+/// (MCP gateway). Created once when the user approves the platform-level
+/// consent screen; while unrevoked, later authorize requests from the same
+/// client skip consent. Revoking it cascades to every token derived under it.
+model McpPlatformGrant {
+  id             String    @id @default(cuid())
+  userId         String
+  organisationId String
+  clientId       String
+  scope          String
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation  Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  accessTokens  McpAccessToken[]
+  refreshTokens McpRefreshToken[]
+
+  @@index([userId, clientId])
+  @@index([organisationId])
+  @@index([clientId])
+}
+
+/// Registry of Orbyt MCP backends (and the gateway itself) that may appear
+/// as an RFC 8707 `resource`/audience. `kind`: "gateway" (the audience of
+/// platform tokens; never a token-exchange target), "native-local" or
+/// "native-introspected". scopeMapping is `{ "allowedScopes"?: string[] }`
+/// — when present, exchanged tokens for this resource are narrowed to it.
+model McpResource {
+  id           String   @id @default(cuid())
+  resourceUri  String   @unique
+  name         String
+  kind         String
+  scopeMapping Json     @default("{}")
+  createdAt    DateTime @default(now())
+}
+
+/// Confidential client used by resource servers (the gateway, lead_orbyt)
+/// to call POST /api/oauth/introspect via HTTP Basic. Only the SHA-256 hash
+/// of the (high-entropy, random) secret is stored.
+model McpIntrospectionClient {
+  id         String    @id @default(cuid())
+  clientId   String    @unique
+  clientName String
+  secretHash String
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
 }
 
 // ---------------------------------------------------------------------------
