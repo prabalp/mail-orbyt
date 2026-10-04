@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "@mail-orbyt/database";
-import { verifyAccessToken } from "@mail-orbyt/mcp-oauth";
+import { MAIL_ORBYT_MCP_RESOURCE_URI, verifyAccessToken } from "@mail-orbyt/mcp-oauth";
 import { resourceUrl } from "./resource-url.js";
 
 export interface AuthenticatedActor {
@@ -31,7 +31,9 @@ function bearerTokenFrom(req: Request): string | null {
 export function mcpAuthMiddleware() {
   return async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     const rawToken = bearerTokenFrom(req);
-    const verified = rawToken ? await verifyAccessToken(prisma, rawToken) : null;
+    const verified = rawToken
+      ? await verifyAccessToken(prisma, rawToken, MAIL_ORBYT_MCP_RESOURCE_URI)
+      : null;
 
     if (!verified || !rawToken) {
       // Must point at THIS resource server's own protected-resource
