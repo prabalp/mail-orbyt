@@ -9,8 +9,14 @@ describe("scopesGrantedByRole", () => {
     expect(scopes).toContain("profile");
   });
 
-  it("grants no permission scopes to VIEWER beyond profile", () => {
-    expect(scopesGrantedByRole("VIEWER")).toEqual(["profile"]);
+  it("grants VIEWER only profile and leads:read", () => {
+    expect(scopesGrantedByRole("VIEWER")).toEqual(["profile", "leads:read"]);
+  });
+
+  it("grants leads:read alongside leads:manage to MEMBER", () => {
+    const scopes = scopesGrantedByRole("MEMBER");
+    expect(scopes).toContain("leads:read");
+    expect(scopes).toContain("leads:manage");
   });
 });
 
@@ -29,5 +35,10 @@ describe("scopeIncludes", () => {
   it("checks membership within a space-separated scope string", () => {
     expect(scopeIncludes("profile leads:manage", "leads:manage")).toBe(true);
     expect(scopeIncludes("profile leads:manage", "campaigns:manage")).toBe(false);
+  });
+
+  it("treats leads:manage as implying leads:read, but not the reverse", () => {
+    expect(scopeIncludes("profile leads:manage", "leads:read")).toBe(true);
+    expect(scopeIncludes("profile leads:read", "leads:manage")).toBe(false);
   });
 });

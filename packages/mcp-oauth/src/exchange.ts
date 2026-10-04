@@ -16,8 +16,20 @@ type ExchangePrisma = Pick<
   | "mcpAccessToken"
   | "mcpRefreshToken"
   | "organisationMembership"
+  | "mcpPlatformGrant"
   | "$transaction"
 >;
+
+/** A revoked platform grant must stop minting new tokens, even from a code/refresh token that predates the revocation. */
+async function assertPlatformGrantActive(
+  prisma: Pick<PrismaClient, "mcpPlatformGrant">,
+  platformGrantId: string,
+): Promise<void> {
+  const grant = await prisma.mcpPlatformGrant.findUnique({ where: { id: platformGrantId } });
+  if (!grant || grant.revokedAt) {
+    throw new OAuthGrantError("invalid_grant", "The platform grant has been revoked");
+  }
+}
 
 async function resolveClientOrThrow(
   prisma: Pick<PrismaClient, "mcpOAuthClient">,
@@ -74,6 +86,8 @@ export async function exchangeAuthorizationCode(
     throw new OAuthGrantError("invalid_grant", "PKCE verification failed");
   }
 
+  if (code.platformGrantId) await assertPlatformGrantActive(prisma, code.platformGrantId);
+
   const scope = await currentGrantableScope(prisma, {
     userId: code.userId,
     organisationId: code.organisationId,
@@ -90,6 +104,8 @@ export async function exchangeAuthorizationCode(
       userId: code.userId,
       organisationId: code.organisationId,
       scope,
+      resource: code.resource,
+      platformGrantId: code.platformGrantId,
       accessTokenTtlMs: params.accessTokenTtlMs,
       refreshTokenTtlMs: params.refreshTokenTtlMs,
     });
@@ -118,6 +134,10 @@ export async function refreshAccessToken(
     throw new OAuthGrantError("invalid_grant", "Refresh token expired or revoked");
   }
 
+  if (refreshToken.platformGrantId) {
+    await assertPlatformGrantActive(prisma, refreshToken.platformGrantId);
+  }
+
   const scope = await currentGrantableScope(prisma, {
     userId: refreshToken.userId,
     organisationId: refreshToken.organisationId,
@@ -130,6 +150,8 @@ export async function refreshAccessToken(
       userId: refreshToken.userId,
       organisationId: refreshToken.organisationId,
       scope,
+      resource: refreshToken.resource,
+      platformGrantId: refreshToken.platformGrantId,
       accessTokenTtlMs: params.accessTokenTtlMs,
       refreshTokenTtlMs: params.refreshTokenTtlMs,
     });

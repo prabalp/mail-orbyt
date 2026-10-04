@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@mail-orbyt/database";
 import { hashToken } from "@mail-orbyt/authentication";
+import { revokePlatformGrants } from "./platform-grants";
 
 export async function revokeToken(
   prisma: Pick<PrismaClient, "mcpAccessToken" | "mcpRefreshToken">,
@@ -47,11 +48,21 @@ export async function listActiveConnections(
 }
 
 export async function revokeConnection(
-  prisma: Pick<PrismaClient, "mcpAccessToken" | "mcpRefreshToken" | "mcpOAuthClient">,
+  prisma: Pick<
+    PrismaClient,
+    "mcpAccessToken" | "mcpRefreshToken" | "mcpOAuthClient" | "mcpPlatformGrant"
+  >,
   params: { userId: string; clientId: string; organisationId: string },
 ): Promise<void> {
   const client = await prisma.mcpOAuthClient.findUnique({ where: { clientId: params.clientId } });
   if (!client) return;
+
+  // Cascade: revoking the platform grant revokes every resource token exchanged under it.
+  await revokePlatformGrants(prisma, {
+    userId: params.userId,
+    clientRowId: client.id,
+    organisationId: params.organisationId,
+  });
 
   const now = new Date();
   const scope = {

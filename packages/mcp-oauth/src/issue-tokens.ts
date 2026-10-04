@@ -17,6 +17,9 @@ export interface IssueTokenPairParams {
   scope: string;
   accessTokenTtlMs?: number;
   refreshTokenTtlMs?: number;
+  /** RFC 8707 audience; omitted means the column default (mail-orbyt's mcp-server). */
+  resource?: string;
+  platformGrantId?: string | null;
 }
 
 /** Shared by both the authorization-code exchange and the refresh grant — the only place access/refresh token rows are created. */
@@ -37,6 +40,8 @@ export async function issueTokenPair(
       organisationId: params.organisationId,
       scope: params.scope,
       expiresAt: tokenExpiryDate(accessTtlMs),
+      ...(params.resource ? { resource: params.resource } : {}),
+      platformGrantId: params.platformGrantId ?? null,
     },
   });
 
@@ -48,6 +53,8 @@ export async function issueTokenPair(
       organisationId: params.organisationId,
       scope: params.scope,
       expiresAt: tokenExpiryDate(refreshTtlMs),
+      ...(params.resource ? { resource: params.resource } : {}),
+      platformGrantId: params.platformGrantId ?? null,
     },
   });
 

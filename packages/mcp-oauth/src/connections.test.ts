@@ -67,6 +67,10 @@ describe("revokeConnection", () => {
       },
       mcpAccessToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       mcpRefreshToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      mcpPlatformGrant: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn(),
+      },
     };
 
     await revokeConnection(prisma, {
@@ -96,6 +100,7 @@ describe("revokeConnection", () => {
       mcpOAuthClient: { findUnique: vi.fn().mockResolvedValue(null) },
       mcpAccessToken: { updateMany: vi.fn() },
       mcpRefreshToken: { updateMany: vi.fn() },
+      mcpPlatformGrant: { findMany: vi.fn(), updateMany: vi.fn() },
     };
 
     await revokeConnection(prisma, {
@@ -105,5 +110,39 @@ describe("revokeConnection", () => {
     });
 
     expect(prisma.mcpAccessToken.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("cascades: revokes the platform grant and every token derived under it", async () => {
+    const prisma = {
+      mcpOAuthClient: {
+        findUnique: vi.fn().mockResolvedValue({ id: "client-row-1", clientId: "mcp_abc" }),
+      },
+      mcpAccessToken: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      mcpRefreshToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      mcpPlatformGrant: {
+        findMany: vi.fn().mockResolvedValue([{ id: "grant-1" }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+
+    await revokeConnection(prisma, {
+      userId: "user-1",
+      clientId: "mcp_abc",
+      organisationId: "org-1",
+    });
+
+    expect(prisma.mcpPlatformGrant.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["grant-1"] } },
+      data: { revokedAt: expect.any(Date) },
+    });
+    const derived = { platformGrantId: { in: ["grant-1"] }, revokedAt: null };
+    expect(prisma.mcpAccessToken.updateMany).toHaveBeenCalledWith({
+      where: derived,
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(prisma.mcpRefreshToken.updateMany).toHaveBeenCalledWith({
+      where: derived,
+      data: { revokedAt: expect.any(Date) },
+    });
   });
 });
