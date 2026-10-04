@@ -3,8 +3,15 @@
 import { redirect } from "next/navigation";
 import { requireOrganisationMembership } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
-import { createAuthorizationCode, intersectScopes } from "@mail-orbyt/mcp-oauth";
+import {
+  createAuthorizationCode,
+  createPlatformGrant,
+  intersectScopes,
+  RESOURCE_KIND_GATEWAY,
+  resolveAuthorizeResource,
+} from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";
+import { mcpServerPublicUrl } from "@/lib/mcp-resource";
 
 function appendCallback(
   url: URL,
@@ -34,6 +41,7 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
   const codeChallenge = String(formData.get("codeChallenge") ?? "");
   const codeChallengeMethod = String(formData.get("codeChallengeMethod") ?? "");
   const organisationId = String(formData.get("organisationId") ?? "");
+  const requestedResource = String(formData.get("resource") ?? "") || null;
 
   const client = await prisma.mcpOAuthClient.findUnique({ where: { clientId } });
   if (!client || !client.redirectUris.includes(redirectUri)) {
@@ -48,7 +56,29 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
     redirect("/oauth/authorize/error");
   }
 
+  // RFC 8707: re-resolve server-side; an unregistered resource never gets a code.
+  const resource = await resolveAuthorizeResource(prisma, {
+    requested: requestedResource,
+    mcpServerUrl: mcpServerPublicUrl(),
+  });
+  if (!resource) {
+    redirect("/oauth/authorize/error");
+  }
+
   const scope = intersectScopes(requestedScope, membership.role);
+
+  // The one platform-level consent: record it so later authorize requests
+  // from this client skip the screen, and tie the code (hence the platform
+  // token and everything exchanged from it) to the grant for cascade revoke.
+  const platformGrant =
+    resource.kind === RESOURCE_KIND_GATEWAY
+      ? await createPlatformGrant(prisma, {
+          userId: session.user.id,
+          organisationId,
+          clientRowId: client.id,
+          scope,
+        })
+      : null;
 
   const { rawCode } = await createAuthorizationCode(prisma, {
     clientRowId: client.id,
@@ -58,6 +88,8 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
     redirectUri,
     codeChallenge,
     codeChallengeMethod,
+    resource: resource.resourceUri,
+    platformGrantId: platformGrant?.id,
   });
 
   redirect(appendCallback(new URL(redirectUri), { code: rawCode, state }));

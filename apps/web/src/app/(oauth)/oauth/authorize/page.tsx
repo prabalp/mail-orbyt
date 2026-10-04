@@ -1,6 +1,15 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@mail-orbyt/database";
+import {
+  createAuthorizationCode,
+  findActivePlatformGrant,
+  intersectScopes,
+  parseScope,
+  RESOURCE_KIND_GATEWAY,
+  resolveAuthorizeResource,
+} from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";
+import { mcpServerPublicUrl } from "@/lib/mcp-resource";
 import { AuthorizeClient } from "./authorize-client";
 import { AuthorizeError } from "./authorize-error";
 
@@ -53,6 +62,16 @@ export default async function AuthorizePage({
     return <AuthorizeError message="Unknown client or redirect URI." />;
   }
 
+  const requestedResource = stringParam(params, "resource");
+  const resource = await resolveAuthorizeResource(prisma, {
+    requested: requestedResource,
+    mcpServerUrl: mcpServerPublicUrl(),
+  });
+  if (!resource) {
+    return <AuthorizeError message="The requested resource is not recognised (invalid_target)." />;
+  }
+  const isPlatformFlow = resource.kind === RESOURCE_KIND_GATEWAY;
+
   const session = await auth();
   if (!session?.user?.id || session.error) {
     const callbackUrl = `/oauth/authorize?${new URLSearchParams(
@@ -71,6 +90,39 @@ export default async function AuthorizePage({
 
   if (memberships.length === 0) redirect("/onboarding");
 
+  // One consent, ever: an unrevoked platform grant for (user, client) means
+  // the user already approved — issue the code straight away, no screen.
+  if (isPlatformFlow) {
+    const grant = await findActivePlatformGrant(prisma, {
+      userId: session.user.id,
+      clientRowId: client.id,
+    });
+    const grantMembership = grant
+      ? memberships.find((m) => m.organisationId === grant.organisationId)
+      : undefined;
+    if (grant && grantMembership) {
+      const grantScopes = new Set(parseScope(grant.scope));
+      const narrowed = parseScope(scope)
+        .filter((s) => grantScopes.has(s))
+        .join(" ");
+      const { rawCode } = await createAuthorizationCode(prisma, {
+        clientRowId: client.id,
+        userId: session.user.id,
+        organisationId: grant.organisationId,
+        scope: intersectScopes(narrowed, grantMembership.role),
+        redirectUri,
+        codeChallenge,
+        codeChallengeMethod,
+        resource: resource.resourceUri,
+        platformGrantId: grant.id,
+      });
+      const callback = new URL(redirectUri);
+      callback.searchParams.set("code", rawCode);
+      if (state) callback.searchParams.set("state", state);
+      redirect(callback.toString());
+    }
+  }
+
   return (
     <AuthorizeClient
       clientId={clientId}
@@ -80,6 +132,8 @@ export default async function AuthorizePage({
       state={state}
       codeChallenge={codeChallenge}
       codeChallengeMethod={codeChallengeMethod}
+      resource={isPlatformFlow ? requestedResource : null}
+      platformConsent={isPlatformFlow}
       organisations={memberships.map((m) => ({
         id: m.organisationId,
         name: m.organisation.name,
