@@ -1075,13 +1075,6 @@ export default function CampaignDetailPage(): React.ReactElement {
                 ? "Each step is a template you write, with {{variables}} like {{firstName}}."
                 : "Each step sends the lead's uploaded email with the matching sequence number."}
           </p>
-          {canChangeType ? (
-            <div className="mb-4">
-              <Button variant="outlined" onClick={() => handleChangeType("JOURNEY")}>
-                Switch to a journey (branching)
-              </Button>
-            </div>
-          ) : null}
           {campaign.steps.length === 0 ? (
             <EmptyState
               icon={<ListOrdered />}
