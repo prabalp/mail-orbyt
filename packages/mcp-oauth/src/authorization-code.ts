@@ -11,8 +11,9 @@ export interface CreateAuthorizationCodeParams {
   redirectUri: string;
   codeChallenge: string;
   codeChallengeMethod: string;
-  /** RFC 8707 resource indicator the client requested — see constants.ts for the default used when a client omits it. */
-  resource: string;
+  /** RFC 8707 audience the resulting token is bound to; omitted means the column default (mail-orbyt's mcp-server). */
+  resource?: string;
+  platformGrantId?: string;
 }
 
 /**
@@ -37,7 +38,8 @@ export async function createAuthorizationCode(
       redirectUri: params.redirectUri,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
-      resource: params.resource,
+      ...(params.resource ? { resource: params.resource } : {}),
+      platformGrantId: params.platformGrantId ?? null,
       expiresAt: tokenExpiryDate(AUTHORIZATION_CODE_TTL_MS),
     },
   });

@@ -2,9 +2,12 @@ export {
   AUTHORIZATION_CODE_TTL_MS,
   DEFAULT_ACCESS_TOKEN_TTL_MS,
   DEFAULT_REFRESH_TOKEN_TTL_MS,
-  RESOURCE_SCOPED_ACCESS_TOKEN_TTL_MS,
+  EXCHANGED_ACCESS_TOKEN_TTL_MS,
   MAIL_ORBYT_MCP_RESOURCE_URI,
   LEAD_ORBYT_MCP_RESOURCE_URI,
+  TOKEN_EXCHANGE_GRANT_TYPE,
+  ACCESS_TOKEN_TYPE,
+  RESOURCE_KIND_GATEWAY,
 } from "./constants";
 export { OAuthGrantError } from "./errors";
 export type { Permission } from "@mail-orbyt/authentication";
@@ -15,6 +18,7 @@ export {
   scopesGrantedByRole,
   intersectScopes,
   PROFILE_SCOPE,
+  LEADS_READ_SCOPE,
   ALL_SCOPES,
 } from "./scopes";
 export {
@@ -26,19 +30,10 @@ export { createAuthorizationCode, type CreateAuthorizationCodeParams } from "./a
 export {
   exchangeAuthorizationCode,
   refreshAccessToken,
-  exchangeTokenForResource,
   type ExchangeAuthorizationCodeParams,
   type RefreshAccessTokenParams,
-  type ExchangeTokenForResourceParams,
 } from "./exchange";
-export {
-  issueTokenPair,
-  issueResourceScopedAccessToken,
-  type TokenPairResult,
-  type IssueTokenPairParams,
-  type ResourceScopedTokenResult,
-  type IssueResourceScopedAccessTokenParams,
-} from "./issue-tokens";
+export { issueTokenPair, type TokenPairResult, type IssueTokenPairParams } from "./issue-tokens";
 export { verifyAccessToken, type VerifiedAccessToken } from "./verify";
 export {
   revokeToken,
@@ -47,17 +42,27 @@ export {
   type McpConnectionSummary,
 } from "./connections";
 export {
+  findResource,
+  ensureMcpResources,
+  resolveAuthorizeResource,
+  applyResourceScopeMapping,
+  allowedScopesFromMapping,
+  type ResolvedResource,
+} from "./resources";
+export {
   findActivePlatformGrant,
-  completeAuthorization,
-  ensurePlatformGrantId,
-  revokePlatformGrant,
-  type ActivePlatformGrant,
-  type CompleteAuthorizationParams,
+  createPlatformGrant,
+  revokePlatformGrants,
 } from "./platform-grants";
-export { findKnownResource, listKnownResources, type KnownResource } from "./resources";
+export {
+  exchangeTokenForResource,
+  type TokenExchangeParams,
+  type TokenExchangeResult,
+} from "./token-exchange";
+export { introspectAccessToken, type IntrospectionResult } from "./introspect";
 export {
   createIntrospectionClient,
-  verifyIntrospectionClient,
-  type CreateIntrospectionClientResult,
-} from "./introspection-clients";
-export { introspectToken, type IntrospectionResult } from "./introspection";
+  authenticateIntrospectionClient,
+  parseBasicAuth,
+  type CreatedIntrospectionClient,
+} from "./introspection-client";

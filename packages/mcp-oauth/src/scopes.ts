@@ -13,15 +13,19 @@ const ALL_PERMISSION_SCOPES: Permission[] = [
   "research:review",
   "conversations:review",
   "analytics:view",
-  "social:manage",
-  "social:review",
-  "social:kill_switch",
 ];
 
 export const PROFILE_SCOPE = "profile";
 
+/**
+ * OAuth-only read scope (not a Permission): read-only access to leads, used
+ * by lead_orbyt's tool gating. Every org member holds it; `leads:manage`
+ * implies it (see scopeIncludes).
+ */
+export const LEADS_READ_SCOPE = "leads:read";
+
 /** Every scope the authorization server can ever grant — used to advertise `scopes_supported` in the OAuth metadata document. */
-export const ALL_SCOPES: string[] = [PROFILE_SCOPE, ...ALL_PERMISSION_SCOPES];
+export const ALL_SCOPES: string[] = [PROFILE_SCOPE, LEADS_READ_SCOPE, ...ALL_PERMISSION_SCOPES];
 
 export function parseScope(scope: string): string[] {
   return scope.split(" ").filter(Boolean);
@@ -30,7 +34,7 @@ export function parseScope(scope: string): string[] {
 /** The full set of scopes a given role is entitled to grant, regardless of what a client requests. */
 export function scopesGrantedByRole(role: OrganisationRole): string[] {
   const granted = ALL_PERMISSION_SCOPES.filter((permission) => hasPermission(role, permission));
-  return [PROFILE_SCOPE, ...granted];
+  return [PROFILE_SCOPE, LEADS_READ_SCOPE, ...granted];
 }
 
 /** Intersects requested scopes against what the role actually grants — never returns a scope the user doesn't hold. */
@@ -41,6 +45,11 @@ export function intersectScopes(requestedScope: string, role: OrganisationRole):
     .join(" ");
 }
 
-export function scopeIncludes(scope: string, required: Permission | typeof PROFILE_SCOPE): boolean {
-  return parseScope(scope).includes(required);
+export function scopeIncludes(
+  scope: string,
+  required: Permission | typeof PROFILE_SCOPE | typeof LEADS_READ_SCOPE,
+): boolean {
+  const held = parseScope(scope);
+  if (required === LEADS_READ_SCOPE && held.includes("leads:manage")) return true;
+  return held.includes(required);
 }

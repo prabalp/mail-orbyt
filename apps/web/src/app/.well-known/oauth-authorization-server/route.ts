@@ -1,5 +1,5 @@
 import { loadEnv } from "@mail-orbyt/config";
-import { ALL_SCOPES } from "@mail-orbyt/mcp-oauth";
+import { ALL_SCOPES, TOKEN_EXCHANGE_GRANT_TYPE } from "@mail-orbyt/mcp-oauth";
 import { NextResponse } from "next/server";
 
 /**
@@ -17,22 +17,12 @@ export async function GET(): Promise<NextResponse> {
     token_endpoint: `${issuer}/api/oauth/token`,
     registration_endpoint: `${issuer}/api/oauth/register`,
     revocation_endpoint: `${issuer}/api/oauth/revoke`,
-    // Not exposed for public/PKCE clients to call directly — only a
-    // registered confidential client (see introspection-clients.ts) can
-    // authenticate against it. Still advertised here per RFC 7662/8414.
     introspection_endpoint: `${issuer}/api/oauth/introspect`,
+    introspection_endpoint_auth_methods_supported: ["client_secret_basic"],
     scopes_supported: ALL_SCOPES,
     response_types_supported: ["code"],
-    grant_types_supported: [
-      "authorization_code",
-      "refresh_token",
-      "urn:ietf:params:oauth:grant-type:token-exchange",
-    ],
+    grant_types_supported: ["authorization_code", "refresh_token", TOKEN_EXCHANGE_GRANT_TYPE],
     code_challenge_methods_supported: ["S256"],
-    // Public/PKCE clients use "none" at the authorize/token endpoints, same
-    // as before; confidential introspection callers authenticate separately
-    // via HTTP Basic auth directly against introspection_endpoint.
     token_endpoint_auth_methods_supported: ["none"],
-    resource_indicators_supported: true,
   });
 }

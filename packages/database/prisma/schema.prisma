@@ -368,16 +368,10 @@ model AuditEvent {
 /// claude.ai's remote MCP connector). Public client only: no client secret
 /// is stored, since the authorization-code exchange is secured by PKCE.
 model McpOAuthClient {
-  id               String   @id @default(cuid())
-  clientId         String   @unique
-  clientName       String
-  redirectUris     String[]
-  /// Set only for confidential clients used purely for server-to-server
-  /// calls that never go through the browser redirect flow (currently:
-  /// RFC 7662 introspection callers like lead_orbyt's MCP server). Null for
-  /// every ordinary public/PKCE client created via registerClient() —
-  /// see introspection-clients.ts, ARCHITECTURE.md §6/§7.
-  clientSecretHash String?
+  id           String   @id @default(cuid())
+  clientId     String   @unique
+  clientName   String
+  redirectUris String[]
 
   authorizationCodes McpAuthorizationCode[]
   accessTokens       McpAccessToken[]
@@ -400,13 +394,12 @@ model McpAuthorizationCode {
   redirectUri         String
   codeChallenge       String
   codeChallengeMethod String
-  /// RFC 8707 resource indicator the client requested at /oauth/authorize —
-  /// carried through to the McpAccessToken/McpRefreshToken minted from this
-  /// code. Defaults to mail-orbyt's own MCP resource URI when a client
-  /// omits it (pre-Gateway clients). See ARCHITECTURE.md §6.
-  resource            String
   expiresAt           DateTime
   consumedAt          DateTime?
+  /// RFC 8707 audience the token minted from this code is bound to.
+  resource            String    @default("urn:orbyt:mail-orbyt-mcp-server")
+  /// Set when this code was issued under a platform grant (gateway flow).
+  platformGrantId     String?
 
   client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -430,18 +423,14 @@ model McpAccessToken {
   userId          String
   organisationId  String
   scope           String
-  /// RFC 8707 audience this token is valid for — a resource server must
-  /// reject a token whose resource isn't itself. Either the client's own
-  /// resource (the initial "platform" token minted at /oauth/authorize) or
-  /// a backend resource URI minted via the token-exchange grant
-  /// (ARCHITECTURE.md §4.2/§6/§7) — never both at once.
-  resource        String
-  /// Null only for tokens minted before this migration (backfilled to
-  /// mail-orbyt's own resource URI with no grant to point at). Every token
-  /// minted from here on always has one — see platform-grants.ts.
-  platformGrantId String?
   expiresAt       DateTime
   revokedAt       DateTime?
+  /// RFC 8707 audience (`aud`) this token was minted for. A resource server
+  /// must reject any token whose resource is not its own URI.
+  resource        String    @default("urn:orbyt:mail-orbyt-mcp-server")
+  /// The platform grant this token was issued/exchanged under, if any.
+  /// Revoking the grant revokes every token carrying its id.
+  platformGrantId String?
 
   client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -454,16 +443,11 @@ model McpAccessToken {
   @@index([userId])
   @@index([organisationId])
   @@index([expiresAt])
-  @@index([platformGrantId])
 }
 
 /// Long-lived (~90d), rotated on every use: refreshAccessToken issues a new
 /// row and sets replacedByTokenHash on this one rather than mutating it in
-/// place, so reuse of an already-rotated refresh token is detectable. Only
-/// ever minted alongside the initial platform-token pair — a resource-
-/// scoped token from the token-exchange grant never gets a refresh token of
-/// its own (the Gateway just re-exchanges using the still-valid platform
-/// token instead).
+/// place, so reuse of an already-rotated refresh token is detectable.
 model McpRefreshToken {
   id                  String    @id @default(cuid())
   tokenHash           String    @unique
@@ -471,11 +455,11 @@ model McpRefreshToken {
   userId              String
   organisationId      String
   scope               String
-  resource            String
-  platformGrantId     String?
   expiresAt           DateTime
   revokedAt           DateTime?
   replacedByTokenHash String?
+  resource            String    @default("urn:orbyt:mail-orbyt-mcp-server")
+  platformGrantId     String?
 
   client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -487,64 +471,56 @@ model McpRefreshToken {
   @@index([clientId])
   @@index([userId])
   @@index([organisationId])
-  @@index([platformGrantId])
 }
 
-/// The single per-(user, organisation, client) consent record — recorded
-/// once, the first time a user approves the platform-level consent screen
-/// for a given MCP client. While it stays unrevoked, every subsequent
-/// /oauth/authorize request for the same (user, organisation, client) is
-/// answered silently (no consent render), and every resource-scoped token
-/// exchange (RFC 8693) under it requires no further user interaction —
-/// this is what makes connecting a second/future Orbyt MCP silent.
-/// ARCHITECTURE.md §4.1, §6.
+/// The single per-(user, client) consent record for the Orbyt platform
+/// (MCP gateway). Created once when the user approves the platform-level
+/// consent screen; while unrevoked, later authorize requests from the same
+/// client skip consent. Revoking it cascades to every token derived under it.
 model McpPlatformGrant {
   id             String    @id @default(cuid())
   userId         String
   organisationId String
   clientId       String
-  /// The platform scope as of the most recent approval — re-narrowed
-  /// against the user's current role on every authorize/exchange/refresh,
-  /// same as every other scope in this file (see scopes.ts).
   scope          String
+  createdAt      DateTime  @default(now())
   revokedAt      DateTime?
 
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
+  client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation  Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   accessTokens  McpAccessToken[]
   refreshTokens McpRefreshToken[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, organisationId, clientId])
+  @@index([userId, clientId])
   @@index([organisationId])
   @@index([clientId])
 }
 
-/// Backends the token-exchange grant (RFC 8693) is willing to mint
-/// resource-scoped tokens for — i.e. every downstream Orbyt MCP server, not
-/// including the Gateway's own resource (which a client requests for
-/// itself at /oauth/authorize and is never looked up here). Purely a
-/// registry/allowlist: `resource` on McpAccessToken/McpRefreshToken is a
-/// plain string, not a foreign key into this table, since it also holds
-/// resource values (like the Gateway's own) that never appear here.
-/// ARCHITECTURE.md §5, §6.
-enum McpResourceBackendKind {
-  NATIVE_LOCAL
-  NATIVE_INTROSPECTED
+/// Registry of Orbyt MCP backends (and the gateway itself) that may appear
+/// as an RFC 8707 `resource`/audience. `kind`: "gateway" (the audience of
+/// platform tokens; never a token-exchange target), "native-local" or
+/// "native-introspected". scopeMapping is `{ "allowedScopes"?: string[] }`
+/// — when present, exchanged tokens for this resource are narrowed to it.
+model McpResource {
+  id           String   @id @default(cuid())
+  resourceUri  String   @unique
+  name         String
+  kind         String
+  scopeMapping Json     @default("{}")
+  createdAt    DateTime @default(now())
 }
 
-model McpResource {
-  id          String                 @id @default(cuid())
-  resourceUri String                 @unique
-  displayName String
-  backendKind McpResourceBackendKind
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+/// Confidential client used by resource servers (the gateway, lead_orbyt)
+/// to call POST /api/oauth/introspect via HTTP Basic. Only the SHA-256 hash
+/// of the (high-entropy, random) secret is stored.
+model McpIntrospectionClient {
+  id         String    @id @default(cuid())
+  clientId   String    @unique
+  clientName String
+  secretHash String
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
 }
 
 // ---------------------------------------------------------------------------

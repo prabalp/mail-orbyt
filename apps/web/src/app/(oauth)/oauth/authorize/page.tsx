@@ -1,10 +1,15 @@
 import { redirect } from "next/navigation";
-import { requireOrganisationMembership } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
-import { completeAuthorization, findActivePlatformGrant } from "@mail-orbyt/mcp-oauth";
+import {
+  createAuthorizationCode,
+  findActivePlatformGrant,
+  intersectScopes,
+  parseScope,
+  RESOURCE_KIND_GATEWAY,
+  resolveAuthorizeResource,
+} from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";
-import { getCurrentOrganisation } from "@/lib/current-organisation";
-import { appendCallback } from "./callback-url";
+import { mcpServerPublicUrl } from "@/lib/mcp-resource";
 import { AuthorizeClient } from "./authorize-client";
 import { AuthorizeError } from "./authorize-error";
 
@@ -39,10 +44,6 @@ export default async function AuthorizePage({
   const state = stringParam(params, "state") ?? "";
   const codeChallenge = stringParam(params, "code_challenge");
   const codeChallengeMethod = stringParam(params, "code_challenge_method");
-  // RFC 8707 resource indicator — the audience the resulting token should be
-  // scoped to (typically the Gateway's own resource URI). Omitted entirely
-  // defaults to mail-orbyt's own resource inside completeAuthorization().
-  const resource = stringParam(params, "resource") ?? undefined;
 
   if (
     !clientId ||
@@ -61,6 +62,16 @@ export default async function AuthorizePage({
     return <AuthorizeError message="Unknown client or redirect URI." />;
   }
 
+  const requestedResource = stringParam(params, "resource");
+  const resource = await resolveAuthorizeResource(prisma, {
+    requested: requestedResource,
+    mcpServerUrl: mcpServerPublicUrl(),
+  });
+  if (!resource) {
+    return <AuthorizeError message="The requested resource is not recognised (invalid_target)." />;
+  }
+  const isPlatformFlow = resource.kind === RESOURCE_KIND_GATEWAY;
+
   const session = await auth();
   if (!session?.user?.id || session.error) {
     const callbackUrl = `/oauth/authorize?${new URLSearchParams(
@@ -71,36 +82,45 @@ export default async function AuthorizePage({
     redirect(`/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   }
 
-  const current = await getCurrentOrganisation(session.user.id);
-  if (!current) redirect("/onboarding");
-
-  // Skip the consent render entirely when this (user, organisation, client)
-  // already has an active platform-level grant — this is what makes
-  // reconnecting the same client, or connecting a second/future Orbyt MCP
-  // under it, silent after the first approval. ARCHITECTURE.md §4.1/§6.
-  const existingGrant = await findActivePlatformGrant(prisma, {
-    userId: session.user.id,
-    organisationId: current.organisationId,
-    clientRowId: client.id,
+  const memberships = await prisma.organisationMembership.findMany({
+    where: { userId: session.user.id },
+    include: { organisation: true },
+    orderBy: { createdAt: "asc" },
   });
 
-  if (existingGrant) {
-    const membership = await requireOrganisationMembership(prisma, {
+  if (memberships.length === 0) redirect("/onboarding");
+
+  // One consent, ever: an unrevoked platform grant for (user, client) means
+  // the user already approved — issue the code straight away, no screen.
+  if (isPlatformFlow) {
+    const grant = await findActivePlatformGrant(prisma, {
       userId: session.user.id,
-      organisationId: current.organisationId,
-    });
-    const { rawCode } = await completeAuthorization(prisma, {
       clientRowId: client.id,
-      userId: session.user.id,
-      organisationId: current.organisationId,
-      role: membership.role,
-      requestedScope: scope,
-      redirectUri,
-      codeChallenge,
-      codeChallengeMethod,
-      resource,
     });
-    redirect(appendCallback(new URL(redirectUri), { code: rawCode, state }));
+    const grantMembership = grant
+      ? memberships.find((m) => m.organisationId === grant.organisationId)
+      : undefined;
+    if (grant && grantMembership) {
+      const grantScopes = new Set(parseScope(grant.scope));
+      const narrowed = parseScope(scope)
+        .filter((s) => grantScopes.has(s))
+        .join(" ");
+      const { rawCode } = await createAuthorizationCode(prisma, {
+        clientRowId: client.id,
+        userId: session.user.id,
+        organisationId: grant.organisationId,
+        scope: intersectScopes(narrowed, grantMembership.role),
+        redirectUri,
+        codeChallenge,
+        codeChallengeMethod,
+        resource: resource.resourceUri,
+        platformGrantId: grant.id,
+      });
+      const callback = new URL(redirectUri);
+      callback.searchParams.set("code", rawCode);
+      if (state) callback.searchParams.set("state", state);
+      redirect(callback.toString());
+    }
   }
 
   return (
@@ -112,8 +132,13 @@ export default async function AuthorizePage({
       state={state}
       codeChallenge={codeChallenge}
       codeChallengeMethod={codeChallengeMethod}
-      resource={resource ?? ""}
-      organisations={current.memberships}
+      resource={isPlatformFlow ? requestedResource : null}
+      platformConsent={isPlatformFlow}
+      organisations={memberships.map((m) => ({
+        id: m.organisationId,
+        name: m.organisation.name,
+        role: m.role,
+      }))}
     />
   );
 }

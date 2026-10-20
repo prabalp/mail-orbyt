@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { hashToken } from "@mail-orbyt/authentication";
-import { MAIL_ORBYT_MCP_RESOURCE_URI } from "./constants";
 import { exchangeAuthorizationCode, refreshAccessToken } from "./exchange";
 import { OAuthGrantError } from "./errors";
 
@@ -29,15 +28,10 @@ function fakePrisma(overrides: Record<string, unknown> = {}) {
         .fn()
         .mockResolvedValue({ organisationId: "org-1", userId: "user-1", role: "ADMIN" }),
     },
-    mcpPlatformGrant: {
-      findFirst: vi.fn().mockResolvedValue({ id: "grant-1", scope: "profile leads:manage" }),
-      upsert: vi.fn().mockResolvedValue({ id: "grant-1" }),
-    },
     ...overrides,
   };
   return {
     ...tx,
-    auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
     $transaction: vi
       .fn()
       .mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx)),
@@ -77,8 +71,6 @@ describe("exchangeAuthorizationCode", () => {
     expect(result.refreshToken).toBeTruthy();
     // organisation:delete is not an ADMIN permission — the granted scope narrows to what the role actually holds.
     expect(result.scope).toBe("profile leads:manage");
-    // The fixture code has no `resource` field — falls back to mail-orbyt's own resource URI.
-    expect(result.resource).toBe(MAIL_ORBYT_MCP_RESOURCE_URI);
     expect(prisma.mcpAuthorizationCode.update).toHaveBeenCalledWith({
       where: { id: "code-1" },
       data: { consumedAt: expect.any(Date) },

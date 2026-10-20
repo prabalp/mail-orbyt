@@ -10,11 +10,9 @@ const SCOPE_LABELS: Record<string, string> = {
   "campaigns:manage": "Manage campaigns, sequences, and email drafts",
   "research:review": "Run and review prospect/company research",
   "conversations:review": "View and manage conversations, replies, and meetings",
+  "leads:read": "View leads (read-only)",
   "analytics:view": "View analytics and reporting",
   "inboxes:manage": "Manage connected sending inboxes and signatures",
-  "social:manage": "Connect social accounts and manage the social agent's rules and autonomy settings",
-  "social:review": "Approve or reject social posts the agent escalated for human review",
-  "social:kill_switch": "Stop or resume the social agent's autonomous posting",
   "members:manage": "Manage organisation members and invitations",
   "organisation:delete": "Delete the organisation",
   "organisation:transfer_ownership": "Transfer organisation ownership",
@@ -29,8 +27,10 @@ export interface AuthorizeClientProps {
   state: string;
   codeChallenge: string;
   codeChallengeMethod: string;
-  /** RFC 8707 resource param from the request, if any — threaded through to actions.ts unchanged. */
-  resource: string;
+  /** Raw RFC 8707 resource to round-trip to the approve action (gateway flow only). */
+  resource?: string | null;
+  /** Platform-level wording: one consent covering every connected Orbyt tool. */
+  platformConsent?: boolean;
   organisations: { id: string; name: string; role: string }[];
 }
 
@@ -43,6 +43,7 @@ export function AuthorizeClient({
   codeChallenge,
   codeChallengeMethod,
   resource,
+  platformConsent,
   organisations,
 }: AuthorizeClientProps): React.ReactElement {
   const [organisationId, setOrganisationId] = useState(organisations[0]?.id ?? "");
@@ -52,9 +53,10 @@ export function AuthorizeClient({
     <Card>
       <h1 className="text-xl font-semibold text-on-surface">Connect {clientName}</h1>
       <p className="mt-1 text-sm text-on-surface-variant">
-        {clientName} wants to access your Orbyt account on your behalf — this covers Mail Orbyt and
-        any other connected Orbyt tools. You can revoke this at any time from Settings &rarr; MCP
-        connections.
+        {platformConsent
+          ? `Allow ${clientName} to access your Orbyt account and its connected tools? You will not be asked again for other Orbyt tools.`
+          : `${clientName} wants to access Mail Orbyt on your behalf.`}{" "}
+        You can revoke this at any time from Settings &rarr; MCP connections.
       </p>
 
       <div className="mt-4">
@@ -96,7 +98,7 @@ export function AuthorizeClient({
           <input type="hidden" name="codeChallenge" value={codeChallenge} />
           <input type="hidden" name="codeChallengeMethod" value={codeChallengeMethod} />
           <input type="hidden" name="organisationId" value={organisationId} />
-          <input type="hidden" name="resource" value={resource} />
+          {resource ? <input type="hidden" name="resource" value={resource} /> : null}
           <Button type="submit">Allow</Button>
         </form>
         <form action={denyAuthorization}>

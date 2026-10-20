@@ -6,7 +6,6 @@ export interface VerifiedAccessToken {
   organisationId: string;
   scope: string;
   clientId: string;
-  /** RFC 8707 audience this token is valid for — a resource server must additionally check this equals its own resource URI (ARCHITECTURE.md §4.3); this function only checks the token itself is unrevoked/unexpired, not who it's audienced to. */
   resource: string;
 }
 
@@ -15,10 +14,15 @@ export interface VerifiedAccessToken {
  * apps/mcp-server (the /mcp endpoint itself) call to validate a token —
  * kept in one place so token semantics (hashing, expiry, revocation) never
  * drift between the two call sites.
+ *
+ * `expectedResource` is the calling resource server's own audience URI
+ * (RFC 8707). A token minted for any other audience — e.g. the gateway's
+ * platform token — is rejected, closing the confused-deputy gap.
  */
 export async function verifyAccessToken(
   prisma: Pick<PrismaClient, "mcpAccessToken">,
   rawToken: string,
+  expectedResource: string,
 ): Promise<VerifiedAccessToken | null> {
   if (!rawToken) return null;
 
@@ -26,6 +30,7 @@ export async function verifyAccessToken(
     where: { tokenHash: hashToken(rawToken) },
   });
   if (!token || token.revokedAt || isTokenExpired(token.expiresAt)) return null;
+  if (token.resource !== expectedResource) return null;
 
   return {
     userId: token.userId,

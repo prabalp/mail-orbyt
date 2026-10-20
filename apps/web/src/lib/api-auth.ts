@@ -5,7 +5,12 @@ import {
   type Permission,
 } from "@mail-orbyt/authentication";
 import { prisma, type OrganisationMembership } from "@mail-orbyt/database";
-import { scopeIncludes, verifyAccessToken, PROFILE_SCOPE } from "@mail-orbyt/mcp-oauth";
+import {
+  MAIL_ORBYT_MCP_RESOURCE_URI,
+  scopeIncludes,
+  verifyAccessToken,
+  PROFILE_SCOPE,
+} from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";
 
 function bearerTokenFrom(request: Request): string | null {
@@ -24,7 +29,7 @@ function bearerTokenFrom(request: Request): string | null {
 export async function authenticateUser(request: Request): Promise<string> {
   const rawToken = bearerTokenFrom(request);
   if (rawToken) {
-    const token = await verifyAccessToken(prisma, rawToken);
+    const token = await verifyAccessToken(prisma, rawToken, MAIL_ORBYT_MCP_RESOURCE_URI);
     if (!token) throw new UnauthenticatedError();
     return token.userId;
   }
@@ -60,7 +65,7 @@ export async function authenticateOrganisationRequest(
 
   let userId: string;
   if (rawToken) {
-    const token = await verifyAccessToken(prisma, rawToken);
+    const token = await verifyAccessToken(prisma, rawToken, MAIL_ORBYT_MCP_RESOURCE_URI);
     if (!token) throw new UnauthenticatedError();
     if (token.organisationId !== params.organisationId) {
       throw new ForbiddenError("This connection is not authorized for this organisation");

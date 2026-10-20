@@ -129,6 +129,10 @@ const envSchema = z.object({
   // override explicitly if it's deployed behind a different host/path than
   // that (e.g. one shared reverse-proxied origin with path-based routing).
   MCP_SERVER_URL: z.string().url().optional(),
+  // The Orbyt MCP gateway's RFC 8707 resource URI (the `aud` of platform
+  // tokens). Unset disables the gateway flow: authorize rejects it as an
+  // unknown resource and token exchange fails closed.
+  GATEWAY_RESOURCE_URI: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

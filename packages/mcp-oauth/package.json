@@ -12,15 +12,16 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "create-introspection-client": "tsx scripts/create-introspection-client.ts"
+    "create-introspection-client": "tsx src/scripts/create-introspection-client.ts",
+    "seed-mcp-resources": "tsx src/scripts/seed-mcp-resources.ts"
   },
   "dependencies": {
     "@mail-orbyt/authentication": "workspace:*",
     "@mail-orbyt/database": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "tsx": "^4.19.2"
   }
 }

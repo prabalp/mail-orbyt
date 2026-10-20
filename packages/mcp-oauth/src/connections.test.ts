@@ -5,15 +5,8 @@ import { hashToken } from "@mail-orbyt/authentication";
 describe("revokeToken", () => {
   it("revokes both the access and refresh token sharing a raw value", async () => {
     const prisma = {
-      mcpAccessToken: {
-        findFirst: vi.fn().mockResolvedValue(null),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-      },
-      mcpRefreshToken: {
-        findFirst: vi.fn().mockResolvedValue(null),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-      },
-      auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
+      mcpAccessToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      mcpRefreshToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     };
     const rawToken = "some-raw-token";
 
@@ -67,7 +60,7 @@ describe("listActiveConnections", () => {
 });
 
 describe("revokeConnection", () => {
-  it("revokes tokens for the given user/client/organisation and the platform grant behind them", async () => {
+  it("revokes only tokens for the given user/client/organisation", async () => {
     const prisma = {
       mcpOAuthClient: {
         findUnique: vi.fn().mockResolvedValue({ id: "client-row-1", clientId: "mcp_abc" }),
@@ -75,10 +68,9 @@ describe("revokeConnection", () => {
       mcpAccessToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       mcpRefreshToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       mcpPlatformGrant: {
-        findFirst: vi.fn().mockResolvedValue({ id: "grant-1" }),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn(),
       },
-      auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
     };
 
     await revokeConnection(prisma, {
@@ -101,40 +93,6 @@ describe("revokeConnection", () => {
       where: expectedWhere,
       data: { revokedAt: expect.any(Date) },
     });
-    // The grant itself gets revoked too, so a later reconnect doesn't silently skip consent.
-    expect(prisma.mcpPlatformGrant.updateMany).toHaveBeenCalledWith({
-      where: { id: "grant-1", revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
-    });
-    // ...and every token exchanged under that grant (not just ones matching the direct user/client/org filter above).
-    expect(prisma.mcpAccessToken.updateMany).toHaveBeenCalledWith({
-      where: { platformGrantId: "grant-1", revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
-    });
-    expect(prisma.mcpRefreshToken.updateMany).toHaveBeenCalledWith({
-      where: { platformGrantId: "grant-1", revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
-    });
-  });
-
-  it("skips the platform-grant cascade when there is no active grant", async () => {
-    const prisma = {
-      mcpOAuthClient: {
-        findUnique: vi.fn().mockResolvedValue({ id: "client-row-1", clientId: "mcp_abc" }),
-      },
-      mcpAccessToken: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-      mcpRefreshToken: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-      mcpPlatformGrant: { findFirst: vi.fn().mockResolvedValue(null), updateMany: vi.fn() },
-      auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
-    };
-
-    await revokeConnection(prisma, {
-      userId: "user-1",
-      clientId: "mcp_abc",
-      organisationId: "org-1",
-    });
-
-    expect(prisma.mcpPlatformGrant.updateMany).not.toHaveBeenCalled();
   });
 
   it("does nothing when the client id is unknown", async () => {
@@ -142,7 +100,7 @@ describe("revokeConnection", () => {
       mcpOAuthClient: { findUnique: vi.fn().mockResolvedValue(null) },
       mcpAccessToken: { updateMany: vi.fn() },
       mcpRefreshToken: { updateMany: vi.fn() },
-      mcpPlatformGrant: { findFirst: vi.fn(), updateMany: vi.fn() },
+      mcpPlatformGrant: { findMany: vi.fn(), updateMany: vi.fn() },
     };
 
     await revokeConnection(prisma, {
@@ -152,5 +110,39 @@ describe("revokeConnection", () => {
     });
 
     expect(prisma.mcpAccessToken.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("cascades: revokes the platform grant and every token derived under it", async () => {
+    const prisma = {
+      mcpOAuthClient: {
+        findUnique: vi.fn().mockResolvedValue({ id: "client-row-1", clientId: "mcp_abc" }),
+      },
+      mcpAccessToken: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      mcpRefreshToken: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      mcpPlatformGrant: {
+        findMany: vi.fn().mockResolvedValue([{ id: "grant-1" }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+
+    await revokeConnection(prisma, {
+      userId: "user-1",
+      clientId: "mcp_abc",
+      organisationId: "org-1",
+    });
+
+    expect(prisma.mcpPlatformGrant.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["grant-1"] } },
+      data: { revokedAt: expect.any(Date) },
+    });
+    const derived = { platformGrantId: { in: ["grant-1"] }, revokedAt: null };
+    expect(prisma.mcpAccessToken.updateMany).toHaveBeenCalledWith({
+      where: derived,
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(prisma.mcpRefreshToken.updateMany).toHaveBeenCalledWith({
+      where: derived,
+      data: { revokedAt: expect.any(Date) },
+    });
   });
 });
