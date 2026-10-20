@@ -196,3 +196,53 @@ describe("getCampaign", () => {
     expect(result?.pendingSends).toEqual({ count: 0, nextScheduledFor: null });
   });
 });
+
+describe("updateCampaign routingMode", () => {
+  const DRAFT = { ...SCHEDULED_CAMPAIGN, status: "DRAFT", routingMode: "LINEAR" };
+
+  function journeyFake(campaign: unknown, enrolled = 0) {
+    const prisma = fakePrisma(campaign);
+    return Object.assign(prisma, {
+      campaignStep: {
+        ...prisma.campaignStep,
+        deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
+        create: vi.fn().mockResolvedValue({}),
+      },
+      campaignEnrollment: {
+        ...prisma.campaignEnrollment,
+        count: vi.fn().mockResolvedValue(enrolled),
+      },
+    });
+  }
+
+  it("switches a draft to a journey, replacing its steps with the placeholder", async () => {
+    const prisma = journeyFake({ ...DRAFT });
+    await updateCampaign(prisma as never, "org-1", "campaign-1", { routingMode: "JOURNEY" });
+    expect(prisma.campaignStep.deleteMany).toHaveBeenCalledWith({
+      where: { campaignId: "campaign-1" },
+    });
+    expect(prisma.campaignStep.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ orderIndex: 0, useImportedContent: true }),
+    });
+  });
+
+  it("switching back to linear clears the placeholder without adding one", async () => {
+    const prisma = journeyFake({ ...DRAFT, routingMode: "JOURNEY" });
+    await updateCampaign(prisma as never, "org-1", "campaign-1", { routingMode: "LINEAR" });
+    expect(prisma.campaignStep.deleteMany).toHaveBeenCalled();
+    expect(prisma.campaignStep.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses to change type once leads are enrolled or the campaign is not a draft", async () => {
+    await expect(
+      updateCampaign(journeyFake({ ...DRAFT }, 3) as never, "org-1", "campaign-1", {
+        routingMode: "JOURNEY",
+      }),
+    ).rejects.toBeInstanceOf(CampaignActivationError);
+    await expect(
+      updateCampaign(journeyFake({ ...DRAFT, status: "ACTIVE" }) as never, "org-1", "campaign-1", {
+        routingMode: "JOURNEY",
+      }),
+    ).rejects.toBeInstanceOf(CampaignActivationError);
+  });
+});

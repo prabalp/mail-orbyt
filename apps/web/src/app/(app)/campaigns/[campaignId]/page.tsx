@@ -212,6 +212,7 @@ interface CampaignDetail {
   id: string;
   name: string;
   status: "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+  routingMode: "LINEAR" | "JOURNEY";
   steps: Step[];
   inboxes: { inboxId: string; inbox: Inbox }[];
   enrollments: { status: string }[];
@@ -523,6 +524,30 @@ export default function CampaignDetailPage(): React.ReactElement {
     );
     if (response.ok) await load();
     else toast.show("Could not update inbox pool", "error");
+  }
+
+  const canChangeType =
+    campaign !== null && campaign.status === "DRAFT" && campaign.enrollments.length === 0;
+
+  async function handleChangeType(routingMode: "LINEAR" | "JOURNEY") {
+    if (
+      campaign &&
+      campaign.steps.length > 0 &&
+      !window.confirm("This replaces the campaign's current steps. Continue?")
+    ) {
+      return;
+    }
+    const response = await fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routingMode }),
+    });
+    if (response.ok) {
+      toast.show(routingMode === "JOURNEY" ? "Switched to a journey" : "Switched to linear");
+      await load();
+    } else {
+      toast.show("Could not change the campaign type", "error");
+    }
   }
 
   async function handleStatusChange(status: CampaignDetail["status"]) {
@@ -867,118 +892,144 @@ export default function CampaignDetailPage(): React.ReactElement {
         ) : null}
       </CollapsibleCard>
 
-      <Card>
-        <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sequence steps</h3>
-        {campaign.steps.length === 0 ? (
-          <EmptyState
-            icon={<ListOrdered />}
-            title="No steps yet"
-            description="Add the first step in this campaign's sequence."
-          />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {campaign.steps.map((step, index) => (
-              <li key={step.id} className="rounded-md-md border border-outline/30 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <Badge tone="neutral">{step.stepType.replace(/_/g, " ")}</Badge>
-                    <span className="ml-2 text-sm text-on-surface-variant">
-                      {step.delayDays === 0
-                        ? "sent immediately"
-                        : `${step.delayDays} day(s) after previous`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="text"
-                      onClick={() => handleMoveStep(index, -1)}
-                      disabled={index === 0}
-                    >
-                      Up
-                    </Button>
-                    <Button
-                      variant="text"
-                      onClick={() => handleMoveStep(index, 1)}
-                      disabled={index === campaign.steps.length - 1}
-                    >
-                      Down
-                    </Button>
-                    <Button variant="text" onClick={() => handleOpenEditStep(step)}>
-                      Edit
-                    </Button>
-                    <Button variant="text" onClick={() => handleRemoveStep(step.id)}>
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-on-surface-variant">
-                  {contentSourceOf(step) === "IMPORTED"
-                    ? "Uses this lead's imported email. Greeting and signature are added at send time."
-                    : contentSourceOf(step) === "SHARED_TEMPLATE"
-                      ? `Shared template: "${step.manualSubject}"`
-                      : `AI-generated, call to action: "${step.callToActionOverride ?? "(default)"}"`}
-                </p>
-                {step.stepInstructions ? (
-                  <p className="mt-1 text-sm text-on-surface-variant italic">
-                    Step prompt: &ldquo;{step.stepInstructions}&rdquo;
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-outline/15 pt-6">
-          <Select
-            label="Step type"
-            value={newStepType}
-            options={[
-              { value: "INITIAL", label: "Initial" },
-              { value: "FOLLOW_UP", label: "Follow-up" },
-              { value: "CLOSE_THE_LOOP", label: "Close the loop" },
-            ]}
-            onChange={(event) => setNewStepType(event.target.value as Step["stepType"])}
-          />
-          <Select
-            label="Content"
-            value={newContentSource}
-            options={CONTENT_SOURCE_OPTIONS}
-            onChange={(event) => setNewContentSource(event.target.value as StepContentSource)}
-          />
-          {newContentSource === "AI" ? (
-            <TextInput
-              label="Call to action"
-              value={newCallToAction}
-              onChange={(event) => setNewCallToAction(event.target.value)}
-            />
-          ) : null}
-          <Button loading={addingStep} onClick={handleAddStep}>
-            Add step
-          </Button>
-        </div>
-        {newContentSource === "SHARED_TEMPLATE" ? (
-          <div className="mt-4 flex flex-col gap-3">
-            <TextInput
-              label="Subject"
-              value={newManualSubject}
-              onChange={(event) => setNewManualSubject(event.target.value)}
-            />
-            <TextArea
-              label="Body"
-              rows={5}
-              value={newManualBody}
-              onChange={(event) => setNewManualBody(event.target.value)}
-            />
-          </div>
-        ) : null}
-        {newContentSource === "IMPORTED" ? (
-          <p className="mt-4 text-sm text-on-surface-variant">
-            Each enrolled lead must already have an imported email for this step&apos;s position
-            (sequence 1 is the first step). The send adds &ldquo;Hey {"{first name}"},&rdquo; and
-            the organisation signature around that body.
+      {campaign.routingMode === "JOURNEY" ? (
+        <Card>
+          <h3 className="mb-2 text-sm font-medium text-on-surface-variant">Journey</h3>
+          <p className="text-sm text-on-surface-variant">
+            This campaign has no fixed steps. Each enrolled lead follows its own graph of emails,
+            imported in the CSV <code>emails</code> column: replies (labelled by the decider or the
+            keyword rules) and silence choose what is sent next. See docs/journeys.md for the
+            format.
           </p>
-        ) : null}
-      </Card>
+          {canChangeType ? (
+            <div className="mt-4">
+              <Button variant="outlined" onClick={() => handleChangeType("LINEAR")}>
+                Switch to a linear sequence
+              </Button>
+            </div>
+          ) : null}
+        </Card>
+      ) : (
+        <Card>
+          <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sequence steps</h3>
+          {canChangeType ? (
+            <div className="mb-4">
+              <Button variant="outlined" onClick={() => handleChangeType("JOURNEY")}>
+                Switch to a journey (branching)
+              </Button>
+            </div>
+          ) : null}
+          {campaign.steps.length === 0 ? (
+            <EmptyState
+              icon={<ListOrdered />}
+              title="No steps yet"
+              description="Add the first step in this campaign's sequence."
+            />
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {campaign.steps.map((step, index) => (
+                <li key={step.id} className="rounded-md-md border border-outline/30 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Badge tone="neutral">{step.stepType.replace(/_/g, " ")}</Badge>
+                      <span className="ml-2 text-sm text-on-surface-variant">
+                        {step.delayDays === 0
+                          ? "sent immediately"
+                          : `${step.delayDays} day(s) after previous`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="text"
+                        onClick={() => handleMoveStep(index, -1)}
+                        disabled={index === 0}
+                      >
+                        Up
+                      </Button>
+                      <Button
+                        variant="text"
+                        onClick={() => handleMoveStep(index, 1)}
+                        disabled={index === campaign.steps.length - 1}
+                      >
+                        Down
+                      </Button>
+                      <Button variant="text" onClick={() => handleOpenEditStep(step)}>
+                        Edit
+                      </Button>
+                      <Button variant="text" onClick={() => handleRemoveStep(step.id)}>
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-on-surface-variant">
+                    {contentSourceOf(step) === "IMPORTED"
+                      ? "Uses this lead's imported email. Greeting and signature are added at send time."
+                      : contentSourceOf(step) === "SHARED_TEMPLATE"
+                        ? `Shared template: "${step.manualSubject}"`
+                        : `AI-generated, call to action: "${step.callToActionOverride ?? "(default)"}"`}
+                  </p>
+                  {step.stepInstructions ? (
+                    <p className="mt-1 text-sm text-on-surface-variant italic">
+                      Step prompt: &ldquo;{step.stepInstructions}&rdquo;
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-outline/15 pt-6">
+            <Select
+              label="Step type"
+              value={newStepType}
+              options={[
+                { value: "INITIAL", label: "Initial" },
+                { value: "FOLLOW_UP", label: "Follow-up" },
+                { value: "CLOSE_THE_LOOP", label: "Close the loop" },
+              ]}
+              onChange={(event) => setNewStepType(event.target.value as Step["stepType"])}
+            />
+            <Select
+              label="Content"
+              value={newContentSource}
+              options={CONTENT_SOURCE_OPTIONS}
+              onChange={(event) => setNewContentSource(event.target.value as StepContentSource)}
+            />
+            {newContentSource === "AI" ? (
+              <TextInput
+                label="Call to action"
+                value={newCallToAction}
+                onChange={(event) => setNewCallToAction(event.target.value)}
+              />
+            ) : null}
+            <Button loading={addingStep} onClick={handleAddStep}>
+              Add step
+            </Button>
+          </div>
+          {newContentSource === "SHARED_TEMPLATE" ? (
+            <div className="mt-4 flex flex-col gap-3">
+              <TextInput
+                label="Subject"
+                value={newManualSubject}
+                onChange={(event) => setNewManualSubject(event.target.value)}
+              />
+              <TextArea
+                label="Body"
+                rows={5}
+                value={newManualBody}
+                onChange={(event) => setNewManualBody(event.target.value)}
+              />
+            </div>
+          ) : null}
+          {newContentSource === "IMPORTED" ? (
+            <p className="mt-4 text-sm text-on-surface-variant">
+              Each enrolled lead must already have an imported email for this step&apos;s position
+              (sequence 1 is the first step). The send adds &ldquo;Hey {"{first name}"},&rdquo; and
+              the organisation signature around that body.
+            </p>
+          ) : null}
+        </Card>
+      )}
 
       <Dialog
         open={editingStep !== null}

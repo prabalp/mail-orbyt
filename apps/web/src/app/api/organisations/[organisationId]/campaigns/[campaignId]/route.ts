@@ -31,6 +31,7 @@ const updateSchema = z.object({
     .transform((value) => value.trim() || null)
     .nullable()
     .optional(),
+  routingMode: z.enum(["LINEAR", "JOURNEY"]).optional(),
   status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
 });
 

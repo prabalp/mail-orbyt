@@ -96,10 +96,9 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   } = parsed.data;
 
   const isJourney = campaignFields.routingMode === "JOURNEY";
-  const steps = isJourney
-    ? [{ stepType: "INITIAL" as const, useAiGeneration: false, useImportedContent: true }]
-    : requestedSteps;
-  if (!steps?.length) {
+  // A journey's placeholder step is created with the campaign itself.
+  const steps = isJourney ? [] : (requestedSteps ?? []);
+  if (!isJourney && steps.length === 0) {
     return NextResponse.json(
       { error: "A linear campaign needs at least one step" },
       { status: 400 },

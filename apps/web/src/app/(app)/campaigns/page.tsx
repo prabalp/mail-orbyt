@@ -9,6 +9,7 @@ import {
   Dialog,
   EmptyState,
   PageHeader,
+  Select,
   Table,
   TextInput,
   useToast,
@@ -38,6 +39,7 @@ export default function CampaignsPage(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
+  const [routingMode, setRoutingMode] = useState<"LINEAR" | "JOURNEY">("LINEAR");
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -60,11 +62,12 @@ export default function CampaignsPage(): React.ReactElement {
       const response = await fetch(`/api/organisations/${organisationId}/campaigns`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, routingMode }),
       });
       if (response.ok) {
         setDialogOpen(false);
         setName("");
+        setRoutingMode("LINEAR");
         await load();
       } else {
         toast.show("Could not create campaign", "error");
@@ -173,6 +176,23 @@ export default function CampaignsPage(): React.ReactElement {
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
+        <div className="mt-4">
+          <Select
+            label="Sequence type"
+            value={routingMode}
+            options={[
+              { value: "LINEAR", label: "Linear — steps sent in order" },
+              { value: "JOURNEY", label: "Journey — branches on replies and silence" },
+            ]}
+            onChange={(event) => setRoutingMode(event.target.value as "LINEAR" | "JOURNEY")}
+          />
+          {routingMode === "JOURNEY" ? (
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Each lead is imported with its own graph of emails (CSV <code>emails</code> column as
+              a JSON object). Replies and silence pick the next email.
+            </p>
+          ) : null}
+        </div>
       </Dialog>
     </div>
   );

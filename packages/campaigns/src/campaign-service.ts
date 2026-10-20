@@ -19,6 +19,14 @@ export interface CreateCampaignParams {
   createdByUserId: string;
 }
 
+/** The one step a journey campaign carries — every node send hangs off it; the real sequence is each lead's imported email graph. */
+const JOURNEY_PLACEHOLDER_STEP = {
+  orderIndex: 0,
+  stepType: "INITIAL",
+  useAiGeneration: false,
+  useImportedContent: true,
+} as const;
+
 export async function createCampaign(prisma: Prisma, params: CreateCampaignParams) {
   return prisma.campaign.create({
     data: {
@@ -33,6 +41,7 @@ export async function createCampaign(prisma: Prisma, params: CreateCampaignParam
       emailPromptInstructions: params.emailPromptInstructions,
       routingMode: params.routingMode,
       createdByUserId: params.createdByUserId,
+      ...(params.routingMode === "JOURNEY" ? { steps: { create: JOURNEY_PLACEHOLDER_STEP } } : {}),
     },
   });
 }
@@ -90,6 +99,8 @@ export interface UpdateCampaignParams {
   inboxCooldownMinutes?: number;
   /** Campaign-level tone/style guidance; null clears it and falls back to the organisation's. */
   emailPromptInstructions?: string | null;
+  /** Only a DRAFT campaign with no enrollments can change type; its steps are replaced to match. */
+  routingMode?: "LINEAR" | "JOURNEY";
   status?: CampaignStatus;
 }
 
@@ -218,6 +229,25 @@ export async function updateCampaign(
   // time and make the resumed campaign look inert. Re-deriving from the
   // enrollment anchor puts overdue items at `now` without ever pulling a
   // follow-up in ahead of its delayDays gap.
+  if (patch.routingMode && patch.routingMode !== campaign.routingMode) {
+    if (campaign.status !== "DRAFT") {
+      throw new CampaignActivationError(
+        "Only a draft campaign can change between linear and journey.",
+      );
+    }
+    if ((await prisma.campaignEnrollment.count({ where: { campaignId } })) > 0) {
+      throw new CampaignActivationError(
+        "This campaign already has enrolled leads, so its type can't be changed.",
+      );
+    }
+    // The old steps mean nothing in the other mode; replace them.
+    await prisma.campaignStep.deleteMany({ where: { campaignId } });
+    if (patch.routingMode === "JOURNEY") {
+      await prisma.campaignStep.create({
+        data: { campaignId, ...JOURNEY_PLACEHOLDER_STEP },
+      });
+    }
+  }
   const resuming = patch.status === "ACTIVE" && campaign.status === "PAUSED";
   const shouldReschedule = movesSendingWindow(campaign, patch) || resuming;
   const previousStatus = campaign.status;
