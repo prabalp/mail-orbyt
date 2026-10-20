@@ -17,7 +17,7 @@ import {
   TimePicker,
   useToast,
 } from "@mail-orbyt/design-system";
-import { CheckCircle2, ChevronDown, ChevronRight, Circle, ListOrdered, Mails } from "lucide-react";
+import { ChevronDown, ChevronRight, ListOrdered, Mails } from "lucide-react";
 import { useOrganisation } from "../../organisation-context";
 
 function CollapsibleCard({
@@ -42,54 +42,6 @@ function CollapsibleCard({
         {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
       </button>
       {open ? <div className="mt-4">{children}</div> : null}
-    </Card>
-  );
-}
-
-interface ChecklistItem {
-  done: boolean;
-  label: string;
-  hint: string;
-}
-
-/** What is still needed before this draft can be switched to Active — each open item says where to do it. */
-function LaunchChecklist({ items }: { items: ChecklistItem[] }): React.ReactElement {
-  const remaining = items.filter((item) => !item.done).length;
-  return (
-    <Card>
-      <h3 className="text-sm font-medium text-on-surface">
-        {remaining === 0 ? "Ready to launch" : `Before you launch (${remaining} to do)`}
-      </h3>
-      <ul className="mt-3 flex flex-col gap-2">
-        {items.map((item) => (
-          <li key={item.label} className="flex items-start gap-2 text-sm">
-            {item.done ? (
-              <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
-            ) : (
-              <Circle
-                size={18}
-                className="mt-0.5 shrink-0 text-on-surface-variant"
-                aria-hidden="true"
-              />
-            )}
-            <span>
-              <span
-                className={item.done ? "text-on-surface-variant" : "font-medium text-on-surface"}
-              >
-                {item.label}
-              </span>
-              {item.done ? null : (
-                <span className="block text-xs text-on-surface-variant">{item.hint}</span>
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {remaining === 0 ? (
-        <p className="mt-3 text-xs text-on-surface-variant">
-          Set the status to Active (top right) when you are happy with the schedule.
-        </p>
-      ) : null}
     </Card>
   );
 }
@@ -791,33 +743,6 @@ export default function CampaignDetailPage(): React.ReactElement {
     scheduleDays.size !== campaign.sendingDaysOfWeek.length ||
     campaign.sendingDaysOfWeek.some((day) => !scheduleDays.has(day));
 
-  const hasContent =
-    campaign.routingMode === "JOURNEY"
-      ? Boolean(campaign.journeyGraph) || campaign.contentSource === "IMPORTED"
-      : campaign.steps.length > 0;
-  const launchChecklist: ChecklistItem[] = [
-    {
-      done: hasContent,
-      label: campaign.routingMode === "JOURNEY" ? "Build the journey" : "Add the email steps",
-      hint:
-        campaign.routingMode === "JOURNEY"
-          ? campaign.contentSource === "IMPORTED"
-            ? "Draw it below, or import leads with their own email graph."
-            : "Add emails, connect them, and save the journey below."
-          : "Add at least one step to the sequence below.",
-    },
-    {
-      done: campaign.inboxes.length > 0,
-      label: "Choose the sending inboxes",
-      hint: "Pick at least one connected inbox in the Sending inbox pool.",
-    },
-    {
-      done: enrollments.length > 0,
-      label: "Enroll leads",
-      hint: "Add leads from a list or search in Enrollments, so there is someone to email.",
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -855,8 +780,6 @@ export default function CampaignDetailPage(): React.ReactElement {
           </div>
         }
       />
-
-      {campaign.status === "DRAFT" ? <LaunchChecklist items={launchChecklist} /> : null}
 
       {canChangeSource ? (
         <Card>
