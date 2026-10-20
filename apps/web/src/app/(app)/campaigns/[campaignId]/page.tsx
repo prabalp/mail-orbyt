@@ -588,6 +588,26 @@ export default function CampaignDetailPage(): React.ReactElement {
 
   const canChangeType =
     campaign !== null && campaign.status === "DRAFT" && campaign.enrollments.length === 0;
+  // The email source can only change while the campaign has nothing written under it.
+  const canChangeSource =
+    canChangeType &&
+    campaign !== null &&
+    (campaign.routingMode === "JOURNEY" ? !campaign.journeyGraph : campaign.steps.length === 0);
+
+  async function handleChangeSource(contentSource: CampaignContentSource) {
+    const response = await fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contentSource }),
+    });
+    if (response.ok) {
+      toast.show("Email source updated");
+      await load();
+    } else {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      toast.show(data?.error ?? "Could not change the email source", "error");
+    }
+  }
 
   async function handleChangeType(routingMode: "LINEAR" | "JOURNEY") {
     if (
@@ -837,6 +857,34 @@ export default function CampaignDetailPage(): React.ReactElement {
       />
 
       {campaign.status === "DRAFT" ? <LaunchChecklist items={launchChecklist} /> : null}
+
+      {canChangeSource ? (
+        <Card>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="max-w-xs flex-1">
+              <Select
+                label="Where the emails come from"
+                value={campaign.contentSource}
+                options={[
+                  {
+                    value: "AI",
+                    label: "AI-written",
+                    disabled: campaign.routingMode === "JOURNEY",
+                  },
+                  { value: "TEMPLATE", label: "My template" },
+                  { value: "IMPORTED", label: "My uploaded list" },
+                ]}
+                onChange={(event) =>
+                  void handleChangeSource(event.target.value as CampaignContentSource)
+                }
+              />
+            </div>
+            <p className="max-w-md pb-2 text-xs text-on-surface-variant">
+              You can change this until you add the first step or save the journey.
+            </p>
+          </div>
+        </Card>
+      ) : null}
 
       <CollapsibleCard title="Sending schedule">
         <div className="mb-4 rounded-lg border border-outline bg-surface-container p-4">
