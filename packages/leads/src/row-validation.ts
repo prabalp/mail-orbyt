@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { CanonicalColumn } from "./column-mapping";
+import { parseImportedEmails, type ImportedEmail } from "./imported-emails";
 
 export type MappedRow = Partial<Record<CanonicalColumn, string>>;
 
@@ -29,6 +30,8 @@ export const mappedRowSchema = z
     city: optionalTrimmed,
     state: optionalTrimmed,
     country: optionalTrimmed,
+    total_mails: optionalTrimmed,
+    emails: optionalTrimmed,
   })
   .refine(
     (row) => Boolean(row.email || row.first_name || row.last_name || row.company),
@@ -36,12 +39,15 @@ export const mappedRowSchema = z
   );
 
 export type RowValidationResult =
-  { valid: true; row: MappedRow } | { valid: false; errors: string[] };
+  | { valid: true; row: MappedRow; importedEmails: ImportedEmail[] }
+  | { valid: false; errors: string[] };
 
 export function validateMappedRow(row: MappedRow): RowValidationResult {
   const result = mappedRowSchema.safeParse(row);
-  if (result.success) {
-    return { valid: true, row: result.data };
+  if (!result.success) {
+    return { valid: false, errors: result.error.issues.map((issue) => issue.message) };
   }
-  return { valid: false, errors: result.error.issues.map((issue) => issue.message) };
+  const imported = parseImportedEmails(result.data.total_mails, result.data.emails);
+  if (!imported.ok) return { valid: false, errors: imported.errors };
+  return { valid: true, row: result.data, importedEmails: imported.emails };
 }

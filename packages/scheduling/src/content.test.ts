@@ -10,11 +10,70 @@ vi.mock("@mail-orbyt/research", () => ({
   getLatestPageText: getLatestPageTextMock,
 }));
 
-const { materializeStepContent, AiNotConfiguredForStepError } = await import("./content");
+const { materializeStepContent, AiNotConfiguredForStepError, MissingImportedEmailError } =
+  await import("./content");
 
 const LEAD = { id: "lead-1", firstName: "Jamie", lastName: "Rivera", title: "VP Sales" };
 
 describe("materializeStepContent", () => {
+  it("wraps an imported body with a greeting and signature and does not call AI", async () => {
+    const prisma = {
+      leadImportedEmail: {
+        findUnique: vi.fn().mockResolvedValue({
+          subject: "Idea for {{firstName}}",
+          body: "I noticed the team is expanding.",
+        }),
+      },
+    };
+    const result = await materializeStepContent(prisma as never, {
+      organisationId: "org-1",
+      lead: LEAD,
+      step: {
+        orderIndex: 0,
+        stepType: "INITIAL",
+        useAiGeneration: false,
+        useImportedContent: true,
+        callToActionOverride: null,
+        stepInstructions: null,
+        manualSubject: null,
+        manualBody: null,
+      },
+      senderName: "Alex",
+      senderCompanyName: "Mail Orbyt",
+      aiGenerator: undefined,
+      signatureText: "Best,\n{senderName}",
+    });
+
+    expect(result).toEqual({
+      subject: "Idea for Jamie",
+      body: "Hey Jamie,\n\nI noticed the team is expanding.\n\nBest,\nAlex",
+    });
+    expect(generateEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("fails when the lead has no imported email for the step", async () => {
+    const prisma = { leadImportedEmail: { findUnique: vi.fn().mockResolvedValue(null) } };
+    await expect(
+      materializeStepContent(prisma as never, {
+        organisationId: "org-1",
+        lead: LEAD,
+        step: {
+          orderIndex: 1,
+          stepType: "FOLLOW_UP",
+          useAiGeneration: false,
+          useImportedContent: true,
+          callToActionOverride: null,
+          stepInstructions: null,
+          manualSubject: null,
+          manualBody: null,
+        },
+        senderName: "Alex",
+        senderCompanyName: "Mail Orbyt",
+        aiGenerator: undefined,
+      }),
+    ).rejects.toBeInstanceOf(MissingImportedEmailError);
+  });
+
   it("applies merge tokens for a manual step without calling AI", async () => {
     const result = await materializeStepContent({} as never, {
       organisationId: "org-1",

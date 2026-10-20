@@ -7,6 +7,13 @@ export {
 } from "./column-mapping";
 export { parseCsv, CsvParseError, type ParsedCsvRow, type ParseCsvResult } from "./csv";
 export {
+  parseImportedEmails,
+  IMPORTED_EMAIL_TYPES,
+  MAX_IMPORTED_EMAILS,
+  type ImportedEmail,
+  type ImportedEmailType,
+} from "./imported-emails";
+export {
   validateMappedRow,
   mappedRowSchema,
   type MappedRow,

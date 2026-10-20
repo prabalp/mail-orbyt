@@ -5,7 +5,7 @@ import { resolveDefaultSignatureText, resolveInboxSenderName } from "@mail-orbyt
 import { buildPixelImgTag, getVerifiedTrackingDomain } from "@mail-orbyt/tracking";
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
 import { markInboxSent, pickNextInbox } from "./inbox-rotation";
-import { materializeStepContent } from "./content";
+import { materializeStepContent, MissingImportedEmailError } from "./content";
 import { nextSendableTime } from "./sending-window";
 
 type Prisma = Pick<
@@ -20,6 +20,7 @@ type Prisma = Pick<
   | "researchSnapshot"
   | "researchSource"
   | "researchPageText"
+  | "leadImportedEmail"
   | "signature"
   | "inbox"
   | "trackingDomain"
@@ -198,25 +199,36 @@ export async function processOutboxItem(
       resolveDefaultSignatureText(prisma, item.organisationId),
       deps.resolveAiGenerator(item.organisationId),
     ]);
-    const generated = await materializeStepContent(prisma, {
-      organisationId: item.organisationId,
-      lead: item.lead,
-      step: item.campaignStep,
-      senderName: resolveInboxSenderName(inbox),
-      senderCompanyName,
-      priorEmail,
-      aiGenerator,
-      // A campaign's own prompt replaces the organisation's rather than
-      // stacking with it — two sets of data/format/voice guidance in one
-      // prompt contradict each other as often as they compose. Neither set
-      // falls back to DEFAULT_CAMPAIGN_EMAIL_PROMPT here; that happens in
-      // buildGenerateEmailPrompt, so there is exactly one such fallback.
-      campaignPrompt: item.campaign.emailPromptInstructions?.trim() || campaignPrompt,
-      bookingLink,
-      signatureText,
-      generationSystemPromptOverride,
-      reviewSystemPromptOverride,
-    });
+    let generated: { subject: string; body: string };
+    try {
+      generated = await materializeStepContent(prisma, {
+        organisationId: item.organisationId,
+        lead: item.lead,
+        step: item.campaignStep,
+        senderName: resolveInboxSenderName(inbox),
+        senderCompanyName,
+        priorEmail,
+        aiGenerator,
+        // A campaign's own prompt replaces the organisation's rather than
+        // stacking with it — two sets of data/format/voice guidance in one
+        // prompt contradict each other as often as they compose. Neither set
+        // falls back to DEFAULT_CAMPAIGN_EMAIL_PROMPT here; that happens in
+        // buildGenerateEmailPrompt, so there is exactly one such fallback.
+        campaignPrompt: item.campaign.emailPromptInstructions?.trim() || campaignPrompt,
+        bookingLink,
+        signatureText,
+        generationSystemPromptOverride,
+        reviewSystemPromptOverride,
+      });
+    } catch (error) {
+      if (error instanceof MissingImportedEmailError) {
+        return prisma.outboxItem.update({
+          where: { id: item.id },
+          data: { status: "FAILED", lastError: error.message },
+        });
+      }
+      throw error;
+    }
     subject = generated.subject;
     body = generated.body;
     await prisma.outboxItem.update({ where: { id: item.id }, data: { subject, body } });

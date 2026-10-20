@@ -74,12 +74,20 @@ function normalizeRow(row: MappedRow): MappedRow {
     city: row.city ? normalizeWhitespace(row.city) : undefined,
     state: row.state ? normalizeState(row.state) : undefined,
     country: row.country ? normalizeCountry(row.country) : undefined,
+    total_mails: row.total_mails?.trim() || undefined,
+    emails: row.emails?.trim() || undefined,
   };
 }
 
 type Prisma = Pick<
   PrismaClient,
-  "importBatch" | "importRow" | "lead" | "company" | "leadListMembership" | "$transaction"
+  | "importBatch"
+  | "importRow"
+  | "lead"
+  | "company"
+  | "leadListMembership"
+  | "leadImportedEmail"
+  | "$transaction"
 >;
 
 async function resolveCompanyId(
@@ -272,6 +280,31 @@ export async function processImportBatch(
         data: [{ leadListId: batch.leadListId, leadId }],
         skipDuplicates: true,
       });
+    }
+
+    if (validation.importedEmails.length > 0) {
+      const replace = action === "CREATE" || action === "CREATE_SEPARATE" || action === "OVERWRITE";
+      const fillBlanks = action === "UPDATE_BLANKS";
+      if (replace || fillBlanks) {
+        const existingCount = fillBlanks
+          ? await prisma.leadImportedEmail.count({ where: { leadId } })
+          : 0;
+        if (replace || existingCount === 0) {
+          await prisma.$transaction([
+            prisma.leadImportedEmail.deleteMany({ where: { leadId } }),
+            prisma.leadImportedEmail.createMany({
+              data: validation.importedEmails.map((email) => ({
+                organisationId: batch.organisationId,
+                leadId,
+                sequence: email.sequence,
+                emailType: email.emailType,
+                subject: email.subject,
+                body: email.body,
+              })),
+            }),
+          ]);
+        }
+      }
     }
 
     await prisma.importRow.upsert({

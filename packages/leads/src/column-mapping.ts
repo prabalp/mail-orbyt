@@ -10,6 +10,8 @@ export const CANONICAL_COLUMNS = [
   "city",
   "state",
   "country",
+  "total_mails",
+  "emails",
 ] as const;
 
 export type CanonicalColumn = (typeof CANONICAL_COLUMNS)[number];
@@ -27,6 +29,8 @@ const COLUMN_ALIASES: Record<CanonicalColumn, string[]> = {
   city: ["town"],
   state: ["province", "region"],
   country: ["nation"],
+  total_mails: ["total mails", "total emails", "email count", "mail count"],
+  emails: ["email bodies", "imported emails", "prewritten emails"],
 };
 
 function normalizeHeader(header: string): string {

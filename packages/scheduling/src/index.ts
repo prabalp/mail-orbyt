@@ -12,6 +12,7 @@ export {
   materializeStepContent,
   applyMergeTokens,
   AiNotConfiguredForStepError,
+  MissingImportedEmailError,
   type MaterializeContentParams,
 } from "./content";
 export {

@@ -8,13 +8,22 @@ import type { Lead, PrismaClient } from "@mail-orbyt/database";
 
 type Prisma = Pick<
   PrismaClient,
-  "researchFact" | "researchSnapshot" | "researchSource" | "researchPageText"
+  "researchFact" | "researchSnapshot" | "researchSource" | "researchPageText" | "leadImportedEmail"
 >;
 
 export class AiNotConfiguredForStepError extends Error {
   constructor() {
     super("This step is set to use AI generation, but no AI provider is configured.");
     this.name = "AiNotConfiguredForStepError";
+  }
+}
+
+export class MissingImportedEmailError extends Error {
+  constructor(sequence: number) {
+    super(
+      `This lead has no imported email for sequence ${sequence}. Import it, or switch the step off imported emails.`,
+    );
+    this.name = "MissingImportedEmailError";
   }
 }
 
@@ -33,8 +42,10 @@ export interface MaterializeContentParams {
   organisationId: string;
   lead: Pick<Lead, "id" | "firstName" | "lastName" | "title">;
   step: {
+    orderIndex?: number;
     stepType: GenerateEmailInput["generationType"];
     useAiGeneration: boolean;
+    useImportedContent?: boolean;
     callToActionOverride: string | null;
     stepInstructions: string | null;
     manualSubject: string | null;
@@ -54,8 +65,31 @@ export interface MaterializeContentParams {
   reviewSystemPromptOverride?: string;
 }
 
+function renderImportedEmail(
+  lead: MaterializeContentParams["lead"],
+  email: { subject: string; body: string },
+  senderName: string,
+  signatureText: string | undefined,
+): { subject: string; body: string } {
+  const name = lead.firstName?.trim() || "there";
+  const signature = (signatureText ?? "Best,\n{senderName}").replace(/\{senderName\}/g, senderName);
+  return {
+    subject: applyMergeTokens(email.subject, lead),
+    body: `Hey ${name},\n\n${applyMergeTokens(email.body, lead)}\n\n${signature}`,
+  };
+}
+
 /** Produces the subject/body for a step's send — either a manual template with {{firstName}}-style merge tokens, or an AI-generated email built from the lead's current research snapshot. Never both. */
 export async function materializeStepContent(prisma: Prisma, params: MaterializeContentParams) {
+  if (params.step.useImportedContent) {
+    const sequence = (params.step.orderIndex ?? 0) + 1;
+    const imported = await prisma.leadImportedEmail.findUnique({
+      where: { leadId_sequence: { leadId: params.lead.id, sequence } },
+    });
+    if (!imported) throw new MissingImportedEmailError(sequence);
+    return renderImportedEmail(params.lead, imported, params.senderName, params.signatureText);
+  }
+
   if (!params.step.useAiGeneration) {
     if (!params.step.manualSubject || !params.step.manualBody) {
       throw new Error(
