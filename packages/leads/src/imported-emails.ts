@@ -12,6 +12,8 @@ export type ImportedEmailType = (typeof IMPORTED_EMAIL_TYPES)[number];
 export interface JourneyEdge {
   to: string;
   afterDays?: number;
+  /** Plain-language description of when this outcome applies — shown to the decider model. */
+  when?: string;
 }
 
 export interface ImportedEmail {
@@ -40,6 +42,7 @@ const journeyEdgeSchema = z.union([
   z.object({
     to: z.string().trim().min(1),
     afterDays: z.number().int().min(0).max(MAX_EDGE_DELAY_DAYS).optional(),
+    when: z.string().trim().min(1).max(300).optional(),
   }),
 ]);
 
@@ -99,7 +102,10 @@ function parseJourney(parsed: unknown, count: number): ParsedImportedEmails {
         errors.push(`node "${key}": outcome "${outcome}" points to unknown node "${edge.to}"`);
         continue;
       }
-      edges[outcome] = edge.afterDays === undefined ? { to: edge.to } : edge;
+      const normalised: JourneyEdge = { to: edge.to };
+      if (edge.afterDays !== undefined) normalised.afterDays = edge.afterDays;
+      if ("when" in edge && edge.when !== undefined) normalised.when = edge.when;
+      edges[outcome] = normalised;
     }
     edgesByNode.set(key, edges);
   }

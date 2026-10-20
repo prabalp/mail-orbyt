@@ -103,6 +103,17 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM_ADDRESS: z.string().email().default("onboarding@resend.dev"),
 
+  // Journey routing decider (packages/scheduling journey-decider.ts): an
+  // external structured-decision model (Jev via OpenRouter) that picks which
+  // pre-defined outcome a lead's reply maps to. Optional — unset means replies
+  // are routed by the deterministic keyword classifier alone. The model only
+  // ever chooses among outcomes the lead's own email graph already defines.
+  JOURNEY_DECIDER_API_KEY: z.string().min(1).optional(),
+  JOURNEY_DECIDER_MODEL: z.string().min(1).default("typesafe/jev-1.14"),
+  JOURNEY_DECIDER_URL: z.string().url().default("https://openrouter.ai/api/alpha/decisions"),
+  JOURNEY_DECIDER_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.6),
+  JOURNEY_DECIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+
   // Email sending safety
   EMERGENCY_STOP: booleanEnvVar(false),
 

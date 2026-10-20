@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@mail-orbyt/database";
+import type { JourneyDecider } from "./journey-decider";
 import { nextSendableTime } from "./sending-window";
 
 type Prisma = Pick<
@@ -22,18 +23,20 @@ export type JourneyTrigger = "TIMEOUT" | "REPLY";
 export interface JourneyEdge {
   to: string;
   afterDays?: number;
+  when?: string;
 }
 
 function parseEdges(value: unknown): Record<string, JourneyEdge> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const edges: Record<string, JourneyEdge> = {};
   for (const [outcome, raw] of Object.entries(value as Record<string, unknown>)) {
-    const edge = raw as { to?: unknown; afterDays?: unknown } | null;
+    const edge = raw as { to?: unknown; afterDays?: unknown; when?: unknown } | null;
     if (edge && typeof edge.to === "string") {
-      edges[outcome] =
-        typeof edge.afterDays === "number"
-          ? { to: edge.to, afterDays: edge.afterDays }
-          : { to: edge.to };
+      edges[outcome] = {
+        to: edge.to,
+        ...(typeof edge.afterDays === "number" ? { afterDays: edge.afterDays } : {}),
+        ...(typeof edge.when === "string" ? { when: edge.when } : {}),
+      };
     }
   }
   return edges;
@@ -61,6 +64,99 @@ export interface ApplyOutcomeParams {
 
 export type ApplyOutcomeResult =
   { routed: true; toNodeKey: string | null; ended: boolean } | { routed: false };
+
+async function currentNodeEdges(prisma: Prisma, leadId: string, nodeKey: string) {
+  const node = await prisma.leadImportedEmail.findUnique({
+    where: { leadId_nodeKey: { leadId, nodeKey } },
+  });
+  return parseEdges(node?.edges);
+}
+
+/** The outcome label a journey graph uses for each rule-based reply classification. */
+const REPLY_OUTCOMES: Record<string, string> = {
+  INTERESTED: "interested",
+  NOT_INTERESTED: "not_interested",
+  OUT_OF_OFFICE: "out_of_office",
+  UNCLASSIFIED: "replied",
+};
+
+/** Outcomes the timer fires, never offered to the model as a reply meaning. */
+const TIMER_OUTCOMES = new Set(["no_reply", "opened_no_reply"]);
+
+const DEFAULT_OUTCOME_DESCRIPTIONS: Record<string, string> = {
+  interested: "The lead is interested, wants to talk, or asks for a call or more information.",
+  not_interested: "The lead declines or says it is not a fit or not the right time.",
+  out_of_office: "An automatic out-of-office or vacation reply.",
+  replied: "Any other reply that none of the more specific outcomes describe.",
+};
+
+export interface RouteReplyParams {
+  /** The rule-based ReplyClassification of the lead's reply. */
+  classification: string;
+  replySubject: string;
+  replySnippet: string;
+  decider?: JourneyDecider;
+}
+
+/**
+ * Routes a lead's reply along the current node's edges. The model (if one is
+ * configured) picks among the outcomes that node defines; if it is absent,
+ * unsure or fails, the keyword classification decides. Returns `routed:false`
+ * when no edge applies so the caller can hand the lead to a human.
+ */
+export async function routeJourneyReply(
+  prisma: Prisma,
+  enrollmentId: string,
+  params: RouteReplyParams,
+): Promise<ApplyOutcomeResult> {
+  const enrollment = await prisma.campaignEnrollment.findUnique({
+    where: { id: enrollmentId },
+    include: { lead: true },
+  });
+  if (!enrollment?.currentNodeKey) return { routed: false };
+
+  const node = await prisma.leadImportedEmail.findUnique({
+    where: {
+      leadId_nodeKey: { leadId: enrollment.leadId, nodeKey: enrollment.currentNodeKey },
+    },
+  });
+  const options = Object.fromEntries(
+    Object.entries(parseEdges(node?.edges))
+      .filter(([outcome]) => !TIMER_OUTCOMES.has(outcome))
+      .map(([outcome, edge]) => [
+        outcome,
+        edge.when ??
+          DEFAULT_OUTCOME_DESCRIPTIONS[outcome] ??
+          `The reply means: ${outcome.replace(/_/g, " ")}.`,
+      ]),
+  );
+
+  const decision = params.decider
+    ? await params.decider.decide({
+        options,
+        state: {
+          lead: { first_name: enrollment.lead.firstName, title: enrollment.lead.title },
+          sent_email: { subject: node?.subject, body: node?.body },
+          reply: { subject: params.replySubject, text: params.replySnippet },
+        },
+      })
+    : null;
+
+  if (decision) {
+    return applyJourneyOutcome(prisma, enrollmentId, {
+      trigger: "REPLY",
+      outcome: decision.outcome,
+      source: "DECIDER",
+      reason: `confidence ${decision.confidence.toFixed(2)}`,
+    });
+  }
+  return applyJourneyOutcome(prisma, enrollmentId, {
+    trigger: "REPLY",
+    outcome: REPLY_OUTCOMES[params.classification] ?? "replied",
+    source: "RULE",
+    reason: `Reply classified ${params.classification}`,
+  });
+}
 
 /**
  * Moves a journey enrollment along the edge for `outcome` from the node it last
@@ -186,9 +282,19 @@ export async function scheduleJourneyStep(prisma: Prisma, enrollmentId: string) 
     enrollment.nextDecisionAt &&
     enrollment.nextDecisionAt.getTime() <= Date.now()
   ) {
+    // Silence after an opened email can route differently from silence after
+    // an unopened one — a rule on the tracking pixel, no model involved.
+    const edges = await currentNodeEdges(prisma, enrollment.leadId, enrollment.currentNodeKey);
+    const opened = edges["opened_no_reply"]
+      ? await prisma.outboxItem.findFirst({
+          where: { enrollmentId, nodeKey: enrollment.currentNodeKey, status: "SENT" },
+          orderBy: { sentAt: "desc" },
+          select: { openCount: true },
+        })
+      : null;
     await applyJourneyOutcome(prisma, enrollmentId, {
       trigger: "TIMEOUT",
-      outcome: "no_reply",
+      outcome: opened && opened.openCount > 0 ? "opened_no_reply" : "no_reply",
       source: "RULE",
       delayElapsed: true,
     });

@@ -59,7 +59,37 @@ trigger, outcome, to-node, source, reason).
 tool) with `routingMode: "JOURNEY"` and no `steps`; one placeholder step is
 created. Leads must be imported with the graph before enrolment.
 
-## Next stage
+## Decider model (Jev)
 
-An external decider (HTTP) will choose the outcome from the allowed set, with
-open/click triggers, falling back to these rules on any error or timeout.
+Set `JOURNEY_DECIDER_API_KEY` (an OpenRouter key) and replies to a journey email
+are routed by `typesafe/jev-1.14` instead of the keyword rules. It is called
+over HTTP (`POST https://openrouter.ai/api/alpha/decisions`) as one `choice`
+question whose options are exactly the reply outcomes the current email defines
+(plus a `none_of_the_above` escape). Each edge may carry a `when` sentence that
+tells the model when that outcome applies:
+
+```json
+"next": {
+  "asks_price":  { "to": "pricing", "when": "The lead asks what it costs." },
+  "interested":  { "to": "book_call" }
+}
+```
+
+The model is advisory. Any error, timeout, answer below
+`JOURNEY_DECIDER_MIN_CONFIDENCE` (default 0.6), `none_of_the_above`, or unknown
+option falls back to the keyword rules. Unsubscribes and bounces are decided by
+rules before the model is consulted and always exit the lead. The model never
+writes copy. The decision log records `source = DECIDER` with its confidence.
+
+Note this sends the lead's name/title, the email we sent, and the reply text
+to the model provider.
+
+## Silence after an open
+
+If a node defines `opened_no_reply` and the tracking pixel recorded an open
+when the no-reply timer fires, that edge is taken instead of `no_reply`
+(rule-based, no model).
+
+## Not built
+
+Click triggers (there is no click tracking yet) and a UI for the graph.

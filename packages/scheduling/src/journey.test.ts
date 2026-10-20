@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyJourneyOutcome,
   JOURNEY_MAX_NODE_VISITS,
+  routeJourneyReply,
   journeyStateAfterSend,
   scheduleJourneyStep,
 } from "./journey";
@@ -22,7 +23,8 @@ const NODES: Record<string, { nodeKey: string; isStart: boolean; edges: unknown 
     isStart: true,
     edges: {
       no_reply: { to: "bump", afterDays: 3 },
-      interested: { to: "book" },
+      opened_no_reply: { to: "book" },
+      interested: { to: "book", when: "wants to talk" },
       replied: { to: "END" },
     },
   },
@@ -37,6 +39,7 @@ function fakePrisma(enrollment: Record<string, unknown>) {
     campaignEnrollment: {
       findUnique: vi.fn().mockImplementation(async () => ({
         ...state,
+        lead: { firstName: "Jamie", title: "CTO" },
         campaign: { ...CAMPAIGN, routingMode: "JOURNEY" },
       })),
       update: vi.fn().mockImplementation(async ({ data }) => {
@@ -47,6 +50,7 @@ function fakePrisma(enrollment: Record<string, unknown>) {
     campaignStep: { findFirst: vi.fn().mockResolvedValue({ id: "step-1" }) },
     outboxItem: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue({ openCount: 0 }),
       create: vi.fn().mockImplementation(async ({ data }) => ({ id: "outbox-new", ...data })),
     },
     leadImportedEmail: {
@@ -185,5 +189,64 @@ describe("journeyStateAfterSend", () => {
       visitCounts: { intro: 1 },
     });
     expect(state.nextDecisionAt).toEqual(new Date(sentAt.getTime() + 3 * DAY_MS));
+  });
+});
+
+describe("opened_no_reply", () => {
+  it("routes silence after an opened email down the opened_no_reply edge", async () => {
+    const prisma = fakePrisma({ ...BASE, nextDecisionAt: new Date(Date.now() - 1000) });
+    prisma.outboxItem.findFirst.mockResolvedValue({ openCount: 2 });
+    const item = await scheduleJourneyStep(prisma as never, "e1");
+    expect(item).toMatchObject({ nodeKey: "book" });
+    expect(prisma.enrollmentRoutingDecision.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ outcome: "opened_no_reply" }),
+    });
+  });
+});
+
+describe("routeJourneyReply", () => {
+  const reply = {
+    classification: "UNCLASSIFIED",
+    replySubject: "Re: Hi",
+    replySnippet: "tell me more",
+  };
+
+  it("lets the decider pick among the node's reply outcomes and logs it as DECIDER", async () => {
+    const prisma = fakePrisma(BASE);
+    const decide = vi.fn().mockResolvedValue({ outcome: "interested", confidence: 0.91 });
+    const result = await routeJourneyReply(prisma as never, "e1", {
+      ...reply,
+      decider: { decide },
+    });
+    expect(result).toMatchObject({ routed: true, toNodeKey: "book" });
+
+    const input = decide.mock.calls[0]?.[0];
+    // Timer outcomes are never offered as reply meanings; edge `when` text is passed through.
+    expect(Object.keys(input.options)).toEqual(["interested", "replied"]);
+    expect(input.options.interested).toBe("wants to talk");
+    expect(input.state.reply).toEqual({ subject: "Re: Hi", text: "tell me more" });
+    expect(prisma.enrollmentRoutingDecision.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ source: "DECIDER", outcome: "interested" }),
+    });
+  });
+
+  it("falls back to the keyword classification when the decider has no answer", async () => {
+    const prisma = fakePrisma(BASE);
+    const decide = vi.fn().mockResolvedValue(null);
+    const result = await routeJourneyReply(prisma as never, "e1", {
+      ...reply,
+      classification: "INTERESTED",
+      decider: { decide },
+    });
+    expect(result).toMatchObject({ routed: true, toNodeKey: "book" });
+    expect(prisma.enrollmentRoutingDecision.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ source: "RULE", outcome: "interested" }),
+    });
+  });
+
+  it("uses the keyword rules when no decider is configured", async () => {
+    const prisma = fakePrisma(BASE);
+    const result = await routeJourneyReply(prisma as never, "e1", reply);
+    expect(result).toMatchObject({ routed: true, ended: true });
   });
 });

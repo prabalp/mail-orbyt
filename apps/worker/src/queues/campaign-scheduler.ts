@@ -4,6 +4,7 @@ import {
   SCHEDULER_QUEUE_NAME,
   dispatchDueOutboxItems,
   enqueueDueOutboxItems,
+  getJourneyDeciderFromEnv,
 } from "@mail-orbyt/scheduling";
 import { syncRepliesForOutboxItem } from "@mail-orbyt/conversations";
 import { fetchThreadMessages } from "@mail-orbyt/gmail";
@@ -33,7 +34,9 @@ async function syncRecentReplies(prisma: PrismaClient, logger: Logger): Promise<
 
   let repliesFound = 0;
   for (const item of recentSentItems) {
-    const result = await syncRepliesForOutboxItem(prisma, fetchThreadMessages, item.id);
+    const result = await syncRepliesForOutboxItem(prisma, fetchThreadMessages, item.id, {
+      decider: getJourneyDeciderFromEnv(),
+    });
     if (result.newReplies > 0) {
       repliesFound += result.newReplies;
       logger.info("reply detected, enrollment exited", { outboxItemId: item.id });

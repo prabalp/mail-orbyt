@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 const addSuppressionEntryMock = vi.fn();
 vi.mock("@mail-orbyt/leads", () => ({ addSuppressionEntry: addSuppressionEntryMock }));
 
-const applyJourneyOutcomeMock = vi.fn();
-vi.mock("@mail-orbyt/scheduling", () => ({ applyJourneyOutcome: applyJourneyOutcomeMock }));
+const routeJourneyReplyMock = vi.fn();
+vi.mock("@mail-orbyt/scheduling", () => ({ routeJourneyReply: routeJourneyReplyMock }));
 
 const { syncRepliesForOutboxItem } = await import("./reply-sync-service");
 
@@ -155,7 +155,7 @@ describe("syncRepliesForOutboxItem", () => {
     prisma.campaignEnrollment.findUnique.mockResolvedValue({
       campaign: { routingMode: "JOURNEY" },
     });
-    applyJourneyOutcomeMock.mockResolvedValue({ routed: true, toNodeKey: "book", ended: false });
+    routeJourneyReplyMock.mockResolvedValue({ routed: true, toNodeKey: "book", ended: false });
     const fetchThread = vi.fn().mockResolvedValue([
       {
         gmailMessageId: "m-1",
@@ -166,10 +166,13 @@ describe("syncRepliesForOutboxItem", () => {
       },
     ]);
     await syncRepliesForOutboxItem(prisma as never, fetchThread, "outbox-1");
-    expect(applyJourneyOutcomeMock).toHaveBeenCalledWith(
+    expect(routeJourneyReplyMock).toHaveBeenCalledWith(
       expect.anything(),
       "enrollment-1",
-      expect.objectContaining({ trigger: "REPLY", outcome: "interested", source: "RULE" }),
+      expect.objectContaining({
+        classification: "INTERESTED",
+        replySnippet: "Happy to chat, sounds interesting",
+      }),
     );
     expect(prisma.campaignEnrollment.update).not.toHaveBeenCalled();
   });
@@ -179,7 +182,7 @@ describe("syncRepliesForOutboxItem", () => {
     prisma.campaignEnrollment.findUnique.mockResolvedValue({
       campaign: { routingMode: "JOURNEY" },
     });
-    applyJourneyOutcomeMock.mockResolvedValue({ routed: false });
+    routeJourneyReplyMock.mockResolvedValue({ routed: false });
     const fetchThread = vi.fn().mockResolvedValue([
       {
         gmailMessageId: "m-2",
