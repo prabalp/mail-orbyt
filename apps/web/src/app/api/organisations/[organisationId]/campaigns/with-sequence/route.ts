@@ -24,9 +24,10 @@ const stepSchema = z.object({
   stepType: z.enum(["INITIAL", "FOLLOW_UP", "CLOSE_THE_LOOP"]),
   delayDays: z.number().int().min(0).max(60).optional(),
   useAiGeneration: z.boolean().optional(),
+  useImportedContent: z.boolean().optional(),
   callToActionOverride: z.string().max(300).optional(),
-  manualSubject: z.string().max(150).optional(),
-  manualBody: z.string().max(4000).optional(),
+  manualSubject: z.string().max(150).nullable().optional(),
+  manualBody: z.string().max(4000).nullable().optional(),
 });
 
 const bodySchema = z.object({
@@ -122,7 +123,12 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     if (activate) {
       // Deliberately last: activation validates that steps and inboxes exist,
       // so it can only succeed once everything above has landed.
-      await updateOrganisationCampaign(organisationId, campaign.id, { status: "ACTIVE" });
+      await updateOrganisationCampaign(
+        organisationId,
+        campaign.id,
+        { status: "ACTIVE" },
+        { userId },
+      );
     }
 
     const assembled = await getOrganisationCampaign(organisationId, campaign.id);

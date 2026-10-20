@@ -16,6 +16,10 @@ const stepInputSchema = z.object({
     .describe(
       "Defaults to true. Set false and provide manualSubject/manualBody for hand-written copy",
     ),
+  useImportedContent: z
+    .boolean()
+    .optional()
+    .describe("Send each lead's imported emails. Do not combine with AI generation"),
   callToActionOverride: z.string().max(300).optional(),
   manualSubject: z.string().max(150).optional(),
   manualBody: z.string().max(4000).optional(),

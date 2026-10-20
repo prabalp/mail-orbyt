@@ -46,4 +46,17 @@ Things to know before acting:
   - Long-running work (research, CSV import, sending) is queued and returns a
     jobId. Poll get_job_status rather than assuming it finished.
   - Lists are paginated and default to a small page. Ask for more pages rather
-    than assuming the first page is everything.`;
+    than assuming the first page is everything.
+
+Social growth agent (LinkedIn, X, Reddit, Instagram, Threads):
+  - Connect accounts with get_social_connect_url (a human must open the link).
+  - The agent polls connected accounts every ~5 minutes, drafts replies, and
+    every draft passes a deterministic policy engine that decides: publish,
+    simulate (dry-run), escalate to human review, or block. See what it did
+    with list_social_actions; the review queue is status=PENDING_HUMAN_APPROVAL.
+  - New organisations are fail-closed: autonomy off, dry-run on. Turning
+    autonomy on with dry-run off (update_social_agent_settings) and
+    approve_social_action both publish publicly and irreversibly — show the
+    user the draft or the change and get their explicit agreement first.
+  - set_social_kill_switch with active=true is the emergency stop. Use it
+    without hesitation if the user wants the agent to stop.`;

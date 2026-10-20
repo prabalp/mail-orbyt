@@ -135,6 +135,18 @@ importers:
       '@mail-orbyt/scheduling':
         specifier: workspace:*
         version: link:../../packages/scheduling
+      '@mail-orbyt/social-generation':
+        specifier: workspace:*
+        version: link:../../packages/social-generation
+      '@mail-orbyt/social-platforms':
+        specifier: workspace:*
+        version: link:../../packages/social-platforms
+      '@mail-orbyt/social-policy':
+        specifier: workspace:*
+        version: link:../../packages/social-policy
+      '@mail-orbyt/social-scheduling':
+        specifier: workspace:*
+        version: link:../../packages/social-scheduling
       '@mail-orbyt/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -223,6 +235,18 @@ importers:
       '@mail-orbyt/scheduling':
         specifier: workspace:*
         version: link:../../packages/scheduling
+      '@mail-orbyt/social-generation':
+        specifier: workspace:*
+        version: link:../../packages/social-generation
+      '@mail-orbyt/social-platforms':
+        specifier: workspace:*
+        version: link:../../packages/social-platforms
+      '@mail-orbyt/social-policy':
+        specifier: workspace:*
+        version: link:../../packages/social-policy
+      '@mail-orbyt/social-scheduling':
+        specifier: workspace:*
+        version: link:../../packages/social-scheduling
       '@mail-orbyt/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -326,6 +350,9 @@ importers:
 
   packages/campaigns:
     dependencies:
+      '@mail-orbyt/authentication':
+        specifier: workspace:*
+        version: link:../authentication
       '@mail-orbyt/database':
         specifier: workspace:*
         version: link:../database
@@ -567,6 +594,9 @@ importers:
         specifier: workspace:*
         version: link:../database
     devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.1
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -656,6 +686,85 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/social-generation:
+    dependencies:
+      '@google/genai':
+        specifier: ^2.13.0
+        version: 2.13.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
+      '@mail-orbyt/config':
+        specifier: workspace:*
+        version: link:../config
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/social-platforms:
+    dependencies:
+      '@mail-orbyt/ai-settings':
+        specifier: workspace:*
+        version: link:../ai-settings
+      '@mail-orbyt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/social-policy:
+    dependencies:
+      '@mail-orbyt/authentication':
+        specifier: workspace:*
+        version: link:../authentication
+      '@mail-orbyt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@mail-orbyt/database':
+        specifier: workspace:*
+        version: link:../database
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/social-scheduling:
+    dependencies:
+      bullmq:
+        specifier: ^5.34.2
+        version: 5.81.2
     devDependencies:
       ioredis:
         specifier: ^5.4.2

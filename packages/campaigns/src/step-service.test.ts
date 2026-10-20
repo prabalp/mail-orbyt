@@ -41,6 +41,16 @@ describe("addStep", () => {
     expect(step?.orderIndex).toBe(0);
   });
 
+  it("stores an imported-email step without a shared template", async () => {
+    const prisma = fakePrisma({ campaign: OWNED_CAMPAIGN, lastStep: null });
+    const step = await addStep(prisma, "org-1", "campaign-1", {
+      stepType: "INITIAL",
+      useImportedContent: true,
+    });
+    expect(step?.useAiGeneration).toBe(false);
+    expect(step?.useImportedContent).toBe(true);
+  });
+
   it("rejects a manual step missing subject/body", async () => {
     const prisma = fakePrisma({ campaign: OWNED_CAMPAIGN });
     await expect(

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { recordAuditEvent } from "@mail-orbyt/authentication";
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
 import {
@@ -56,6 +57,13 @@ export async function completeGmailOAuth(params: {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresInSeconds: tokens.expiresInSeconds,
+  });
+
+  await recordAuditEvent(prisma, {
+    type: "INBOX_CONNECTED",
+    organisationId: params.organisationId,
+    userId: params.connectedByUserId,
+    metadata: { inboxId: inbox.id },
   });
 
   await runDomainDnsCheck(prisma, params.organisationId, extractDomain(email));

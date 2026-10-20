@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "@mail-orbyt/authentication";
 import type { Campaign, CampaignStatus, PrismaClient } from "@mail-orbyt/database";
 import { rescheduleCampaignOutboxItems } from "@mail-orbyt/scheduling";
 
@@ -130,11 +131,61 @@ function movesSendingWindow(campaign: Campaign, patch: UpdateCampaignParams): bo
   return false;
 }
 
+async function assertImportedEmailsCoverEnrollments(
+  prisma: Pick<PrismaClient, "campaignStep" | "campaignEnrollment" | "leadImportedEmail">,
+  campaignId: string,
+) {
+  const steps = await prisma.campaignStep.findMany({
+    where: { campaignId, useImportedContent: true },
+    select: { orderIndex: true },
+  });
+  if (steps.length === 0) return;
+  const sequences = steps.map((step) => step.orderIndex + 1);
+  const enrollments = await prisma.campaignEnrollment.findMany({
+    where: { campaignId, status: { in: ["PENDING", "ACTIVE", "PAUSED"] } },
+    select: { leadId: true, lead: { select: { email: true } } },
+  });
+  if (enrollments.length === 0) return;
+
+  const imported = await prisma.leadImportedEmail.findMany({
+    where: {
+      leadId: { in: enrollments.map((enrollment) => enrollment.leadId) },
+      sequence: { in: sequences },
+    },
+    select: { leadId: true, sequence: true },
+  });
+  const present = new Set(imported.map((email) => `${email.leadId}:${email.sequence}`));
+  const missing = new Set<string>();
+  for (const enrollment of enrollments) {
+    for (const sequence of sequences) {
+      if (!present.has(`${enrollment.leadId}:${sequence}`)) {
+        missing.add(enrollment.lead.email ?? enrollment.leadId);
+      }
+    }
+  }
+  if (missing.size > 0) {
+    const sample = [...missing].slice(0, 5).join(", ");
+    throw new CampaignActivationError(
+      `Imported-email steps are missing content for: ${sample}. Import those emails or switch the step back to AI generation.`,
+    );
+  }
+}
+
 export async function updateCampaign(
-  prisma: Pick<PrismaClient, "campaign" | "campaignStep" | "campaignInbox" | "outboxItem">,
+  prisma: Pick<
+    PrismaClient,
+    | "campaign"
+    | "campaignStep"
+    | "campaignInbox"
+    | "outboxItem"
+    | "campaignEnrollment"
+    | "leadImportedEmail"
+    | "auditEvent"
+  >,
   organisationId: string,
   campaignId: string,
   patch: UpdateCampaignParams,
+  actor?: { userId?: string },
 ) {
   const campaign = await assertOwnedCampaign(prisma, organisationId, campaignId);
   if (!campaign) return null;
@@ -154,6 +205,7 @@ export async function updateCampaign(
         "A campaign needs at least one connected inbox before it can go active.",
       );
     }
+    await assertImportedEmailsCoverEnrollments(prisma, campaignId);
   }
 
   // Resuming re-anchors pending sends for the same reason a window edit does:
@@ -165,7 +217,24 @@ export async function updateCampaign(
   // follow-up in ahead of its delayDays gap.
   const resuming = patch.status === "ACTIVE" && campaign.status === "PAUSED";
   const shouldReschedule = movesSendingWindow(campaign, patch) || resuming;
+  const previousStatus = campaign.status;
   const updated = await prisma.campaign.update({ where: { id: campaignId }, data: patch });
+
+  if (patch.status === "ACTIVE" && previousStatus !== "ACTIVE") {
+    await recordAuditEvent(prisma, {
+      type: "CAMPAIGN_LAUNCHED",
+      organisationId,
+      userId: actor?.userId,
+      metadata: { campaignId, previousStatus },
+    });
+  } else if (patch.status === "PAUSED" && previousStatus !== "PAUSED") {
+    await recordAuditEvent(prisma, {
+      type: "CAMPAIGN_PAUSED",
+      organisationId,
+      userId: actor?.userId,
+      metadata: { campaignId, previousStatus },
+    });
+  }
 
   // Pending sends carry a scheduledFor computed under the OLD window, so
   // without this the edit silently applies to future items only.

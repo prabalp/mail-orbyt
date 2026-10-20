@@ -1,11 +1,14 @@
 import { isSuppressed } from "@mail-orbyt/leads";
 import type { PrismaClient } from "@mail-orbyt/database";
+import { CampaignActivationError } from "./campaign-service";
 
 type Prisma = Pick<
   PrismaClient,
   | "campaign"
   | "lead"
   | "campaignEnrollment"
+  | "campaignStep"
+  | "leadImportedEmail"
   | "suppressionEntry"
   | "leadListMembership"
   | "auditEvent"
@@ -32,6 +35,31 @@ export async function enrollLeads(
   const leads = await prisma.lead.findMany({
     where: { id: { in: leadIds }, organisationId },
   });
+
+  const importedSteps = await prisma.campaignStep.findMany({
+    where: { campaignId, useImportedContent: true },
+    select: { orderIndex: true },
+  });
+  if (importedSteps.length > 0 && leads.length > 0) {
+    const sequences = importedSteps.map((step) => step.orderIndex + 1);
+    const imported = await prisma.leadImportedEmail.findMany({
+      where: { leadId: { in: leads.map((lead) => lead.id) }, sequence: { in: sequences } },
+      select: { leadId: true, sequence: true },
+    });
+    const present = new Set(imported.map((email) => `${email.leadId}:${email.sequence}`));
+    const missing = leads.filter((lead) =>
+      sequences.some((sequence) => !present.has(`${lead.id}:${sequence}`)),
+    );
+    if (missing.length > 0) {
+      const sample = missing
+        .slice(0, 5)
+        .map((lead) => lead.email ?? lead.id)
+        .join(", ");
+      throw new CampaignActivationError(
+        `These leads are missing imported emails for this campaign: ${sample}.`,
+      );
+    }
+  }
 
   const existing = await prisma.campaignEnrollment.findMany({
     where: { campaignId, leadId: { in: leads.map((lead) => lead.id) } },

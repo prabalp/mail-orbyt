@@ -28,6 +28,8 @@ const CANONICAL_COLUMNS = [
   { key: "city", label: "City" },
   { key: "state", label: "State" },
   { key: "country", label: "Country" },
+  { key: "total_mails", label: "Total mails" },
+  { key: "emails", label: "Imported emails (JSON)" },
 ] as const;
 
 interface PreviewRow {
@@ -208,8 +210,10 @@ export default function ImportLeadsPage(): React.ReactElement {
           <h2 className="text-lg font-medium text-on-surface">Upload a CSV file</h2>
           <p className="mt-1 text-sm text-on-surface-variant">
             Expected columns: first_name, last_name, title, company, linkedin_url, website_url,
-            email, industry, city, state, country. Column names don&apos;t need to match exactly:
-            you&apos;ll confirm the mapping next.
+            email, industry, city, state, country. Optional prewritten copy uses total_mails and
+            emails. emails is a JSON array of {"{"}sequence, type, subject, body{"}"} — leave out
+            the greeting and signature; those are added when the email is sent. Column names
+            don&apos;t need to match exactly: you&apos;ll confirm the mapping next.
           </p>
           <div className="mt-4">
             <input

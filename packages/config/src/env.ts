@@ -54,6 +54,26 @@ const envSchema = z.object({
   // Encryption for tokens at rest (AES-256-GCM key, base64, 32 bytes)
   TOKEN_ENCRYPTION_KEY: z.string().min(1),
 
+  // Social platform OAuth (packages/social-platforms) — all optional since a
+  // deployment may only have some of these platforms' apps configured.
+  LINKEDIN_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  LINKEDIN_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+  LINKEDIN_OAUTH_REDIRECT_URI: z.string().url().optional(),
+
+  TWITTER_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  TWITTER_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+  TWITTER_OAUTH_REDIRECT_URI: z.string().url().optional(),
+
+  REDDIT_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  REDDIT_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+  REDDIT_OAUTH_REDIRECT_URI: z.string().url().optional(),
+  REDDIT_USER_AGENT: z.string().min(1).optional(),
+
+  META_OAUTH_APP_ID: z.string().min(1).optional(),
+  META_OAUTH_APP_SECRET: z.string().min(1).optional(),
+  META_OAUTH_REDIRECT_URI: z.string().url().optional(),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().min(1).optional(),
+
   // Object storage (S3-compatible)
   STORAGE_ENDPOINT: z.string().url(),
   STORAGE_REGION: z.string().default("auto"),

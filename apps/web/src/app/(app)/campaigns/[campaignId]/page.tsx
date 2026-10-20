@@ -144,12 +144,58 @@ function recommendedTimezone(): string {
   }
 }
 
+type StepContentSource = "AI" | "SHARED_TEMPLATE" | "IMPORTED";
+
+const CONTENT_SOURCE_OPTIONS = [
+  { value: "AI", label: "Generate with AI" },
+  { value: "SHARED_TEMPLATE", label: "Shared manual template" },
+  { value: "IMPORTED", label: "Use imported lead emails" },
+];
+
+function contentSourceOf(step: {
+  useAiGeneration: boolean;
+  useImportedContent?: boolean;
+}): StepContentSource {
+  if (step.useImportedContent) return "IMPORTED";
+  if (!step.useAiGeneration) return "SHARED_TEMPLATE";
+  return "AI";
+}
+
+function contentSourcePayload(
+  source: StepContentSource,
+  manual?: { subject: string; body: string },
+) {
+  if (source === "IMPORTED") {
+    return {
+      useAiGeneration: false,
+      useImportedContent: true,
+      manualSubject: null,
+      manualBody: null,
+    };
+  }
+  if (source === "SHARED_TEMPLATE") {
+    return {
+      useAiGeneration: false,
+      useImportedContent: false,
+      manualSubject: manual?.subject ?? "",
+      manualBody: manual?.body ?? "",
+    };
+  }
+  return {
+    useAiGeneration: true,
+    useImportedContent: false,
+    manualSubject: null,
+    manualBody: null,
+  };
+}
+
 interface Step {
   id: string;
   orderIndex: number;
   stepType: "INITIAL" | "FOLLOW_UP" | "CLOSE_THE_LOOP";
   delayDays: number;
   useAiGeneration: boolean;
+  useImportedContent: boolean;
   callToActionOverride: string | null;
   stepInstructions: string | null;
   manualSubject: string | null;
@@ -211,12 +257,18 @@ export default function CampaignDetailPage(): React.ReactElement {
   const [deleting, setDeleting] = useState(false);
 
   const [newStepType, setNewStepType] = useState<Step["stepType"]>("INITIAL");
+  const [newContentSource, setNewContentSource] = useState<StepContentSource>("AI");
   const [newCallToAction, setNewCallToAction] = useState("book a 15 minute intro call");
+  const [newManualSubject, setNewManualSubject] = useState("");
+  const [newManualBody, setNewManualBody] = useState("");
   const [addingStep, setAddingStep] = useState(false);
 
   const [editingStep, setEditingStep] = useState<Step | null>(null);
+  const [editContentSource, setEditContentSource] = useState<StepContentSource>("AI");
   const [editDelayDays, setEditDelayDays] = useState("0");
   const [editCallToAction, setEditCallToAction] = useState("");
+  const [editManualSubject, setEditManualSubject] = useState("");
+  const [editManualBody, setEditManualBody] = useState("");
   const [editStepInstructions, setEditStepInstructions] = useState("");
   const [savingStep, setSavingStep] = useState(false);
 
@@ -364,14 +416,21 @@ export default function CampaignDetailPage(): React.ReactElement {
           body: JSON.stringify({
             stepType: newStepType,
             delayDays: newStepType === "INITIAL" ? 0 : 3,
-            callToActionOverride: newCallToAction,
+            callToActionOverride: newContentSource === "AI" ? newCallToAction : undefined,
+            ...contentSourcePayload(newContentSource, {
+              subject: newManualSubject,
+              body: newManualBody,
+            }),
           }),
         },
       );
       if (response.ok) {
+        setNewManualSubject("");
+        setNewManualBody("");
         await load();
       } else {
-        toast.show("Could not add step", "error");
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not add step", "error");
       }
     } finally {
       setAddingStep(false);
@@ -380,8 +439,11 @@ export default function CampaignDetailPage(): React.ReactElement {
 
   function handleOpenEditStep(step: Step) {
     setEditingStep(step);
+    setEditContentSource(contentSourceOf(step));
     setEditDelayDays(String(step.delayDays));
     setEditCallToAction(step.callToActionOverride ?? "");
+    setEditManualSubject(step.manualSubject ?? "");
+    setEditManualBody(step.manualBody ?? "");
     setEditStepInstructions(step.stepInstructions ?? "");
   }
 
@@ -396,8 +458,12 @@ export default function CampaignDetailPage(): React.ReactElement {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             delayDays: Number(editDelayDays),
-            callToActionOverride: editCallToAction,
-            stepInstructions: editStepInstructions,
+            callToActionOverride: editContentSource === "AI" ? editCallToAction : undefined,
+            stepInstructions: editContentSource === "AI" ? editStepInstructions : null,
+            ...contentSourcePayload(editContentSource, {
+              subject: editManualSubject,
+              body: editManualBody,
+            }),
           }),
         },
       );
@@ -549,7 +615,8 @@ export default function CampaignDetailPage(): React.ReactElement {
         setLeadSearch("");
         await load();
       } else {
-        toast.show("Could not enroll leads", "error");
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not enroll leads", "error");
       }
     } finally {
       setEnrolling(false);
@@ -577,7 +644,8 @@ export default function CampaignDetailPage(): React.ReactElement {
         setSelectedLeadListId("");
         await load();
       } else {
-        toast.show("Could not enroll this list", "error");
+        const data = await response.json().catch(() => ({}));
+        toast.show(data.error ?? "Could not enroll this list", "error");
       }
     } finally {
       setEnrollingList(false);
@@ -844,9 +912,11 @@ export default function CampaignDetailPage(): React.ReactElement {
                   </div>
                 </div>
                 <p className="mt-2 text-sm text-on-surface-variant">
-                  {step.useAiGeneration
-                    ? `AI-generated, call to action: "${step.callToActionOverride ?? "(default)"}"`
-                    : `Manual: "${step.manualSubject}"`}
+                  {contentSourceOf(step) === "IMPORTED"
+                    ? "Uses this lead's imported email. Greeting and signature are added at send time."
+                    : contentSourceOf(step) === "SHARED_TEMPLATE"
+                      ? `Shared template: "${step.manualSubject}"`
+                      : `AI-generated, call to action: "${step.callToActionOverride ?? "(default)"}"`}
                 </p>
                 {step.stepInstructions ? (
                   <p className="mt-1 text-sm text-on-surface-variant italic">
@@ -869,15 +939,45 @@ export default function CampaignDetailPage(): React.ReactElement {
             ]}
             onChange={(event) => setNewStepType(event.target.value as Step["stepType"])}
           />
-          <TextInput
-            label="Call to action"
-            value={newCallToAction}
-            onChange={(event) => setNewCallToAction(event.target.value)}
+          <Select
+            label="Content"
+            value={newContentSource}
+            options={CONTENT_SOURCE_OPTIONS}
+            onChange={(event) => setNewContentSource(event.target.value as StepContentSource)}
           />
+          {newContentSource === "AI" ? (
+            <TextInput
+              label="Call to action"
+              value={newCallToAction}
+              onChange={(event) => setNewCallToAction(event.target.value)}
+            />
+          ) : null}
           <Button loading={addingStep} onClick={handleAddStep}>
             Add step
           </Button>
         </div>
+        {newContentSource === "SHARED_TEMPLATE" ? (
+          <div className="mt-4 flex flex-col gap-3">
+            <TextInput
+              label="Subject"
+              value={newManualSubject}
+              onChange={(event) => setNewManualSubject(event.target.value)}
+            />
+            <TextArea
+              label="Body"
+              rows={5}
+              value={newManualBody}
+              onChange={(event) => setNewManualBody(event.target.value)}
+            />
+          </div>
+        ) : null}
+        {newContentSource === "IMPORTED" ? (
+          <p className="mt-4 text-sm text-on-surface-variant">
+            Each enrolled lead must already have an imported email for this step&apos;s position
+            (sequence 1 is the first step). The send adds &ldquo;Hey {"{first name}"},&rdquo; and
+            the organisation signature around that body.
+          </p>
+        ) : null}
       </Card>
 
       <Dialog
@@ -933,7 +1033,14 @@ export default function CampaignDetailPage(): React.ReactElement {
               </p>
             </div>
 
-            {editingStep.useAiGeneration ? (
+            <Select
+              label="Content"
+              value={editContentSource}
+              options={CONTENT_SOURCE_OPTIONS}
+              onChange={(event) => setEditContentSource(event.target.value as StepContentSource)}
+            />
+
+            {editContentSource === "AI" ? (
               <>
                 <TextInput
                   label="Call to action"
@@ -948,12 +1055,29 @@ export default function CampaignDetailPage(): React.ReactElement {
                   rows={5}
                 />
               </>
-            ) : (
+            ) : null}
+            {editContentSource === "SHARED_TEMPLATE" ? (
+              <>
+                <TextInput
+                  label="Subject"
+                  value={editManualSubject}
+                  onChange={(event) => setEditManualSubject(event.target.value)}
+                />
+                <TextArea
+                  label="Body"
+                  rows={6}
+                  value={editManualBody}
+                  onChange={(event) => setEditManualBody(event.target.value)}
+                />
+              </>
+            ) : null}
+            {editContentSource === "IMPORTED" ? (
               <p className="text-sm text-on-surface-variant">
-                This step uses a manual template, so it has no AI prompt to configure. Edit the
-                subject/body via the API or MCP tools.
+                Sends the imported email whose sequence matches this step&apos;s position. The
+                greeting and signature are added at send time, and activation fails if an enrolled
+                lead is missing that email.
               </p>
-            )}
+            ) : null}
           </div>
         ) : null}
       </Dialog>

@@ -4,12 +4,16 @@ import { createLogger } from "@mail-orbyt/logging";
 import { prisma } from "@mail-orbyt/database";
 import { S3ObjectStorage } from "@mail-orbyt/storage";
 import { scheduleRecurringTick } from "@mail-orbyt/scheduling";
+import { scheduleSocialPollTick } from "@mail-orbyt/social-scheduling";
 import type { Worker } from "bullmq";
 import { createLeadImportWorker } from "./queues/lead-import.js";
 import { createResearchWorker } from "./queues/research.js";
 import { createResearchKeywordsWorker } from "./queues/research-keywords.js";
 import { createCampaignSchedulerWorker } from "./queues/campaign-scheduler.js";
 import { createOutboxWorker } from "./queues/outbox.js";
+import { createSocialPollWorker } from "./queues/social-event-polling.js";
+import { createSocialEventProcessingWorker } from "./queues/social-event-processing.js";
+import { createSocialPublishWorker } from "./queues/social-publish.js";
 
 /**
  * Worker process bootstrap. Job queues (generation, scheduling, send,
@@ -86,13 +90,40 @@ async function main(): Promise<void> {
       prisma,
       logger: logger.child({ queue: "outbox" }),
     }),
+    createSocialPollWorker({
+      connection: redis,
+      prisma,
+      logger: logger.child({ queue: "social-event-polling" }),
+    }),
+    createSocialEventProcessingWorker({
+      connection: redis,
+      redis,
+      prisma,
+      logger: logger.child({ queue: "social-event-processing" }),
+    }),
+    createSocialPublishWorker({
+      connection: redis,
+      redis,
+      prisma,
+      logger: logger.child({ queue: "social-publish" }),
+    }),
   );
 
   await scheduleRecurringTick(redis);
+  await scheduleSocialPollTick(redis);
 
   logger.info("worker started", {
     environment: env.NODE_ENV,
-    queues: ["lead-import", "research", "research-keywords", "campaign-scheduler", "outbox"],
+    queues: [
+      "lead-import",
+      "research",
+      "research-keywords",
+      "campaign-scheduler",
+      "outbox",
+      "social-event-polling",
+      "social-event-processing",
+      "social-publish",
+    ],
   });
 }
 

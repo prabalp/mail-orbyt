@@ -14,6 +14,7 @@ function fakePrisma(options: {
 }) {
   return {
     campaign: { findUnique: vi.fn().mockResolvedValue(OWNED_CAMPAIGN) },
+    campaignStep: { findMany: vi.fn().mockResolvedValue([]) },
     lead: { findMany: vi.fn().mockResolvedValue(options.leads ?? []) },
     campaignEnrollment: {
       findMany: vi.fn().mockResolvedValue(options.existingEnrollments ?? []),

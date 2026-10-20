@@ -17,7 +17,11 @@ import { describe, expect, it } from "vitest";
  */
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
-const ALLOWED_PACKAGES = ["packages/email-generation", "packages/research-keywords"];
+const ALLOWED_PACKAGES = [
+  "packages/email-generation",
+  "packages/research-keywords",
+  "packages/social-generation",
+];
 const SCAN_ROOTS = ["apps", "packages"];
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const IGNORED_DIR_NAMES = new Set(["node_modules", "dist", ".next", ".turbo", "coverage"]);
@@ -100,6 +104,8 @@ describe("AI SDK import boundary", () => {
       // Re-exports the same helpers under Gmail-token names; adds no new
       // decryption of its own.
       "packages/gmail/src/token-crypto.ts",
+      // Same re-export pattern, for social platform OAuth tokens.
+      "packages/social-platforms/src/token-crypto.ts",
     ];
     const offenders = files
       .map((file) => relative(REPO_ROOT, file))
@@ -137,7 +143,11 @@ describe("AI SDK import boundary", () => {
         const hasAiSdk = Object.keys(deps).some(
           (dep) => dep.includes("anthropic") || dep === "openai" || dep === "@google/genai",
         );
-        const allowedNames = ["@mail-orbyt/email-generation", "@mail-orbyt/research-keywords"];
+        const allowedNames = [
+          "@mail-orbyt/email-generation",
+          "@mail-orbyt/research-keywords",
+          "@mail-orbyt/social-generation",
+        ];
         if (hasAiSdk && !allowedNames.includes(pkgJson.name ?? "")) {
           offenders.push(pkgJson.name ?? dir);
         }

@@ -16,8 +16,8 @@ const AI_SDK_IMPORT_PATTERNS = [
       "@google/genai/*",
     ],
     message:
-      "AI provider SDKs may only be imported from packages/email-generation or " +
-      "packages/research-keywords. See docs/ai-boundaries.md.",
+      "AI provider SDKs may only be imported from packages/email-generation, " +
+      "packages/research-keywords, or packages/social-generation. See docs/ai-boundaries.md.",
   },
 ];
 
@@ -64,7 +64,11 @@ export default [
     },
   },
   {
-    files: ["packages/email-generation/**/*.ts", "packages/research-keywords/**/*.ts"],
+    files: [
+      "packages/email-generation/**/*.ts",
+      "packages/research-keywords/**/*.ts",
+      "packages/social-generation/**/*.ts",
+    ],
     rules: {
       "no-restricted-imports": "off",
     },

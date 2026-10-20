@@ -57,8 +57,9 @@ export async function updateOrganisationCampaign(
   organisationId: string,
   campaignId: string,
   patch: UpdateCampaignParams,
+  actor?: { userId?: string },
 ) {
-  const campaign = await updateCampaign(prisma, organisationId, campaignId, patch);
+  const campaign = await updateCampaign(prisma, organisationId, campaignId, patch, actor);
 
   // Activating is otherwise only a column write, and sending is driven by the
   // worker's 60s tick — so without this a campaign switched back to Active sits
@@ -243,6 +244,12 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
 
   let subject: string;
   let body: string;
+
+  if (step.useImportedContent) {
+    throw new CampaignActivationError(
+      "This step sends each lead's imported email, so a test send has no single body to preview.",
+    );
+  }
 
   if (!step.useAiGeneration) {
     if (!step.manualSubject || !step.manualBody) {

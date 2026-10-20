@@ -12,10 +12,11 @@ const addStepSchema = z.object({
   stepType: z.enum(["INITIAL", "FOLLOW_UP", "CLOSE_THE_LOOP"]),
   delayDays: z.number().int().min(0).max(60).optional(),
   useAiGeneration: z.boolean().optional(),
+  useImportedContent: z.boolean().optional(),
   callToActionOverride: z.string().max(300).optional(),
   stepInstructions: z.string().max(1000).optional(),
-  manualSubject: z.string().max(150).optional(),
-  manualBody: z.string().max(4000).optional(),
+  manualSubject: z.string().max(150).nullable().optional(),
+  manualBody: z.string().max(4000).nullable().optional(),
 });
 
 const reorderSchema = z.object({ orderedStepIds: z.array(z.string().min(1)) });

@@ -13,18 +13,26 @@ export interface AddStepParams {
   stepType: SequenceStepType;
   delayDays?: number;
   useAiGeneration?: boolean;
+  useImportedContent?: boolean;
   callToActionOverride?: string;
-  stepInstructions?: string;
-  manualSubject?: string;
-  manualBody?: string;
+  stepInstructions?: string | null;
+  manualSubject?: string | null;
+  manualBody?: string | null;
 }
 
-function assertValidContent(
-  params: Pick<AddStepParams, "useAiGeneration" | "manualSubject" | "manualBody">,
-) {
+function assertValidContent(params: {
+  useAiGeneration?: boolean;
+  useImportedContent?: boolean;
+  manualSubject?: string | null;
+  manualBody?: string | null;
+}) {
+  if (params.useImportedContent && params.useAiGeneration === true) {
+    throw new InvalidStepError("A step cannot both generate with AI and use imported emails.");
+  }
+  if (params.useImportedContent) return;
   if (params.useAiGeneration === false && (!params.manualSubject || !params.manualBody)) {
     throw new InvalidStepError(
-      "A step with AI generation disabled requires both manualSubject and manualBody.",
+      "A shared template requires both manualSubject and manualBody. Choose imported emails to send the lead's prewritten copy instead.",
     );
   }
 }
@@ -56,7 +64,8 @@ export async function addStep(
       orderIndex: (lastStep?.orderIndex ?? -1) + 1,
       stepType: params.stepType,
       delayDays: params.delayDays ?? 0,
-      useAiGeneration: params.useAiGeneration ?? true,
+      useAiGeneration: params.useImportedContent ? false : (params.useAiGeneration ?? true),
+      useImportedContent: params.useImportedContent ?? false,
       callToActionOverride: params.callToActionOverride,
       stepInstructions: params.stepInstructions,
       manualSubject: params.manualSubject,
@@ -77,13 +86,21 @@ export async function updateStep(
   const step = await prisma.campaignStep.findUnique({ where: { id: stepId } });
   if (!step || step.campaignId !== campaignId) return null;
 
+  const useImportedContent = patch.useImportedContent ?? step.useImportedContent;
+  const useAiGeneration = useImportedContent
+    ? false
+    : (patch.useAiGeneration ?? step.useAiGeneration);
   assertValidContent({
-    useAiGeneration: patch.useAiGeneration ?? step.useAiGeneration,
-    manualSubject: patch.manualSubject ?? step.manualSubject ?? undefined,
-    manualBody: patch.manualBody ?? step.manualBody ?? undefined,
+    useAiGeneration,
+    useImportedContent,
+    manualSubject: patch.manualSubject !== undefined ? patch.manualSubject : step.manualSubject,
+    manualBody: patch.manualBody !== undefined ? patch.manualBody : step.manualBody,
   });
 
-  return prisma.campaignStep.update({ where: { id: stepId }, data: patch });
+  return prisma.campaignStep.update({
+    where: { id: stepId },
+    data: { ...patch, useAiGeneration, useImportedContent },
+  });
 }
 
 /** Removes a step and renumbers the remaining steps to stay contiguous (0..n-1), so orderIndex always reflects actual send order with no gaps. */

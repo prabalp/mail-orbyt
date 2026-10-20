@@ -17,6 +17,9 @@ const VALID_PERMISSIONS = new Set<string>([
   "research:review",
   "conversations:review",
   "analytics:view",
+  "social:manage",
+  "social:review",
+  "social:kill_switch",
   PROFILE_SCOPE,
 ]);
 

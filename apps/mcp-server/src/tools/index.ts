@@ -19,6 +19,7 @@ import { EMAIL_DRAFT_TOOLS } from "./email-drafts.js";
 import { SUPPRESSION_TOOLS } from "./suppressions.js";
 import { MCP_CONNECTION_TOOLS } from "./mcp-connections.js";
 import { COMPOSITE_TOOLS } from "./composite.js";
+import { SOCIAL_LINK_TOOLS, SOCIAL_TOOLS } from "./social.js";
 
 export const ALL_TOOLS: RouteToolDescriptor[] = [
   ...LEAD_TOOLS,
@@ -40,7 +41,8 @@ export const ALL_TOOLS: RouteToolDescriptor[] = [
   ...SUPPRESSION_TOOLS,
   ...MCP_CONNECTION_TOOLS,
   ...COMPOSITE_TOOLS,
+  ...SOCIAL_TOOLS,
 ];
 
 /** Tools whose result is computed directly rather than fetched from apps/web — see registry.ts's LinkToolDescriptor. */
-export const ALL_LINK_TOOLS: LinkToolDescriptor[] = [...GMAIL_TOOLS];
+export const ALL_LINK_TOOLS: LinkToolDescriptor[] = [...GMAIL_TOOLS, ...SOCIAL_LINK_TOOLS];

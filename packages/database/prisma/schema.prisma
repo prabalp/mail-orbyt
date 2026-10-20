@@ -75,6 +75,7 @@ model User {
   mcpAuthorizationCodes   McpAuthorizationCode[]
   mcpAccessTokens         McpAccessToken[]
   mcpRefreshTokens        McpRefreshToken[]
+  mcpPlatformGrants       McpPlatformGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -169,9 +170,9 @@ enum AiProviderKind {
 }
 
 model Organisation {
-  id   String @id @default(cuid())
-  name String
-  slug String @unique
+  id                      String         @id @default(cuid())
+  name                    String
+  slug                    String         @unique
   /// The organisation's DEFAULT campaign prompt: which recipient data emails
   /// may use, how they are formatted, and the voice to write in. Used by
   /// campaigns that set no prompt of their own (Campaign.emailPromptInstructions
@@ -179,7 +180,7 @@ model Organisation {
   /// never merged into the system prompt, so it can never relax the safety
   /// rules there. Null falls back to DEFAULT_CAMPAIGN_EMAIL_PROMPT. See
   /// docs/ai-boundaries.md.
-  emailPromptInstructions String? @db.Text
+  emailPromptInstructions String?        @db.Text
   /// Booking link embedded verbatim (via deterministic substitution, never
   /// model-generated) into every AI-drafted email's call to action.
   calendlyUrl             String?
@@ -188,56 +189,62 @@ model Organisation {
   /// / DEFAULT_REVIEW_SYSTEM_PROMPT in packages/email-generation/src/prompt.ts).
   /// These hold only rules no campaign may relax — what an email says and how
   /// it looks comes from the campaign prompt instead.
-  generationSystemPrompt String? @db.Text
-  reviewSystemPrompt     String? @db.Text
+  generationSystemPrompt  String?        @db.Text
+  reviewSystemPrompt      String?        @db.Text
   /// The organisation's own AI provider (Gemini) API key, AES-256-GCM
   /// encrypted at rest with TOKEN_ENCRYPTION_KEY — the same scheme used for
   /// Gmail OAuth tokens. Null means "use the deployment's AI_PROVIDER_API_KEY".
   /// Never returned to the browser once saved; the settings API exposes only a
   /// masked hint. Applies to every AI call made for this organisation: email
   /// generation, the QA review pass, and AI keyword extraction.
-  aiProviderApiKey String? @db.Text
+  aiProviderApiKey        String?        @db.Text
   /// Model ID used for this organisation's AI calls. Null means "use the
   /// deployment's AI_PROVIDER_MODEL". Independent of aiProviderApiKey — an
   /// organisation may pin a model without bringing its own key.
-  aiProviderModel  String?
+  aiProviderModel         String?
   /// Which provider protocol aiProviderApiKey/aiProviderModel are for.
   /// GEMINI (default) preserves existing behavior — every org created before
   /// this field existed is unaffected. OPENAI_COMPATIBLE lets an org point
   /// at any LLM that speaks the OpenAI Chat Completions wire format (self-
   /// hosted, OpenRouter, Azure OpenAI, etc.) via aiProviderBaseUrl below.
-  aiProviderKind    AiProviderKind @default(GEMINI)
+  aiProviderKind          AiProviderKind @default(GEMINI)
   /// Base URL for a custom OpenAI-compatible endpoint (e.g.
   /// https://api.example.com/v1, or a self-hosted vLLM/Ollama URL). Only
   /// meaningful when aiProviderKind is OPENAI_COMPATIBLE. Not secret —
   /// stored in the clear like calendlyUrl.
-  aiProviderBaseUrl String?
+  aiProviderBaseUrl       String?
 
-  memberships        OrganisationMembership[]
-  invitations        Invitation[]
-  auditEvents        AuditEvent[]
-  leads              Lead[]
-  companies          Company[]
-  leadLists          LeadList[]
-  importBatches      ImportBatch[]
-  suppressionEntries SuppressionEntry[]
-  researchJobs       ResearchJob[]
-  researchSources    ResearchSource[]
-  researchFacts      ResearchFact[]
-  researchSnapshots  ResearchSnapshot[]
-  researchKeywordRuns ResearchKeywordRun[]
-  emailDrafts        EmailDraft[]
-  inboxes            Inbox[]
-  signatures         Signature[]
-  domainDnsChecks    DomainDnsCheck[]
-  trackingDomain     TrackingDomain?
-  campaigns          Campaign[]
-  outboxItems        OutboxItem[]
-  conversations      Conversation[]
-  meetings           Meeting[]
+  memberships           OrganisationMembership[]
+  invitations           Invitation[]
+  auditEvents           AuditEvent[]
+  leads                 Lead[]
+  companies             Company[]
+  leadLists             LeadList[]
+  importBatches         ImportBatch[]
+  suppressionEntries    SuppressionEntry[]
+  researchJobs          ResearchJob[]
+  researchSources       ResearchSource[]
+  researchFacts         ResearchFact[]
+  researchSnapshots     ResearchSnapshot[]
+  researchKeywordRuns   ResearchKeywordRun[]
+  emailDrafts           EmailDraft[]
+  inboxes               Inbox[]
+  signatures            Signature[]
+  domainDnsChecks       DomainDnsCheck[]
+  trackingDomain        TrackingDomain?
+  campaigns             Campaign[]
+  outboxItems           OutboxItem[]
+  conversations         Conversation[]
+  meetings              Meeting[]
   mcpAuthorizationCodes McpAuthorizationCode[]
   mcpAccessTokens       McpAccessToken[]
   mcpRefreshTokens      McpRefreshToken[]
+  mcpPlatformGrants     McpPlatformGrant[]
+  socialConnections     SocialConnection[]
+  socialAutonomyConfigs SocialAutonomyConfig[]
+  socialPolicyRules     SocialPolicyRule[]
+  socialActions         SocialAction[]
+  socialInboundEvents   SocialInboundEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -318,6 +325,13 @@ enum AuditEventType {
   MCP_TOKEN_REVOKED
   MCP_TOOL_INVOKED
   ORGANISATION_DELETED
+  SOCIAL_CONNECTION_ADDED
+  SOCIAL_CONNECTION_REMOVED
+  SOCIAL_KILL_SWITCH_ACTIVATED
+  SOCIAL_KILL_SWITCH_DEACTIVATED
+  SOCIAL_ACTION_PUBLISHED
+  SOCIAL_ACTION_ESCALATED
+  SOCIAL_POLICY_RULE_CHANGED
 }
 
 model AuditEvent {
@@ -354,14 +368,21 @@ model AuditEvent {
 /// claude.ai's remote MCP connector). Public client only: no client secret
 /// is stored, since the authorization-code exchange is secured by PKCE.
 model McpOAuthClient {
-  id           String   @id @default(cuid())
-  clientId     String   @unique
-  clientName   String
-  redirectUris String[]
+  id               String   @id @default(cuid())
+  clientId         String   @unique
+  clientName       String
+  redirectUris     String[]
+  /// Set only for confidential clients used purely for server-to-server
+  /// calls that never go through the browser redirect flow (currently:
+  /// RFC 7662 introspection callers like lead_orbyt's MCP server). Null for
+  /// every ordinary public/PKCE client created via registerClient() —
+  /// see introspection-clients.ts, ARCHITECTURE.md §6/§7.
+  clientSecretHash String?
 
   authorizationCodes McpAuthorizationCode[]
   accessTokens       McpAccessToken[]
   refreshTokens      McpRefreshToken[]
+  platformGrants     McpPlatformGrant[]
 
   createdAt DateTime @default(now())
 }
@@ -379,6 +400,11 @@ model McpAuthorizationCode {
   redirectUri         String
   codeChallenge       String
   codeChallengeMethod String
+  /// RFC 8707 resource indicator the client requested at /oauth/authorize —
+  /// carried through to the McpAccessToken/McpRefreshToken minted from this
+  /// code. Defaults to mail-orbyt's own MCP resource URI when a client
+  /// omits it (pre-Gateway clients). See ARCHITECTURE.md §6.
+  resource            String
   expiresAt           DateTime
   consumedAt          DateTime?
 
@@ -398,18 +424,29 @@ model McpAuthorizationCode {
 /// one organisation — a token never grants cross-organisation access even
 /// if the user belongs to several.
 model McpAccessToken {
-  id             String    @id @default(cuid())
-  tokenHash      String    @unique
-  clientId       String
-  userId         String
-  organisationId String
-  scope          String
-  expiresAt      DateTime
-  revokedAt      DateTime?
+  id              String    @id @default(cuid())
+  tokenHash       String    @unique
+  clientId        String
+  userId          String
+  organisationId  String
+  scope           String
+  /// RFC 8707 audience this token is valid for — a resource server must
+  /// reject a token whose resource isn't itself. Either the client's own
+  /// resource (the initial "platform" token minted at /oauth/authorize) or
+  /// a backend resource URI minted via the token-exchange grant
+  /// (ARCHITECTURE.md §4.2/§6/§7) — never both at once.
+  resource        String
+  /// Null only for tokens minted before this migration (backfilled to
+  /// mail-orbyt's own resource URI with no grant to point at). Every token
+  /// minted from here on always has one — see platform-grants.ts.
+  platformGrantId String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
 
-  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation  Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  platformGrant McpPlatformGrant? @relation(fields: [platformGrantId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
@@ -417,11 +454,16 @@ model McpAccessToken {
   @@index([userId])
   @@index([organisationId])
   @@index([expiresAt])
+  @@index([platformGrantId])
 }
 
 /// Long-lived (~90d), rotated on every use: refreshAccessToken issues a new
 /// row and sets replacedByTokenHash on this one rather than mutating it in
-/// place, so reuse of an already-rotated refresh token is detectable.
+/// place, so reuse of an already-rotated refresh token is detectable. Only
+/// ever minted alongside the initial platform-token pair — a resource-
+/// scoped token from the token-exchange grant never gets a refresh token of
+/// its own (the Gateway just re-exchanges using the still-valid platform
+/// token instead).
 model McpRefreshToken {
   id                  String    @id @default(cuid())
   tokenHash           String    @unique
@@ -429,19 +471,80 @@ model McpRefreshToken {
   userId              String
   organisationId      String
   scope               String
+  resource            String
+  platformGrantId     String?
   expiresAt           DateTime
   revokedAt           DateTime?
   replacedByTokenHash String?
 
-  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation  Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  platformGrant McpPlatformGrant? @relation(fields: [platformGrantId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@index([clientId])
   @@index([userId])
   @@index([organisationId])
+  @@index([platformGrantId])
+}
+
+/// The single per-(user, organisation, client) consent record — recorded
+/// once, the first time a user approves the platform-level consent screen
+/// for a given MCP client. While it stays unrevoked, every subsequent
+/// /oauth/authorize request for the same (user, organisation, client) is
+/// answered silently (no consent render), and every resource-scoped token
+/// exchange (RFC 8693) under it requires no further user interaction —
+/// this is what makes connecting a second/future Orbyt MCP silent.
+/// ARCHITECTURE.md §4.1, §6.
+model McpPlatformGrant {
+  id             String    @id @default(cuid())
+  userId         String
+  organisationId String
+  clientId       String
+  /// The platform scope as of the most recent approval — re-narrowed
+  /// against the user's current role on every authorize/exchange/refresh,
+  /// same as every other scope in this file (see scopes.ts).
+  scope          String
+  revokedAt      DateTime?
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client       McpOAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  accessTokens  McpAccessToken[]
+  refreshTokens McpRefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, organisationId, clientId])
+  @@index([organisationId])
+  @@index([clientId])
+}
+
+/// Backends the token-exchange grant (RFC 8693) is willing to mint
+/// resource-scoped tokens for — i.e. every downstream Orbyt MCP server, not
+/// including the Gateway's own resource (which a client requests for
+/// itself at /oauth/authorize and is never looked up here). Purely a
+/// registry/allowlist: `resource` on McpAccessToken/McpRefreshToken is a
+/// plain string, not a foreign key into this table, since it also holds
+/// resource values (like the Gateway's own) that never appear here.
+/// ARCHITECTURE.md §5, §6.
+enum McpResourceBackendKind {
+  NATIVE_LOCAL
+  NATIVE_INTROSPECTED
+}
+
+model McpResource {
+  id          String                 @id @default(cuid())
+  resourceUri String                 @unique
+  displayName String
+  backendKind McpResourceBackendKind
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ---------------------------------------------------------------------------
@@ -487,9 +590,9 @@ model Company {
   /// Per-field provenance: { [fieldName]: { source: DataSourceKind, updatedAt: ISO string } }
   fieldSources   Json?
 
-  organisation  Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  leads         Lead[]
-  leadCompanies LeadCompany[]
+  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  leads           Lead[]
+  leadCompanies   LeadCompany[]
   researchJobs    ResearchJob[]
   researchSources ResearchSource[]
   researchFacts   ResearchFact[]
@@ -534,6 +637,7 @@ model Lead {
   outboxItems         OutboxItem[]
   conversations       Conversation[]
   meetings            Meeting[]
+  importedEmails      LeadImportedEmail[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -808,16 +912,16 @@ model ResearchProviderRun {
 /// by walking providerRun -> researchJob) specifically so this row can
 /// outlive, and be looked up independently of, any single job/provider run.
 model ResearchSource {
-  id             String              @id @default(cuid())
-  organisationId String
-  subjectType    ResearchSubjectType
-  leadId         String?
-  companyId      String?
-  url            String
-  title          String?
-  publishedAt    DateTime?
-  fetchedAt      DateTime            @default(now())
-  httpStatus     Int?
+  id                    String              @id @default(cuid())
+  organisationId        String
+  subjectType           ResearchSubjectType
+  leadId                String?
+  companyId             String?
+  url                   String
+  title                 String?
+  publishedAt           DateTime?
+  fetchedAt             DateTime            @default(now())
+  httpStatus            Int?
   /// The provider run that most recently fetched/updated this row —
   /// informational only, not an owning parent (see onDelete: SetNull).
   researchProviderRunId String?
@@ -1135,17 +1239,17 @@ enum DnsCheckStatus {
 /// selectors aren't guessable/fixed), so dkimStatus stays UNKNOWN until one
 /// is supplied.
 model DomainDnsCheck {
-  id           String         @id @default(cuid())
+  id             String         @id @default(cuid())
   organisationId String
-  domain       String
-  spfStatus    DnsCheckStatus @default(UNKNOWN)
-  spfRecord    String?
-  dkimSelector String?
-  dkimStatus   DnsCheckStatus @default(UNKNOWN)
-  dkimRecord   String?
-  dmarcStatus  DnsCheckStatus @default(UNKNOWN)
-  dmarcRecord  String?
-  checkedAt    DateTime       @default(now())
+  domain         String
+  spfStatus      DnsCheckStatus @default(UNKNOWN)
+  spfRecord      String?
+  dkimSelector   String?
+  dkimStatus     DnsCheckStatus @default(UNKNOWN)
+  dkimRecord     String?
+  dmarcStatus    DnsCheckStatus @default(UNKNOWN)
+  dmarcRecord    String?
+  checkedAt      DateTime       @default(now())
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
 
@@ -1241,10 +1345,32 @@ enum SequenceStepType {
   CLOSE_THE_LOOP
 }
 
+/// Prewritten emails imported with a lead. The body is the middle of the
+/// message only: send time prepends "Hey {firstName}," and appends the
+/// organisation signature. sequence 1 is the first campaign step.
+model LeadImportedEmail {
+  id             String           @id @default(cuid())
+  organisationId String
+  leadId         String
+  sequence       Int
+  emailType      SequenceStepType
+  subject        String
+  body           String
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leadId, sequence])
+  @@index([leadId])
+  @@index([organisationId])
+}
+
 /// One step in a campaign's sequence, ordered by orderIndex. Content is
-/// either generated via AI at send time (Phase 5's generateEmail, using
-/// callToActionOverride if set) or a manually-written template with simple
-/// {{firstName}}-style merge tokens — never both, per useAiGeneration.
+/// generated via AI at send time, a shared manual template, or the lead's
+/// imported emails (LeadImportedEmail, matched by sequence = orderIndex + 1).
+/// useImportedContent and useAiGeneration are mutually exclusive.
 ///
 /// The trigger to advance is always "no reply within delayDays" — see
 /// enrollment-progression.ts. There is no reply-classification branch here:
@@ -1263,6 +1389,9 @@ model CampaignStep {
   /// the sole trigger condition for advancing to this step.
   delayDays            Int              @default(0)
   useAiGeneration      Boolean          @default(true)
+  /// When true, send the lead's imported email for this step's sequence
+  /// instead of generating one or using the shared manual template.
+  useImportedContent   Boolean          @default(false)
   callToActionOverride String?
   /// Free-text guidance for THIS step only, layered on top of the campaign's
   /// prompt — e.g. "this is a bump, try a new angle: a case study" or "keep
@@ -1325,8 +1454,8 @@ model CampaignEnrollment {
   lastStepSentAt   DateTime?
   exitReason       String?
 
-  campaign    Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  lead        Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
   outboxItems OutboxItem[]
 
   enrolledAt DateTime  @default(now())
@@ -1356,28 +1485,28 @@ enum OutboxItemStatus {
 /// regenerated on retry, so a retried send is byte-identical to the first
 /// attempt.
 model OutboxItem {
-  id             String           @id @default(cuid())
-  organisationId String
-  campaignId     String
-  leadId         String
-  campaignStepId String
-  enrollmentId   String
-  status         OutboxItemStatus @default(SCHEDULED)
-  scheduledFor   DateTime
-  inboxId        String?
-  subject        String?
-  body           String?
-  attempts       Int              @default(0)
-  lastError      String?
-  sentAt         DateTime?
+  id                String           @id @default(cuid())
+  organisationId    String
+  campaignId        String
+  leadId            String
+  campaignStepId    String
+  enrollmentId      String
+  status            OutboxItemStatus @default(SCHEDULED)
+  scheduledFor      DateTime
+  inboxId           String?
+  subject           String?
+  body              String?
+  attempts          Int              @default(0)
+  lastError         String?
+  sentAt            DateTime?
   providerMessageId String?
   providerThreadId  String?
   /// Open-tracking counters, updated by the pixel-serving route. The
   /// OutboxItem's own id (unguessable cuid) doubles as the pixel token —
   /// no separate token column, since a send row already exists 1:1 with a
   /// single recipient/email.
-  openCount      Int              @default(0)
-  firstOpenedAt  DateTime?
+  openCount         Int              @default(0)
+  firstOpenedAt     DateTime?
 
   organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   campaign     Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -1400,7 +1529,7 @@ model OutboxItem {
 /// summary so raw hits (IP/UA, useful for later bot-prefetch filtering) are
 /// available without bloating the hot OutboxItem row.
 model EmailOpenEvent {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   outboxItemId   String
   organisationId String
   ipAddress      String?
@@ -1467,14 +1596,14 @@ enum ReplyClassification {
 }
 
 model ConversationMessage {
-  id              String            @id @default(cuid())
-  conversationId  String
-  direction       MessageDirection
-  gmailMessageId  String?
-  outboxItemId    String?
-  classification  ReplyClassification?
-  snippet         String?
-  occurredAt      DateTime
+  id             String               @id @default(cuid())
+  conversationId String
+  direction      MessageDirection
+  gmailMessageId String?
+  outboxItemId   String?
+  classification ReplyClassification?
+  snippet        String?
+  occurredAt     DateTime
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -1521,4 +1650,214 @@ model Meeting {
   @@index([organisationId])
   @@index([leadId])
   @@index([campaignId])
+}
+
+// ---------------------------------------------------------------------------
+// Social growth agent — connects an organisation's LinkedIn/X/Reddit/
+// Instagram/Threads accounts and, within an enforced guardrail policy, drafts
+// and autonomously posts/replies to grow the brand. SocialAction is the
+// permanent audit log: every candidate action is recorded here whether or
+// not it ever publishes. See docs/social-agent.md.
+// ---------------------------------------------------------------------------
+
+enum SocialPlatform {
+  LINKEDIN
+  TWITTER
+  REDDIT
+  INSTAGRAM
+  THREADS
+}
+
+enum SocialConnectionStatus {
+  CONNECTED
+  TOKEN_EXPIRED
+  REVOKED
+  DISCONNECTED
+}
+
+/// One connected account per organisation+platform+external account id.
+/// Mirrors Inbox's connect/disconnect/token-refresh shape.
+model SocialConnection {
+  id                    String                 @id @default(cuid())
+  organisationId        String
+  platform              SocialPlatform
+  /// The platform's stable user/page id — not the handle, which can change.
+  externalAccountId     String
+  externalHandle        String
+  encryptedAccessToken  String
+  /// Absent for platforms whose long-lived tokens aren't refreshed via a
+  /// refresh token (e.g. Meta long-lived tokens are renewed by re-exchange).
+  encryptedRefreshToken String?
+  tokenExpiresAt        DateTime?
+  status                SocialConnectionStatus @default(CONNECTED)
+  connectedByUserId     String
+  scopes                String[]
+  lastSyncedAt          DateTime?
+  disconnectedAt        DateTime?
+
+  organisation  Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  actions       SocialAction[]
+  inboundEvents SocialInboundEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organisationId, platform, externalAccountId])
+  @@index([organisationId])
+}
+
+/// Per-organisation, optionally per-platform (null platform = applies to
+/// every platform) autonomy settings and kill switch. A missing row means
+/// autonomy is disabled for that scope — the policy engine fails closed.
+model SocialAutonomyConfig {
+  id                             String          @id @default(cuid())
+  organisationId                 String
+  platform                       SocialPlatform?
+  autonomyEnabled                Boolean         @default(false)
+  dryRunMode                     Boolean         @default(true)
+  killSwitchActivatedAt          DateTime?
+  killSwitchActivatedByUserId    String?
+  maxActionsPerHour              Int             @default(5)
+  maxActionsPerDay               Int             @default(20)
+  requireApprovalBelowConfidence Float           @default(0.85)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organisationId, platform])
+}
+
+enum SocialPolicyRuleKind {
+  BANNED_TOPIC
+  BANNED_PHRASE
+  /// Allow-list mode: if any ALLOWED_TOPIC rules exist for an organisation,
+  /// generated content must match at least one or it is denied.
+  ALLOWED_TOPIC
+  REQUIRE_APPROVAL_KEYWORD
+}
+
+/// Org-authored rules evaluated by packages/social-policy's deterministic
+/// rule engine — plain string/regex matching, never an LLM call.
+model SocialPolicyRule {
+  id              String               @id @default(cuid())
+  organisationId  String
+  kind            SocialPolicyRuleKind
+  pattern         String
+  isRegex         Boolean              @default(false)
+  /// Null applies the rule to every platform.
+  platform        SocialPlatform?
+  createdByUserId String
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId])
+}
+
+enum SocialEventType {
+  MENTION
+  COMMENT
+  DM
+  KEYWORD_MATCH
+}
+
+/// Raw inbound events from a platform webhook or a poll tick, before any
+/// agent decision is made. Deduplicated on (connectionId, externalEventId)
+/// so a poll cycle that re-observes an already-processed mention is a no-op.
+model SocialInboundEvent {
+  id                       String          @id @default(cuid())
+  organisationId           String
+  connectionId             String
+  platform                 SocialPlatform
+  eventType                SocialEventType
+  externalEventId          String
+  externalThreadId         String?
+  authorHandle             String
+  /// Computed at ingestion; consumed by the policy engine's escalation rule
+  /// (first-time contact always escalates to human review).
+  authorIsFirstTimeContact Boolean         @default(false)
+  contentText              String
+  rawPayload               Json
+  processedAt              DateTime?
+
+  organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  actions      SocialAction[]
+
+  receivedAt DateTime @default(now())
+
+  @@unique([connectionId, externalEventId])
+  @@index([organisationId, processedAt])
+}
+
+enum SocialActionType {
+  POST
+  REPLY
+  DM_REPLY
+  LIKE
+}
+
+enum SocialActionStatus {
+  PENDING_POLICY_CHECK
+  PENDING_HUMAN_APPROVAL
+  APPROVED
+  REJECTED_BY_POLICY
+  REJECTED_BY_HUMAN
+  DRY_RUN_SIMULATED
+  PUBLISHED
+  FAILED
+  /// In-flight when the kill switch activated; publication was stopped.
+  KILLED
+}
+
+/// Every candidate autonomous action, whether or not it ever publishes.
+/// This IS the audit log — rows are never deleted.
+model SocialAction {
+  id             String             @id @default(cuid())
+  organisationId String
+  connectionId   String
+  platform       SocialPlatform
+  actionType     SocialActionType
+  status         SocialActionStatus @default(PENDING_POLICY_CHECK)
+
+  /// Null for a proactive POST with no inbound trigger.
+  triggerEventId String?
+  /// "webhook" | "poll" | "manual" | "scheduled-post"
+  triggerSource  String
+
+  generatedContent String @db.Text
+  /// Full prompt sent to the model, kept for audit.
+  generationPrompt String @db.Text
+  generationModel  String
+  /// Composite confidence (model self-report + deterministic signals) — see
+  /// packages/social-generation. Consumed by the escalation rule, never the
+  /// model's raw self-report alone.
+  policyConfidence Float?
+
+  /// { rulesEvaluated, matchedRules, rateLimitCheck, escalationReasons }
+  policyEvaluation Json
+  policyDecision   String
+
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  reviewNotes      String?
+
+  externalPostId String?
+  publishedAt    DateTime?
+  failureReason  String?
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   SocialConnection    @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  triggerEvent SocialInboundEvent? @relation(fields: [triggerEventId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organisationId, createdAt])
+  @@index([connectionId, createdAt])
+  @@index([status])
 }

@@ -59,11 +59,12 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
 export async function PATCH(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId, campaignId } = await params;
 
+  let userId: string;
   try {
-    await authenticateOrganisationRequest(request, {
+    ({ userId } = await authenticateOrganisationRequest(request, {
       organisationId,
       permission: "campaigns:manage",
-    });
+    }));
   } catch (error) {
     if (error instanceof UnauthenticatedError) {
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
@@ -79,7 +80,9 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   }
 
   try {
-    const campaign = await updateOrganisationCampaign(organisationId, campaignId, body.data);
+    const campaign = await updateOrganisationCampaign(organisationId, campaignId, body.data, {
+      userId,
+    });
     if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     return NextResponse.json(campaign);
   } catch (error) {

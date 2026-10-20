@@ -14,6 +14,10 @@ const campaignScheduleFields = {
 const campaignStepFields = {
   delayDays: z.number().int().min(0).max(60).optional(),
   useAiGeneration: z.boolean().optional(),
+  useImportedContent: z
+    .boolean()
+    .optional()
+    .describe("Send the lead's imported emails instead of generating or using a shared template"),
   callToActionOverride: z.string().max(300).optional(),
   stepInstructions: z.string().max(1000).optional(),
   manualSubject: z.string().max(150).optional(),

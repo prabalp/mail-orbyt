@@ -17,8 +17,14 @@ function fakePrisma(campaign: unknown, stepCount = 0, inboxCount = 0) {
       findUnique: vi.fn().mockImplementation(async () => stored),
       update: vi.fn().mockImplementation(({ data }) => Object.assign(stored ?? {}, data)),
     },
-    campaignStep: { count: vi.fn().mockResolvedValue(stepCount) },
+    campaignStep: {
+      count: vi.fn().mockResolvedValue(stepCount),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     campaignInbox: { count: vi.fn().mockResolvedValue(inboxCount) },
+    campaignEnrollment: { findMany: vi.fn().mockResolvedValue([]) },
+    leadImportedEmail: { findMany: vi.fn().mockResolvedValue([]) },
+    auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
     outboxItem: {
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn(),
@@ -63,9 +69,22 @@ describe("updateCampaign", () => {
   });
 
   it("allows activating a campaign with at least one step and one inbox", async () => {
-    const prisma = fakePrisma({ id: "campaign-1", organisationId: "org-1" }, 1, 1);
-    const result = await updateCampaign(prisma, "org-1", "campaign-1", { status: "ACTIVE" });
+    const prisma = fakePrisma({ id: "campaign-1", organisationId: "org-1", status: "DRAFT" }, 1, 1);
+    const result = await updateCampaign(
+      prisma,
+      "org-1",
+      "campaign-1",
+      { status: "ACTIVE" },
+      { userId: "user-1" },
+    );
     expect(result?.status).toBe("ACTIVE");
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: "CAMPAIGN_LAUNCHED",
+        organisationId: "org-1",
+        userId: "user-1",
+      }),
+    });
   });
 
   // A send time is baked in when the item is created, so anything the pause
@@ -81,6 +100,9 @@ describe("updateCampaign", () => {
     const prisma = fakePrisma({ ...SCHEDULED_CAMPAIGN, status: "ACTIVE" });
     await updateCampaign(prisma, "org-1", "campaign-1", { status: "PAUSED" });
     expect(prisma.outboxItem.findMany).not.toHaveBeenCalled();
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ type: "CAMPAIGN_PAUSED", organisationId: "org-1" }),
+    });
   });
 
   // Without this, a window edit applies only to items created afterwards and

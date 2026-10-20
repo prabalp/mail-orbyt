@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateOrganisationRequest } from "@/lib/api-auth";
 import {
+  CampaignActivationError,
   enrollCampaignLeads,
   enrollCampaignLeadsFromList,
   listCampaignEnrollments,
@@ -65,18 +66,29 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
   }
 
-  if ("leadListId" in body.data) {
-    const result = await enrollCampaignLeadsFromList(
-      organisationId,
-      campaignId,
-      body.data.leadListId,
-    );
+  try {
+    return await enroll(organisationId, campaignId, body.data);
+  } catch (error) {
+    if (error instanceof CampaignActivationError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    throw error;
+  }
+}
+
+async function enroll(
+  organisationId: string,
+  campaignId: string,
+  data: z.infer<typeof enrollSchema>,
+): Promise<NextResponse> {
+  if ("leadListId" in data) {
+    const result = await enrollCampaignLeadsFromList(organisationId, campaignId, data.leadListId);
     return NextResponse.json(result, { status: 201 });
   }
 
-  if ("leadEmails" in body.data) {
+  if ("leadEmails" in data) {
     const leads = await prisma.lead.findMany({
-      where: { organisationId, email: { in: body.data.leadEmails } },
+      where: { organisationId, email: { in: data.leadEmails } },
       select: { id: true, email: true },
     });
 
@@ -84,7 +96,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     // enrolling a subset — "enrolled: 3" when you asked for 5 is a bug the
     // caller cannot see.
     const found = new Set(leads.map((lead) => lead.email));
-    const notFound = body.data.leadEmails.filter((email) => !found.has(email));
+    const notFound = data.leadEmails.filter((email) => !found.has(email));
 
     if (leads.length === 0) {
       return NextResponse.json(
@@ -101,6 +113,6 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ ...result, notFound }, { status: 201 });
   }
 
-  const result = await enrollCampaignLeads(organisationId, campaignId, body.data.leadIds);
+  const result = await enrollCampaignLeads(organisationId, campaignId, data.leadIds);
   return NextResponse.json(result, { status: 201 });
 }
