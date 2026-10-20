@@ -108,7 +108,12 @@ export async function processOutboxItem(
 ) {
   const item = await prisma.outboxItem.findUnique({
     where: { id: itemId },
-    include: { lead: true, campaign: true, campaignStep: true, enrollment: true },
+    include: {
+      lead: { include: { company: true } },
+      campaign: true,
+      campaignStep: true,
+      enrollment: true,
+    },
   });
   if (!item) return null;
   if (item.status !== "SCHEDULED") return item;
@@ -216,6 +221,7 @@ export async function processOutboxItem(
         lead: item.lead,
         step: item.campaignStep,
         nodeKey: item.nodeKey ?? undefined,
+        journeyGraph: item.campaign.journeyGraph,
         senderName: resolveInboxSenderName(inbox),
         senderCompanyName,
         priorEmail,

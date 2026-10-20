@@ -3,6 +3,7 @@ import {
   type AiEmailGenerator,
   type GenerateEmailInput,
 } from "@mail-orbyt/email-generation";
+import { parseJourneyGraph, renderJourneyTemplate } from "@mail-orbyt/leads";
 import { createResearchSnapshot, getLatestPageText } from "@mail-orbyt/research";
 import type { Lead, PrismaClient } from "@mail-orbyt/database";
 
@@ -40,7 +41,10 @@ export function applyMergeTokens(
 
 export interface MaterializeContentParams {
   organisationId: string;
-  lead: Pick<Lead, "id" | "firstName" | "lastName" | "title">;
+  lead: Pick<Lead, "id" | "firstName" | "lastName" | "title"> &
+    Partial<
+      Pick<Lead, "email" | "industry" | "city" | "state" | "country" | "websiteUrl" | "linkedinUrl">
+    > & { company?: { name: string } | null };
   step: {
     orderIndex?: number;
     stepType: GenerateEmailInput["generationType"];
@@ -53,6 +57,8 @@ export interface MaterializeContentParams {
   };
   /** Journey sends: the graph node whose imported email to send, instead of the step's sequence number. */
   nodeKey?: string;
+  /** Campaign.journeyGraph — when it holds this node, its template and variable mapping are used. */
+  journeyGraph?: unknown;
   senderName: string;
   senderCompanyName: string;
   priorEmail?: { subject: string; body: string };
@@ -81,8 +87,41 @@ function renderImportedEmail(
   };
 }
 
+/** The node's subject/body with the campaign's variable mapping already applied for this lead; null if the campaign has no such node. */
+function journeyGraphNode(
+  params: MaterializeContentParams,
+): { subject: string; body: string } | null {
+  const parsed = parseJourneyGraph(params.journeyGraph);
+  if (!parsed.ok) return null;
+  const node = parsed.graph.nodes.find((candidate) => candidate.key === params.nodeKey);
+  if (!node) return null;
+  const { lead } = params;
+  const values = {
+    firstName: lead.firstName,
+    lastName: lead.lastName,
+    title: lead.title,
+    email: lead.email,
+    industry: lead.industry,
+    city: lead.city,
+    state: lead.state,
+    country: lead.country,
+    websiteUrl: lead.websiteUrl,
+    linkedinUrl: lead.linkedinUrl,
+    company: lead.company?.name,
+  };
+  return {
+    subject: renderJourneyTemplate(node.subject, parsed.graph.variables, values),
+    body: renderJourneyTemplate(node.body, parsed.graph.variables, values),
+  };
+}
+
 /** Produces the subject/body for a step's send — either a manual template with {{firstName}}-style merge tokens, or an AI-generated email built from the lead's current research snapshot. Never both. */
 export async function materializeStepContent(prisma: Prisma, params: MaterializeContentParams) {
+  const graphNode = params.nodeKey && params.journeyGraph ? journeyGraphNode(params) : null;
+  if (graphNode) {
+    return renderImportedEmail(params.lead, graphNode, params.senderName, params.signatureText);
+  }
+
   if (params.step.useImportedContent) {
     const sequence = (params.step.orderIndex ?? 0) + 1;
     const imported = params.nodeKey

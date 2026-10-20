@@ -29,6 +29,23 @@ const GRAPH = JSON.stringify({
   },
 });
 
+const CAMPAIGN_GRAPH = {
+  start: "welcome",
+  nodes: [
+    {
+      key: "welcome",
+      label: "Welcome",
+      subject: "{{firstName}}, about {{company}}",
+      body: "We help {{company}} with {{pain}}.",
+      x: 0,
+      y: 0,
+    },
+    { key: "bump", label: "Bump", subject: "Bump", body: "Checking in", x: 0, y: 0 },
+  ],
+  edges: [{ from: "welcome", outcome: "no_reply", to: "bump", afterDays: 1 }],
+  variables: { pain: { source: "fixed", value: "slow outbound" } },
+};
+
 describe("journey routing (end to end against real Postgres)", () => {
   const orgIds: string[] = [];
 
@@ -46,7 +63,7 @@ describe("journey routing (end to end against real Postgres)", () => {
     await prisma.$disconnect();
   });
 
-  async function setup() {
+  async function setup(options: { importGraph?: boolean; journeyGraph?: object } = {}) {
     const org = await prisma.organisation.create({
       data: { name: "Journey Org", slug: `journey-org-${randomBytes(6).toString("hex")}` },
     });
@@ -74,15 +91,6 @@ describe("journey routing (end to end against real Postgres)", () => {
       inboxCooldownMinutes: 0,
     });
     await prisma.campaignInbox.create({ data: { campaignId: campaign.id, inboxId: inbox.id } });
-    await prisma.campaignStep.create({
-      data: {
-        campaignId: campaign.id,
-        orderIndex: 0,
-        stepType: "INITIAL",
-        useAiGeneration: false,
-        useImportedContent: true,
-      },
-    });
     const lead = await prisma.lead.create({
       data: {
         organisationId: org.id,
@@ -93,7 +101,7 @@ describe("journey routing (end to end against real Postgres)", () => {
     const parsed = parseImportedEmails("3", GRAPH);
     if (!parsed.ok) throw new Error(parsed.errors.join("; "));
     await prisma.leadImportedEmail.createMany({
-      data: parsed.emails.map((email) => ({
+      data: (options.importGraph === false ? [] : parsed.emails).map((email) => ({
         organisationId: org.id,
         leadId: lead.id,
         sequence: email.sequence,
@@ -105,6 +113,12 @@ describe("journey routing (end to end against real Postgres)", () => {
         edges: email.edges as object,
       })),
     });
+    if (options.journeyGraph) {
+      await prisma.campaign.update({
+        where: { id: campaign.id },
+        data: { journeyGraph: options.journeyGraph },
+      });
+    }
     await updateCampaign(prisma, org.id, campaign.id, { status: "ACTIVE" });
     await enrollLeads(prisma, org.id, campaign.id, [lead.id]);
 
@@ -183,5 +197,27 @@ describe("journey routing (end to end against real Postgres)", () => {
 
     await tickAndSendAll();
     expect(sent.map((m) => m.subject)).toEqual(["Hi Jamie", "Book a time"]);
+  });
+
+  it("sends a campaign-level graph with variables filled for the lead", async () => {
+    const { campaign, enrollment, sent, tickAndSendAll } = await setup({
+      importGraph: false,
+      journeyGraph: CAMPAIGN_GRAPH,
+    });
+    const company = await prisma.company.create({
+      data: { organisationId: campaign.organisationId, name: "Acme" },
+    });
+    await prisma.lead.update({ where: { id: enrollment.leadId }, data: { companyId: company.id } });
+
+    await tickAndSendAll();
+    expect(sent[0]?.subject).toBe("Jamie, about Acme");
+    expect(sent[0]?.body).toContain("We help Acme with slow outbound.");
+
+    await prisma.campaignEnrollment.update({
+      where: { id: enrollment.id },
+      data: { nextDecisionAt: new Date(Date.now() - 1000) },
+    });
+    await tickAndSendAll();
+    expect(sent.map((m) => m.subject)).toEqual(["Jamie, about Acme", "Bump"]);
   });
 });

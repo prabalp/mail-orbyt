@@ -250,3 +250,45 @@ describe("routeJourneyReply", () => {
     expect(result).toMatchObject({ routed: true, ended: true });
   });
 });
+
+describe("campaign-level graph", () => {
+  const graph = {
+    start: "welcome",
+    nodes: [
+      { key: "welcome", label: "Welcome", subject: "Hi", body: "Hello", x: 0, y: 0 },
+      { key: "bump", label: "Bump", subject: "Bump", body: "Checking in", x: 0, y: 0 },
+    ],
+    edges: [{ from: "welcome", outcome: "no_reply", to: "bump", afterDays: 2 }],
+    variables: {},
+  };
+
+  it("starts at the graph's start node without any imported emails", async () => {
+    const prisma = fakePrisma({ ...BASE, status: "PENDING", currentNodeKey: null, sendCount: 0 });
+    const original = prisma.campaignEnrollment.findUnique.getMockImplementation();
+    prisma.campaignEnrollment.findUnique.mockImplementation(async (args) => ({
+      ...(await original?.(args)),
+      campaign: { ...CAMPAIGN, routingMode: "JOURNEY", journeyGraph: graph },
+    }));
+    prisma.leadImportedEmail.findFirst.mockResolvedValue(null);
+    const item = await scheduleJourneyStep(prisma as never, "e1");
+    expect(item).toMatchObject({ nodeKey: "welcome" });
+    expect(prisma.leadImportedEmail.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("routes edges from the graph, not the lead's imports", async () => {
+    const prisma = fakePrisma({ ...BASE, currentNodeKey: "welcome" });
+    const original = prisma.campaignEnrollment.findUnique.getMockImplementation();
+    prisma.campaignEnrollment.findUnique.mockImplementation(async (args) => ({
+      ...(await original?.(args)),
+      campaign: { ...CAMPAIGN, routingMode: "JOURNEY", journeyGraph: graph },
+    }));
+    const result = await applyJourneyOutcome(prisma as never, "e1", {
+      trigger: "TIMEOUT",
+      outcome: "no_reply",
+      source: "RULE",
+      delayElapsed: true,
+    });
+    expect(result).toEqual({ routed: true, toNodeKey: "bump", ended: false });
+    expect(prisma.leadImportedEmail.findUnique).not.toHaveBeenCalled();
+  });
+});

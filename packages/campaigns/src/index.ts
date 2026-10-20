@@ -24,3 +24,4 @@ export {
   exitEnrollment,
   type EnrollLeadsResult,
 } from "./enrollment-service";
+export { getJourneyGraph, saveJourneyGraph, InvalidJourneyGraphError } from "./journey-service";

@@ -1305,6 +1305,13 @@ model Campaign {
   /// packages/scheduling. A JOURNEY campaign has one placeholder step that
   /// every node send is attached to.
   routingMode              CampaignRoutingMode @default(LINEAR)
+  /// The campaign-level journey graph authored in the node editor:
+  /// { start, nodes: [{key,label,subject,body,x,y}], edges: [{from,outcome,to,
+  /// afterDays?,when?}], variables: {token: {source,field?,value?,fallback?}} }.
+  /// Validated by validateJourneyGraph (packages/leads). When set it is the
+  /// source of every lead's emails; when null, journeys read each lead's own
+  /// imported graph (LeadImportedEmail) instead.
+  journeyGraph             Json?
   createdByUserId          String
 
   organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)

@@ -219,7 +219,11 @@ export async function updateCampaign(
         "A campaign needs at least one connected inbox before it can go active.",
       );
     }
-    await assertImportedEmailsCoverEnrollments(prisma, campaignId);
+    // A campaign-level journey graph carries its own emails; only per-lead
+    // imports need checking against the enrolled leads.
+    if (!(campaign.routingMode === "JOURNEY" && campaign.journeyGraph)) {
+      await assertImportedEmailsCoverEnrollments(prisma, campaignId);
+    }
   }
 
   // Resuming re-anchors pending sends for the same reason a window edit does:

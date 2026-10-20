@@ -40,7 +40,8 @@ export async function enrollLeads(
     where: { campaignId, useImportedContent: true },
     select: { orderIndex: true },
   });
-  if (importedSteps.length > 0 && leads.length > 0) {
+  const hasCampaignGraph = campaign.routingMode === "JOURNEY" && Boolean(campaign.journeyGraph);
+  if (importedSteps.length > 0 && leads.length > 0 && !hasCampaignGraph) {
     const sequences = importedSteps.map((step) => step.orderIndex + 1);
     const imported = await prisma.leadImportedEmail.findMany({
       where: { leadId: { in: leads.map((lead) => lead.id) }, sequence: { in: sequences } },

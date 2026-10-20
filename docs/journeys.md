@@ -53,6 +53,27 @@ most 3 times per enrollment, so a cycle can't loop forever.
 Every routing decision is stored in `EnrollmentRoutingDecision` (from-node,
 trigger, outcome, to-node, source, reason).
 
+## The node editor
+
+A journey campaign's page has a visual editor. Add emails (nodes), drag from an
+email's right dot to another email or **END** to connect them, then click a
+connection to choose what triggers it (No reply, Opened but no reply, Interested,
+Not interested, Out of office, Any other reply, or a custom outcome the AI
+decider picks from your description) and how many days to wait. Click an email
+to edit its subject and body, mark the start, and preview it with a sample lead.
+
+**Variables.** `{{firstName}}`, `{{lastName}}`, `{{title}}`, `{{company}}`,
+`{{industry}}`, `{{city}}`, `{{state}}`, `{{country}}`, `{{email}}`,
+`{{websiteUrl}}` and `{{linkedinUrl}}` read the lead directly. Any other
+`{{token}}` (or any built-in you want to override) is mapped in the Variables
+panel to a lead field with a fallback, or to fixed text. A missing value never
+leaves a raw `{{token}}` in the email; `firstName` falls back to "there".
+
+The graph is saved with one validated write (`PUT …/campaigns/{id}/journey`).
+Editing a running campaign is allowed, but an email a lead is currently on
+can't be removed. When a campaign has a graph it is used for every lead; with
+none, each lead's own imported graph (above) is used.
+
 ## Creating one
 
 `POST …/campaigns/with-sequence` (or the `create_campaign_with_sequence` MCP

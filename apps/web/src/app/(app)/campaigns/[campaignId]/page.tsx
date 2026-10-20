@@ -1,5 +1,6 @@
 "use client";
 
+import { JourneyEditor } from "./journey-editor";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -894,20 +895,22 @@ export default function CampaignDetailPage(): React.ReactElement {
 
       {campaign.routingMode === "JOURNEY" ? (
         <Card>
-          <h3 className="mb-2 text-sm font-medium text-on-surface-variant">Journey</h3>
-          <p className="text-sm text-on-surface-variant">
-            This campaign has no fixed steps. Each enrolled lead follows its own graph of emails,
-            imported in the CSV <code>emails</code> column: replies (labelled by the decider or the
-            keyword rules) and silence choose what is sent next. See docs/journeys.md for the
-            format.
-          </p>
-          {canChangeType ? (
-            <div className="mt-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-medium text-on-surface-variant">Journey</h3>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                Build the emails and how they connect. Replies (labelled by the AI decider or the
+                keyword rules) and silence choose what is sent next. If you build nothing here, each
+                lead&apos;s own imported graph (CSV <code>emails</code> column) is used.
+              </p>
+            </div>
+            {canChangeType ? (
               <Button variant="outlined" onClick={() => handleChangeType("LINEAR")}>
                 Switch to a linear sequence
               </Button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
+          <JourneyEditor organisationId={organisationId} campaignId={campaignId} />
         </Card>
       ) : (
         <Card>

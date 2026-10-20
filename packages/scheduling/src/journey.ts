@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@mail-orbyt/database";
+import { graphNodeEdges, parseJourneyGraph, type JourneyGraph } from "@mail-orbyt/leads";
 import type { JourneyDecider } from "./journey-decider";
 import { nextSendableTime } from "./sending-window";
 
@@ -65,11 +66,48 @@ export interface ApplyOutcomeParams {
 export type ApplyOutcomeResult =
   { routed: true; toNodeKey: string | null; ended: boolean } | { routed: false };
 
-async function currentNodeEdges(prisma: Prisma, leadId: string, nodeKey: string) {
+interface JourneyNodeView {
+  subject: string;
+  body: string;
+  edges: Record<string, JourneyEdge>;
+}
+
+interface NodeSource {
+  leadId: string;
+  campaign: { journeyGraph?: unknown };
+}
+
+function campaignGraph(source: NodeSource): JourneyGraph | null {
+  if (!source.campaign.journeyGraph) return null;
+  const parsed = parseJourneyGraph(source.campaign.journeyGraph);
+  return parsed.ok ? parsed.graph : null;
+}
+
+/**
+ * A journey node's content and outgoing edges. A campaign authored in the node
+ * editor carries one shared graph; otherwise each lead brings its own, imported
+ * from the CSV.
+ */
+async function loadJourneyNode(
+  prisma: Prisma,
+  source: NodeSource,
+  nodeKey: string,
+): Promise<JourneyNodeView | null> {
+  const graph = campaignGraph(source);
+  if (graph) {
+    const node = graph.nodes.find((candidate) => candidate.key === nodeKey);
+    return node
+      ? { subject: node.subject, body: node.body, edges: graphNodeEdges(graph, nodeKey) }
+      : null;
+  }
   const node = await prisma.leadImportedEmail.findUnique({
-    where: { leadId_nodeKey: { leadId, nodeKey } },
+    where: { leadId_nodeKey: { leadId: source.leadId, nodeKey } },
   });
-  return parseEdges(node?.edges);
+  return node ? { subject: node.subject, body: node.body, edges: parseEdges(node.edges) } : null;
+}
+
+async function currentNodeEdges(prisma: Prisma, source: NodeSource, nodeKey: string) {
+  return (await loadJourneyNode(prisma, source, nodeKey))?.edges ?? {};
 }
 
 /** The outcome label a journey graph uses for each rule-based reply classification. */
@@ -111,17 +149,13 @@ export async function routeJourneyReply(
 ): Promise<ApplyOutcomeResult> {
   const enrollment = await prisma.campaignEnrollment.findUnique({
     where: { id: enrollmentId },
-    include: { lead: true },
+    include: { lead: true, campaign: true },
   });
   if (!enrollment?.currentNodeKey) return { routed: false };
 
-  const node = await prisma.leadImportedEmail.findUnique({
-    where: {
-      leadId_nodeKey: { leadId: enrollment.leadId, nodeKey: enrollment.currentNodeKey },
-    },
-  });
+  const node = await loadJourneyNode(prisma, enrollment, enrollment.currentNodeKey);
   const options = Object.fromEntries(
-    Object.entries(parseEdges(node?.edges))
+    Object.entries(node?.edges ?? {})
       .filter(([outcome]) => !TIMER_OUTCOMES.has(outcome))
       .map(([outcome, edge]) => [
         outcome,
@@ -170,7 +204,10 @@ export async function applyJourneyOutcome(
   params: ApplyOutcomeParams,
 ): Promise<ApplyOutcomeResult> {
   const now = params.now ?? new Date();
-  const enrollment = await prisma.campaignEnrollment.findUnique({ where: { id: enrollmentId } });
+  const enrollment = await prisma.campaignEnrollment.findUnique({
+    where: { id: enrollmentId },
+    include: { campaign: true },
+  });
   if (
     !enrollment ||
     enrollment.status !== "ACTIVE" ||
@@ -180,10 +217,7 @@ export async function applyJourneyOutcome(
     return { routed: false };
   }
 
-  const node = await prisma.leadImportedEmail.findUnique({
-    where: { leadId_nodeKey: { leadId: enrollment.leadId, nodeKey: enrollment.currentNodeKey } },
-  });
-  const edges = parseEdges(node?.edges);
+  const edges = await currentNodeEdges(prisma, enrollment, enrollment.currentNodeKey);
   // A generic "replied" edge catches any reply the specific outcomes don't.
   const edge = edges[params.outcome] ?? (params.trigger === "REPLY" ? edges["replied"] : undefined);
 
@@ -247,12 +281,13 @@ export async function journeyStateAfterSend(
   nodeKey: string,
   sentAt: Date,
 ) {
-  const enrollment = await prisma.campaignEnrollment.findUnique({ where: { id: enrollmentId } });
-  if (!enrollment) return {};
-  const node = await prisma.leadImportedEmail.findUnique({
-    where: { leadId_nodeKey: { leadId: enrollment.leadId, nodeKey } },
+  const enrollment = await prisma.campaignEnrollment.findUnique({
+    where: { id: enrollmentId },
+    include: { campaign: true },
   });
-  const waitDays = parseEdges(node?.edges)["no_reply"]?.afterDays ?? JOURNEY_DEFAULT_WAIT_DAYS;
+  if (!enrollment) return {};
+  const edges = await currentNodeEdges(prisma as Prisma, enrollment, nodeKey);
+  const waitDays = edges["no_reply"]?.afterDays ?? JOURNEY_DEFAULT_WAIT_DAYS;
   const visits = parseVisitCounts(enrollment.visitCounts);
   return {
     currentNodeKey: nodeKey,
@@ -284,7 +319,7 @@ export async function scheduleJourneyStep(prisma: Prisma, enrollmentId: string) 
   ) {
     // Silence after an opened email can route differently from silence after
     // an unopened one — a rule on the tracking pixel, no model involved.
-    const edges = await currentNodeEdges(prisma, enrollment.leadId, enrollment.currentNodeKey);
+    const edges = await currentNodeEdges(prisma, enrollment, enrollment.currentNodeKey);
     const opened = edges["opened_no_reply"]
       ? await prisma.outboxItem.findFirst({
           where: { enrollmentId, nodeKey: enrollment.currentNodeKey, status: "SENT" },
@@ -310,17 +345,22 @@ export async function scheduleJourneyStep(prisma: Prisma, enrollmentId: string) 
   let dueAt: Date = enrollment.nextDueAt ?? new Date();
   if (!nodeKey) {
     if (enrollment.sendCount > 0 || enrollment.currentNodeKey) return null;
-    const start = await prisma.leadImportedEmail.findFirst({
-      where: { leadId: enrollment.leadId, isStart: true },
-    });
-    if (!start?.nodeKey) {
+    const graph = campaignGraph(enrollment);
+    const startKey = graph
+      ? graph.start
+      : (
+          await prisma.leadImportedEmail.findFirst({
+            where: { leadId: enrollment.leadId, isStart: true },
+          })
+        )?.nodeKey;
+    if (!startKey) {
       await prisma.campaignEnrollment.update({
         where: { id: enrollmentId },
         data: { status: "EXITED", exitedAt: new Date(), exitReason: "No start email imported" },
       });
       return null;
     }
-    nodeKey = start.nodeKey;
+    nodeKey = startKey;
     dueAt = enrollment.enrolledAt;
   }
 
