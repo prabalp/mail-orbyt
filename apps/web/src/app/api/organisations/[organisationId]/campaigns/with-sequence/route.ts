@@ -41,6 +41,8 @@ const bodySchema = z.object({
   emailPromptInstructions: z.string().max(4000).optional(),
   /** JOURNEY follows each lead's imported email graph; steps are then optional (one placeholder step is created). */
   routingMode: z.enum(["LINEAR", "JOURNEY"]).optional(),
+  /** Where email text comes from; inferred from the first step when omitted. */
+  contentSource: z.enum(["AI", "TEMPLATE", "IMPORTED"]).optional(),
   /** Ordered — steps are created in array order, which becomes their orderIndex. */
   steps: z.array(stepSchema).max(20).optional(),
   inboxIds: z.array(z.string().min(1)).optional(),
@@ -120,11 +122,29 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     );
   }
 
-  const campaign = await createOrganisationCampaign({
-    organisationId,
-    createdByUserId: userId,
-    ...campaignFields,
-  });
+  // Steps carry their own content flags, so when the caller didn't name a
+  // content source, take it from the first step rather than defaulting to AI
+  // and rejecting a template or imported sequence.
+  const first = steps[0];
+  const inferredSource = first?.useImportedContent
+    ? "IMPORTED"
+    : first && first.useAiGeneration === false
+      ? "TEMPLATE"
+      : "AI";
+  let campaign;
+  try {
+    campaign = await createOrganisationCampaign({
+      organisationId,
+      createdByUserId: userId,
+      ...campaignFields,
+      contentSource: campaignFields.contentSource ?? (isJourney ? undefined : inferredSource),
+    });
+  } catch (error) {
+    if (error instanceof CampaignActivationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
 
   try {
     for (const step of steps) {

@@ -27,7 +27,12 @@ function fake(campaign: unknown, live: unknown[] = []) {
 }
 
 describe("saveJourneyGraph", () => {
-  const journey = { id: "c1", organisationId: "org", routingMode: "JOURNEY" };
+  const journey = {
+    id: "c1",
+    organisationId: "org",
+    routingMode: "JOURNEY",
+    contentSource: "TEMPLATE",
+  };
 
   it("saves a valid graph", async () => {
     const prisma = fake(journey);
@@ -61,6 +66,33 @@ describe("saveJourneyGraph", () => {
     const prisma = fake(journey, [{ currentNodeKey: "gone", nextNodeKey: null }]);
     await expect(saveJourneyGraph(prisma as never, "org", "c1", GRAPH)).rejects.toThrow(/gone/);
     expect(prisma.campaign.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveJourneyGraph content source", () => {
+  const base = { id: "c1", organisationId: "org", routingMode: "JOURNEY" };
+  const uploadedGraph = {
+    ...GRAPH,
+    nodes: [
+      { key: "a", label: "A", subject: "", body: "", importedSequence: 1, x: 0, y: 0 },
+      { key: "b", label: "B", subject: "", body: "", importedSequence: 2, x: 0, y: 0 },
+    ],
+  };
+
+  it("requires every email of an uploaded-list campaign to name a sequence", async () => {
+    const prisma = fake({ ...base, contentSource: "IMPORTED" });
+    await expect(saveJourneyGraph(prisma as never, "org", "c1", GRAPH)).rejects.toThrow(
+      /uploaded sequence/,
+    );
+    await saveJourneyGraph(prisma as never, "org", "c1", uploadedGraph);
+    expect(prisma.campaign.update).toHaveBeenCalled();
+  });
+
+  it("rejects uploaded-email nodes on a written-email campaign", async () => {
+    const prisma = fake({ ...base, contentSource: "TEMPLATE" });
+    await expect(saveJourneyGraph(prisma as never, "org", "c1", uploadedGraph)).rejects.toThrow(
+      /written emails/,
+    );
   });
 });
 

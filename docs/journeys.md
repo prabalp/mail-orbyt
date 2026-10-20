@@ -74,6 +74,20 @@ Editing a running campaign is allowed, but an email a lead is currently on
 can't be removed. When a campaign has a graph it is used for every lead; with
 none, each lead's own imported graph (above) is used.
 
+## Campaign settings chosen at creation
+
+The **New campaign** dialog asks, up front:
+
+- **How it sends:** Linear sequence or Journey.
+- **Where the emails come from:** AI-written, My template, or My uploaded list.
+  Journeys can't be AI-written yet. Steps and journey emails must match the
+  choice (`Campaign.contentSource`), and the **Campaign email prompt** is only
+  shown for AI-written campaigns.
+- **Sending inboxes** and the **sending schedule** (timezone, days, window, gap
+  per inbox), which default to your browser timezone and Mon–Fri 09:00–17:00.
+
+A draft with no steps, graph or leads can still change either setting.
+
 ## Creating one
 
 `POST …/campaigns/with-sequence` (or the `create_campaign_with_sequence` MCP

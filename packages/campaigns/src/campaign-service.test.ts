@@ -246,3 +246,81 @@ describe("updateCampaign routingMode", () => {
     ).rejects.toBeInstanceOf(CampaignActivationError);
   });
 });
+
+describe("campaign content source", () => {
+  const DRAFT = {
+    ...SCHEDULED_CAMPAIGN,
+    status: "DRAFT",
+    routingMode: "LINEAR",
+    contentSource: "AI",
+  };
+
+  function fake(campaign: unknown, { steps = 0, enrolled = 0 } = {}) {
+    const prisma = fakePrisma(campaign, steps);
+    return Object.assign(prisma, {
+      campaignEnrollment: {
+        ...prisma.campaignEnrollment,
+        count: vi.fn().mockResolvedValue(enrolled),
+      },
+    });
+  }
+
+  it("changes the source of an empty draft", async () => {
+    const prisma = fake({ ...DRAFT });
+    await updateCampaign(prisma as never, "org-1", "campaign-1", { contentSource: "TEMPLATE" });
+    expect(prisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ contentSource: "TEMPLATE" }) }),
+    );
+  });
+
+  it("refuses once steps exist, leads are enrolled, or the campaign is live", async () => {
+    for (const [campaign, options] of [
+      [{ ...DRAFT }, { steps: 2 }],
+      [{ ...DRAFT }, { enrolled: 1 }],
+      [{ ...DRAFT, status: "ACTIVE" }, {}],
+    ] as const) {
+      await expect(
+        updateCampaign(fake(campaign, options) as never, "org-1", "campaign-1", {
+          contentSource: "IMPORTED",
+        }),
+      ).rejects.toBeInstanceOf(CampaignActivationError);
+    }
+  });
+
+  it("never lets a journey use AI, and defaults a converted journey to written emails", async () => {
+    await expect(
+      updateCampaign(
+        fake({ ...DRAFT, routingMode: "JOURNEY", contentSource: "TEMPLATE" }) as never,
+        "org-1",
+        "campaign-1",
+        { contentSource: "AI" },
+      ),
+    ).rejects.toBeInstanceOf(CampaignActivationError);
+
+    const converting = Object.assign(fake({ ...DRAFT }), {
+      campaignStep: {
+        count: vi.fn().mockResolvedValue(0),
+        findMany: vi.fn().mockResolvedValue([]),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        create: vi.fn().mockResolvedValue({}),
+      },
+    });
+    await updateCampaign(converting as never, "org-1", "campaign-1", { routingMode: "JOURNEY" });
+    expect(converting.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ routingMode: "JOURNEY", contentSource: "TEMPLATE" }),
+      }),
+    );
+  });
+
+  it("won't activate a written journey that has no saved graph", async () => {
+    const prisma = fakePrisma(
+      { ...DRAFT, routingMode: "JOURNEY", contentSource: "TEMPLATE", journeyGraph: null },
+      1,
+      1,
+    );
+    await expect(
+      updateCampaign(prisma as never, "org-1", "campaign-1", { status: "ACTIVE" }),
+    ).rejects.toThrow(/Build and save the journey/);
+  });
+});

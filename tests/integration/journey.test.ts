@@ -63,7 +63,13 @@ describe("journey routing (end to end against real Postgres)", () => {
     await prisma.$disconnect();
   });
 
-  async function setup(options: { importGraph?: boolean; journeyGraph?: object } = {}) {
+  async function setup(
+    options: {
+      importGraph?: boolean;
+      journeyGraph?: object;
+      contentSource?: "TEMPLATE" | "IMPORTED";
+    } = {},
+  ) {
     const org = await prisma.organisation.create({
       data: { name: "Journey Org", slug: `journey-org-${randomBytes(6).toString("hex")}` },
     });
@@ -84,6 +90,7 @@ describe("journey routing (end to end against real Postgres)", () => {
       organisationId: org.id,
       name: "Journey",
       routingMode: "JOURNEY",
+      contentSource: options.contentSource ?? "IMPORTED",
       createdByUserId: "seed-user",
       sendingDaysOfWeek: [0, 1, 2, 3, 4, 5, 6],
       sendingWindowStartMinute: 0,
@@ -202,6 +209,7 @@ describe("journey routing (end to end against real Postgres)", () => {
   it("sends a campaign-level graph with variables filled for the lead", async () => {
     const { campaign, enrollment, sent, tickAndSendAll } = await setup({
       importGraph: false,
+      contentSource: "TEMPLATE",
       journeyGraph: CAMPAIGN_GRAPH,
     });
     const company = await prisma.company.create({

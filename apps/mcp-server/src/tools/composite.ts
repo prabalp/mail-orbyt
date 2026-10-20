@@ -69,6 +69,12 @@ export const COMPOSITE_TOOLS: RouteToolDescriptor[] = [
         .describe(
           "LINEAR (default) sends the ordered steps. JOURNEY follows each lead's imported email graph (branching on replies and silence) and takes no steps.",
         ),
+      contentSource: z
+        .enum(["AI", "TEMPLATE", "IMPORTED"])
+        .optional()
+        .describe(
+          "Where email text comes from. Inferred from the first step for linear campaigns when omitted.",
+        ),
       steps: z
         .array(stepInputSchema)
         .max(20)

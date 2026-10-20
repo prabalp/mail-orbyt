@@ -17,6 +17,8 @@ export interface CreateCampaignParams {
   emailPromptInstructions?: string | null;
   /** JOURNEY campaigns follow each lead's own email graph instead of an ordered step list. */
   routingMode?: "LINEAR" | "JOURNEY";
+  /** Where email text comes from. Defaults to AI for linear campaigns and TEMPLATE for journeys (journeys can't use AI yet). */
+  contentSource?: "AI" | "TEMPLATE" | "IMPORTED";
   createdByUserId: string;
 }
 
@@ -29,6 +31,13 @@ const JOURNEY_PLACEHOLDER_STEP = {
 } as const;
 
 export async function createCampaign(prisma: Prisma, params: CreateCampaignParams) {
+  const contentSource =
+    params.contentSource ?? (params.routingMode === "JOURNEY" ? "TEMPLATE" : "AI");
+  if (params.routingMode === "JOURNEY" && contentSource === "AI") {
+    throw new CampaignActivationError(
+      "Journeys can't use AI-written emails yet — write the emails in the editor or use uploaded emails.",
+    );
+  }
   return prisma.campaign.create({
     data: {
       organisationId: params.organisationId,
@@ -41,6 +50,7 @@ export async function createCampaign(prisma: Prisma, params: CreateCampaignParam
       inboxCooldownMinutes: params.inboxCooldownMinutes,
       emailPromptInstructions: params.emailPromptInstructions,
       routingMode: params.routingMode,
+      contentSource,
       createdByUserId: params.createdByUserId,
       ...(params.routingMode === "JOURNEY" ? { steps: { create: JOURNEY_PLACEHOLDER_STEP } } : {}),
     },
@@ -102,6 +112,8 @@ export interface UpdateCampaignParams {
   emailPromptInstructions?: string | null;
   /** Only a DRAFT campaign with no enrollments can change type; its steps are replaced to match. */
   routingMode?: "LINEAR" | "JOURNEY";
+  /** Only a DRAFT campaign with no enrollments and no steps/graph yet can change it. */
+  contentSource?: "AI" | "TEMPLATE" | "IMPORTED";
   status?: CampaignStatus;
 }
 
@@ -227,6 +239,14 @@ export async function updateCampaign(
   // time and make the resumed campaign look inert. Re-deriving from the
   // enrollment anchor puts overdue items at `now` without ever pulling a
   // follow-up in ahead of its delayDays gap.
+  if (
+    patch.routingMode === "JOURNEY" &&
+    campaign.contentSource === "AI" &&
+    patch.contentSource === undefined
+  ) {
+    // Journeys can't be AI-written, so converting one defaults to written emails.
+    patch = { ...patch, contentSource: "TEMPLATE" };
+  }
   if (patch.routingMode && patch.routingMode !== campaign.routingMode) {
     if (campaign.status !== "DRAFT") {
       throw new CampaignActivationError(
@@ -245,6 +265,41 @@ export async function updateCampaign(
         data: { campaignId, ...JOURNEY_PLACEHOLDER_STEP },
       });
     }
+  }
+  if (patch.contentSource && patch.contentSource !== campaign.contentSource) {
+    const effectiveMode = patch.routingMode ?? campaign.routingMode;
+    if (effectiveMode === "JOURNEY" && patch.contentSource === "AI") {
+      throw new CampaignActivationError("Journeys can't use AI-written emails yet.");
+    }
+    if (campaign.status !== "DRAFT") {
+      throw new CampaignActivationError(
+        "Only a draft campaign can change where its emails come from.",
+      );
+    }
+    if ((await prisma.campaignEnrollment.count({ where: { campaignId } })) > 0) {
+      throw new CampaignActivationError(
+        "This campaign already has enrolled leads, so its email source can't be changed.",
+      );
+    }
+    const hasContent =
+      effectiveMode === "JOURNEY"
+        ? Boolean(campaign.journeyGraph)
+        : (await prisma.campaignStep.count({ where: { campaignId } })) > 0;
+    if (hasContent) {
+      throw new CampaignActivationError(
+        effectiveMode === "JOURNEY"
+          ? "Clear the journey's emails before changing where they come from."
+          : "Remove this campaign's steps before changing where its emails come from.",
+      );
+    }
+  }
+  if (
+    patch.status === "ACTIVE" &&
+    campaign.routingMode === "JOURNEY" &&
+    (patch.contentSource ?? campaign.contentSource) === "TEMPLATE" &&
+    !campaign.journeyGraph
+  ) {
+    throw new CampaignActivationError("Build and save the journey before activating.");
   }
   const resuming = patch.status === "ACTIVE" && campaign.status === "PAUSED";
   const shouldReschedule = movesSendingWindow(campaign, patch) || resuming;

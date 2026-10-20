@@ -39,6 +39,7 @@ describe("reorderSteps (end to end against real Postgres)", () => {
     const campaign = await createCampaign(prisma, {
       organisationId: org.id,
       name: "Reorder Test Campaign",
+      contentSource: "TEMPLATE",
       createdByUserId: "seed-user",
     });
 
@@ -71,6 +72,7 @@ describe("reorderSteps (end to end against real Postgres)", () => {
     const campaign = await createCampaign(prisma, {
       organisationId: org.id,
       name: "Reorder Test Campaign 3-Way",
+      contentSource: "TEMPLATE",
       createdByUserId: "seed-user",
     });
 

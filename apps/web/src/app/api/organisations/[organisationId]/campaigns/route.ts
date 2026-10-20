@@ -2,7 +2,11 @@ import { ForbiddenError, UnauthenticatedError } from "@mail-orbyt/authentication
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateOrganisationRequest } from "@/lib/api-auth";
-import { createOrganisationCampaign, listOrganisationCampaigns } from "@/lib/campaigns";
+import {
+  CampaignActivationError,
+  createOrganisationCampaign,
+  listOrganisationCampaigns,
+} from "@/lib/campaigns";
 
 interface RouteParams {
   params: Promise<{ organisationId: string }>;
@@ -17,6 +21,7 @@ const createSchema = z.object({
   sendingWindowEndMinute: z.number().int().min(0).max(1439).optional(),
   inboxCooldownMinutes: z.number().int().min(0).max(180).optional(),
   routingMode: z.enum(["LINEAR", "JOURNEY"]).optional(),
+  contentSource: z.enum(["AI", "TEMPLATE", "IMPORTED"]).optional(),
 });
 
 export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
@@ -60,10 +65,17 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
   }
 
-  const campaign = await createOrganisationCampaign({
-    organisationId,
-    ...body.data,
-    createdByUserId: userId,
-  });
-  return NextResponse.json(campaign, { status: 201 });
+  try {
+    const campaign = await createOrganisationCampaign({
+      organisationId,
+      ...body.data,
+      createdByUserId: userId,
+    });
+    return NextResponse.json(campaign, { status: 201 });
+  } catch (error) {
+    if (error instanceof CampaignActivationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
 }

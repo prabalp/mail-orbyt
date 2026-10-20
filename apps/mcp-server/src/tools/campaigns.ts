@@ -134,6 +134,12 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
         .enum(["LINEAR", "JOURNEY"])
         .optional()
         .describe("JOURNEY follows each lead's imported email graph; default LINEAR"),
+      contentSource: z
+        .enum(["AI", "TEMPLATE", "IMPORTED"])
+        .optional()
+        .describe(
+          "Where email text comes from: AI writes each email (linear only), TEMPLATE is text you write, IMPORTED sends each lead's uploaded emails. Default AI (TEMPLATE for journeys).",
+        ),
     },
     // Creates a new row every call, so never idempotent.
     annotations: {

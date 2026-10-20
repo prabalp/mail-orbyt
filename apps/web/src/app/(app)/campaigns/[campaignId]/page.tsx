@@ -17,7 +17,7 @@ import {
   TimePicker,
   useToast,
 } from "@mail-orbyt/design-system";
-import { ChevronDown, ChevronRight, ListOrdered, Mails } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Circle, ListOrdered, Mails } from "lucide-react";
 import { useOrganisation } from "../../organisation-context";
 
 function CollapsibleCard({
@@ -42,6 +42,54 @@ function CollapsibleCard({
         {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
       </button>
       {open ? <div className="mt-4">{children}</div> : null}
+    </Card>
+  );
+}
+
+interface ChecklistItem {
+  done: boolean;
+  label: string;
+  hint: string;
+}
+
+/** What is still needed before this draft can be switched to Active — each open item says where to do it. */
+function LaunchChecklist({ items }: { items: ChecklistItem[] }): React.ReactElement {
+  const remaining = items.filter((item) => !item.done).length;
+  return (
+    <Card>
+      <h3 className="text-sm font-medium text-on-surface">
+        {remaining === 0 ? "Ready to launch" : `Before you launch (${remaining} to do)`}
+      </h3>
+      <ul className="mt-3 flex flex-col gap-2">
+        {items.map((item) => (
+          <li key={item.label} className="flex items-start gap-2 text-sm">
+            {item.done ? (
+              <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+            ) : (
+              <Circle
+                size={18}
+                className="mt-0.5 shrink-0 text-on-surface-variant"
+                aria-hidden="true"
+              />
+            )}
+            <span>
+              <span
+                className={item.done ? "text-on-surface-variant" : "font-medium text-on-surface"}
+              >
+                {item.label}
+              </span>
+              {item.done ? null : (
+                <span className="block text-xs text-on-surface-variant">{item.hint}</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {remaining === 0 ? (
+        <p className="mt-3 text-xs text-on-surface-variant">
+          Set the status to Active (top right) when you are happy with the schedule.
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -147,11 +195,19 @@ function recommendedTimezone(): string {
 
 type StepContentSource = "AI" | "SHARED_TEMPLATE" | "IMPORTED";
 
-const CONTENT_SOURCE_OPTIONS = [
-  { value: "AI", label: "Generate with AI" },
-  { value: "SHARED_TEMPLATE", label: "Shared manual template" },
-  { value: "IMPORTED", label: "Use imported lead emails" },
-];
+type CampaignContentSource = "AI" | "TEMPLATE" | "IMPORTED";
+
+const CAMPAIGN_SOURCE_LABEL: Record<CampaignContentSource, string> = {
+  AI: "AI-written",
+  TEMPLATE: "Template",
+  IMPORTED: "Uploaded list",
+};
+
+function stepSourceOfCampaign(source: CampaignContentSource | undefined): StepContentSource {
+  if (source === "TEMPLATE") return "SHARED_TEMPLATE";
+  if (source === "IMPORTED") return "IMPORTED";
+  return "AI";
+}
 
 function contentSourceOf(step: {
   useAiGeneration: boolean;
@@ -214,6 +270,8 @@ interface CampaignDetail {
   name: string;
   status: "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
   routingMode: "LINEAR" | "JOURNEY";
+  contentSource: CampaignContentSource;
+  journeyGraph?: unknown;
   steps: Step[];
   inboxes: { inboxId: string; inbox: Inbox }[];
   enrollments: { status: string }[];
@@ -259,7 +317,6 @@ export default function CampaignDetailPage(): React.ReactElement {
   const [deleting, setDeleting] = useState(false);
 
   const [newStepType, setNewStepType] = useState<Step["stepType"]>("INITIAL");
-  const [newContentSource, setNewContentSource] = useState<StepContentSource>("AI");
   const [newCallToAction, setNewCallToAction] = useState("book a 15 minute intro call");
   const [newManualSubject, setNewManualSubject] = useState("");
   const [newManualBody, setNewManualBody] = useState("");
@@ -267,6 +324,8 @@ export default function CampaignDetailPage(): React.ReactElement {
 
   const [editingStep, setEditingStep] = useState<Step | null>(null);
   const [editContentSource, setEditContentSource] = useState<StepContentSource>("AI");
+  // Chosen once, when the campaign was created — new steps follow it.
+  const newContentSource: StepContentSource = stepSourceOfCampaign(campaign?.contentSource);
   const [editDelayDays, setEditDelayDays] = useState("0");
   const [editCallToAction, setEditCallToAction] = useState("");
   const [editManualSubject, setEditManualSubject] = useState("");
@@ -712,11 +771,38 @@ export default function CampaignDetailPage(): React.ReactElement {
     scheduleDays.size !== campaign.sendingDaysOfWeek.length ||
     campaign.sendingDaysOfWeek.some((day) => !scheduleDays.has(day));
 
+  const hasContent =
+    campaign.routingMode === "JOURNEY"
+      ? Boolean(campaign.journeyGraph) || campaign.contentSource === "IMPORTED"
+      : campaign.steps.length > 0;
+  const launchChecklist: ChecklistItem[] = [
+    {
+      done: hasContent,
+      label: campaign.routingMode === "JOURNEY" ? "Build the journey" : "Add the email steps",
+      hint:
+        campaign.routingMode === "JOURNEY"
+          ? campaign.contentSource === "IMPORTED"
+            ? "Draw it below, or import leads with their own email graph."
+            : "Add emails, connect them, and save the journey below."
+          : "Add at least one step to the sequence below.",
+    },
+    {
+      done: campaign.inboxes.length > 0,
+      label: "Choose the sending inboxes",
+      hint: "Pick at least one connected inbox in the Sending inbox pool.",
+    },
+    {
+      done: enrollments.length > 0,
+      label: "Enroll leads",
+      hint: "Add leads from a list or search in Enrollments, so there is someone to email.",
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title={campaign.name}
-        description={`Status: ${campaign.status}`}
+        description={`${campaign.routingMode === "JOURNEY" ? "Journey" : "Linear"} · ${CAMPAIGN_SOURCE_LABEL[campaign.contentSource]} · Status: ${campaign.status}`}
         actions={
           <div className="flex items-center gap-2">
             {process.env.NODE_ENV !== "production" ? (
@@ -749,6 +835,8 @@ export default function CampaignDetailPage(): React.ReactElement {
           </div>
         }
       />
+
+      {campaign.status === "DRAFT" ? <LaunchChecklist items={launchChecklist} /> : null}
 
       <CollapsibleCard title="Sending schedule">
         <div className="mb-4 rounded-lg border border-outline bg-surface-container p-4">
@@ -850,48 +938,50 @@ export default function CampaignDetailPage(): React.ReactElement {
         </div>
       </CollapsibleCard>
 
-      <CollapsibleCard title="Send test email">
-        <p className="mb-4 text-sm text-on-surface-variant">
-          Sends this campaign&apos;s first step to 1-2 addresses you control, exactly what a real
-          prospect would receive, so you can check formatting, signature, and tone before going
-          live. This never enrolls a real lead or affects campaign progress.
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <TextInput
-            label="Test email 1"
-            type="email"
-            value={testEmail1}
-            onChange={(event) => setTestEmail1(event.target.value)}
-          />
-          <TextInput
-            label="Test email 2 (optional)"
-            type="email"
-            value={testEmail2}
-            onChange={(event) => setTestEmail2(event.target.value)}
-          />
-          <Button loading={sendingTest} disabled={!testEmail1.trim()} onClick={handleSendTest}>
-            Send test
-          </Button>
-        </div>
-
-        {testResult ? (
-          <div className="mt-4 flex flex-col gap-3 border-t border-outline/15 pt-4">
-            <div className="flex flex-wrap items-center gap-2">
-              {testResult.results.map((result) => (
-                <Badge key={result.email} tone={result.ok ? "success" : "error"}>
-                  {result.email}: {result.ok ? "sent" : (result.error ?? "failed")}
-                </Badge>
-              ))}
-            </div>
-            <div className="rounded-md-md border border-outline/30 p-3">
-              <p className="text-sm font-medium text-on-surface">Subject: {testResult.subject}</p>
-              <p className="mt-2 whitespace-pre-line text-sm text-on-surface-variant">
-                {testResult.body}
-              </p>
-            </div>
+      {campaign.contentSource !== "IMPORTED" ? (
+        <CollapsibleCard title="Send test email">
+          <p className="mb-4 text-sm text-on-surface-variant">
+            Sends this campaign&apos;s first step to 1-2 addresses you control, exactly what a real
+            prospect would receive, so you can check formatting, signature, and tone before going
+            live. This never enrolls a real lead or affects campaign progress.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <TextInput
+              label="Test email 1"
+              type="email"
+              value={testEmail1}
+              onChange={(event) => setTestEmail1(event.target.value)}
+            />
+            <TextInput
+              label="Test email 2 (optional)"
+              type="email"
+              value={testEmail2}
+              onChange={(event) => setTestEmail2(event.target.value)}
+            />
+            <Button loading={sendingTest} disabled={!testEmail1.trim()} onClick={handleSendTest}>
+              Send test
+            </Button>
           </div>
-        ) : null}
-      </CollapsibleCard>
+
+          {testResult ? (
+            <div className="mt-4 flex flex-col gap-3 border-t border-outline/15 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {testResult.results.map((result) => (
+                  <Badge key={result.email} tone={result.ok ? "success" : "error"}>
+                    {result.email}: {result.ok ? "sent" : (result.error ?? "failed")}
+                  </Badge>
+                ))}
+              </div>
+              <div className="rounded-md-md border border-outline/30 p-3">
+                <p className="text-sm font-medium text-on-surface">Subject: {testResult.subject}</p>
+                <p className="mt-2 whitespace-pre-line text-sm text-on-surface-variant">
+                  {testResult.body}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </CollapsibleCard>
+      ) : null}
 
       {campaign.routingMode === "JOURNEY" ? (
         <Card>
@@ -899,9 +989,19 @@ export default function CampaignDetailPage(): React.ReactElement {
             <div>
               <h3 className="text-sm font-medium text-on-surface-variant">Journey</h3>
               <p className="mt-1 text-sm text-on-surface-variant">
-                Build the emails and how they connect. Replies (labelled by the AI decider or the
-                keyword rules) and silence choose what is sent next. If you build nothing here, each
-                lead&apos;s own imported graph (CSV <code>emails</code> column) is used.
+                {campaign.contentSource === "IMPORTED" ? (
+                  <>
+                    Connect the emails and pick which uploaded email (by sequence number) each one
+                    sends. Replies (labelled by the AI decider or the keyword rules) and silence
+                    choose what goes next. If you build nothing here, each lead&apos;s own imported
+                    graph (CSV <code>emails</code> column) is used.
+                  </>
+                ) : (
+                  <>
+                    Write the emails and connect them. Replies (labelled by the AI decider or the
+                    keyword rules) and silence choose what is sent next.
+                  </>
+                )}
               </p>
             </div>
             {canChangeType ? (
@@ -910,11 +1010,23 @@ export default function CampaignDetailPage(): React.ReactElement {
               </Button>
             ) : null}
           </div>
-          <JourneyEditor organisationId={organisationId} campaignId={campaignId} />
+          <JourneyEditor
+            organisationId={organisationId}
+            campaignId={campaignId}
+            contentSource={campaign.contentSource}
+            onSaved={() => void load()}
+          />
         </Card>
       ) : (
         <Card>
-          <h3 className="mb-4 text-sm font-medium text-on-surface-variant">Sequence steps</h3>
+          <h3 className="text-sm font-medium text-on-surface-variant">Sequence steps</h3>
+          <p className="mb-4 mt-1 text-xs text-on-surface-variant">
+            {campaign.contentSource === "AI"
+              ? "Each email is written by AI for the lead."
+              : campaign.contentSource === "TEMPLATE"
+                ? "Each step is a template you write, with {{variables}} like {{firstName}}."
+                : "Each step sends the lead's uploaded email with the matching sequence number."}
+          </p>
           {canChangeType ? (
             <div className="mb-4">
               <Button variant="outlined" onClick={() => handleChangeType("JOURNEY")}>
@@ -991,12 +1103,6 @@ export default function CampaignDetailPage(): React.ReactElement {
                 { value: "CLOSE_THE_LOOP", label: "Close the loop" },
               ]}
               onChange={(event) => setNewStepType(event.target.value as Step["stepType"])}
-            />
-            <Select
-              label="Content"
-              value={newContentSource}
-              options={CONTENT_SOURCE_OPTIONS}
-              onChange={(event) => setNewContentSource(event.target.value as StepContentSource)}
             />
             {newContentSource === "AI" ? (
               <TextInput
@@ -1087,13 +1193,6 @@ export default function CampaignDetailPage(): React.ReactElement {
               </p>
             </div>
 
-            <Select
-              label="Content"
-              value={editContentSource}
-              options={CONTENT_SOURCE_OPTIONS}
-              onChange={(event) => setEditContentSource(event.target.value as StepContentSource)}
-            />
-
             {editContentSource === "AI" ? (
               <>
                 <TextInput
@@ -1160,54 +1259,56 @@ export default function CampaignDetailPage(): React.ReactElement {
         )}
       </Card>
 
-      <CollapsibleCard title="Campaign email prompt">
-        <p className="text-sm text-on-surface-variant">
-          What emails in this campaign say and how they look: which recipient data they may use, the
-          format to follow, and the voice to write in. It is sent to the AI with every email this
-          campaign generates, and the QA pass checks the draft against it.
-        </p>
-        <p className="mt-2 text-sm text-on-surface-variant">
-          The safety rules (facts-only personalisation, no invented claims, no fabricated URLs, no
-          self-written signature) always apply on top of this and cannot be relaxed here. Leave it
-          empty to fall back to the organisation default in Settings.
-        </p>
-        <div className="mt-4">
-          <TextArea
-            label="Campaign email prompt"
-            rows={14}
-            maxLength={4000}
-            placeholder={campaign.defaultCampaignPrompt}
-            value={promptInstructions}
-            onChange={(event) => setPromptInstructions(event.target.value)}
-          />
-        </div>
-        <div className="mt-4 flex items-center gap-2">
-          <Button loading={savingPrompt} onClick={() => handleSavePrompt(promptInstructions)}>
-            Save campaign prompt
-          </Button>
-          <Button
-            variant="text"
-            onClick={() => setPromptInstructions(campaign.defaultCampaignPrompt)}
-          >
-            Reset to default
-          </Button>
-          {campaign.emailPromptInstructions ? (
+      {campaign.contentSource === "AI" ? (
+        <CollapsibleCard title="Campaign email prompt">
+          <p className="text-sm text-on-surface-variant">
+            What emails in this campaign say and how they look: which recipient data they may use,
+            the format to follow, and the voice to write in. It is sent to the AI with every email
+            this campaign generates, and the QA pass checks the draft against it.
+          </p>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            The safety rules (facts-only personalisation, no invented claims, no fabricated URLs, no
+            self-written signature) always apply on top of this and cannot be relaxed here. Leave it
+            empty to fall back to the organisation default in Settings.
+          </p>
+          <div className="mt-4">
+            <TextArea
+              label="Campaign email prompt"
+              rows={14}
+              maxLength={4000}
+              placeholder={campaign.defaultCampaignPrompt}
+              value={promptInstructions}
+              onChange={(event) => setPromptInstructions(event.target.value)}
+            />
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <Button loading={savingPrompt} onClick={() => handleSavePrompt(promptInstructions)}>
+              Save campaign prompt
+            </Button>
             <Button
               variant="text"
-              onClick={() => {
-                setPromptInstructions("");
-                void handleSavePrompt("");
-              }}
+              onClick={() => setPromptInstructions(campaign.defaultCampaignPrompt)}
             >
-              Clear and use organisation default
+              Reset to default
             </Button>
-          ) : (
-            <span className="text-sm text-on-surface-variant">
-              Currently using the organisation default.
-            </span>
-          )}
-        </div>
-      </CollapsibleCard>
+            {campaign.emailPromptInstructions ? (
+              <Button
+                variant="text"
+                onClick={() => {
+                  setPromptInstructions("");
+                  void handleSavePrompt("");
+                }}
+              >
+                Clear and use organisation default
+              </Button>
+            ) : (
+              <span className="text-sm text-on-surface-variant">
+                Currently using the organisation default.
+              </span>
+            )}
+          </div>
+        </CollapsibleCard>
+      ) : null}
 
       <Card>
         <h3 className="mb-4 text-sm font-medium text-on-surface-variant">

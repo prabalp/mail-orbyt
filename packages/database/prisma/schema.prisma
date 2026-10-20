@@ -1278,21 +1278,21 @@ enum CampaignStatus {
 /// the scheduler (Phase 8) is responsible for converting to each send's
 /// actual wall-clock time.
 model Campaign {
-  id                       String              @id @default(cuid())
+  id                       String                @id @default(cuid())
   organisationId           String
   name                     String
   description              String?
-  status                   CampaignStatus      @default(DRAFT)
-  timezone                 String              @default("UTC")
+  status                   CampaignStatus        @default(DRAFT)
+  timezone                 String                @default("UTC")
   /// 0 (Sunday) - 6 (Saturday).
-  sendingDaysOfWeek        Int[]               @default([1, 2, 3, 4, 5])
-  sendingWindowStartMinute Int                 @default(540)
-  sendingWindowEndMinute   Int                 @default(1020)
+  sendingDaysOfWeek        Int[]                 @default([1, 2, 3, 4, 5])
+  sendingWindowStartMinute Int                   @default(540)
+  sendingWindowEndMinute   Int                   @default(1020)
   /// Minimum gap between two sends from the SAME inbox, for inbox health —
   /// without it a whole batch of due items leaves one mailbox in seconds,
   /// which is what spam filters look for. Enforced per inbox, so a pool of
   /// N inboxes still sends N emails concurrently. 0 disables the throttle.
-  inboxCooldownMinutes     Int                 @default(3)
+  inboxCooldownMinutes     Int                   @default(3)
   /// Tone/style guidance for AI-generated copy in THIS campaign. When set it
   /// replaces Organisation.emailPromptInstructions outright (it does not
   /// stack with it) so a campaign's voice is readable in one place; null/empty
@@ -1304,7 +1304,12 @@ model Campaign {
   /// imported email graph (LeadImportedEmail.edges) — see journey.ts in
   /// packages/scheduling. A JOURNEY campaign has one placeholder step that
   /// every node send is attached to.
-  routingMode              CampaignRoutingMode @default(LINEAR)
+  routingMode              CampaignRoutingMode   @default(LINEAR)
+  /// Where this campaign's email text comes from, chosen when it is created:
+  /// AI writes each email, TEMPLATE is text the user writes (shared template
+  /// steps / journey nodes), IMPORTED sends each lead's uploaded emails. Steps
+  /// and journey nodes must match it; the campaign email prompt only applies to AI.
+  contentSource            CampaignContentSource @default(AI)
   /// The campaign-level journey graph authored in the node editor:
   /// { start, nodes: [{key,label,subject,body,x,y}], edges: [{from,outcome,to,
   /// afterDays?,when?}], variables: {token: {source,field?,value?,fallback?}} }.
@@ -1325,6 +1330,12 @@ model Campaign {
 
   @@index([organisationId])
   @@index([organisationId, status])
+}
+
+enum CampaignContentSource {
+  AI
+  TEMPLATE
+  IMPORTED
 }
 
 enum CampaignRoutingMode {

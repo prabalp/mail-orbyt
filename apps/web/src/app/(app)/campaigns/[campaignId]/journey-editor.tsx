@@ -20,15 +20,20 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, Plus, Save } from "lucide-react";
 import {
   Alert,
   Button,
   Card,
+  IconButton,
   Select,
   TextArea,
   TextInput,
+  Tooltip,
   useToast,
 } from "@mail-orbyt/design-system";
+
+type ContentSource = "AI" | "TEMPLATE" | "IMPORTED";
 
 /** Mirrors packages/leads journey-graph.ts — kept in sync by hand because that package is server-only. */
 const LEAD_FIELDS = [
@@ -207,11 +212,15 @@ function EndNodeView({ selected }: NodeProps<EndNode>) {
 
 const NODE_TYPES = { email: EmailNodeView, end: EndNodeView };
 
-function fromSaved(graph: SavedGraph | null): {
+function fromSaved(
+  graph: SavedGraph | null,
+  contentSource: ContentSource,
+): {
   nodes: FlowNode[];
   edges: FlowEdge[];
   start: string;
 } {
+  const uploaded = contentSource === "IMPORTED";
   const endNode: EndNode = {
     id: END_ID,
     type: "end",
@@ -224,14 +233,20 @@ function fromSaved(graph: SavedGraph | null): {
       id: "email_1",
       type: "email",
       position: { x: 40, y: 120 },
-      data: { label: "First email", subject: "", body: "", isStart: true },
+      data: {
+        label: "First email",
+        subject: "",
+        body: "",
+        importedSequence: uploaded ? 1 : undefined,
+        isStart: true,
+      },
     };
     return { nodes: [first, endNode], edges: [], start: "email_1" };
   }
   return {
     start: graph.start,
     nodes: [
-      ...graph.nodes.map((node): EmailNode => ({
+      ...graph.nodes.map((node, index): EmailNode => ({
         id: node.key,
         type: "email",
         position: { x: node.x, y: node.y },
@@ -239,7 +254,8 @@ function fromSaved(graph: SavedGraph | null): {
           label: node.label || node.key,
           subject: node.subject,
           body: node.body,
-          importedSequence: node.importedSequence,
+          // The campaign's content source decides how every email is written.
+          importedSequence: uploaded ? (node.importedSequence ?? index + 1) : undefined,
           isStart: node.key === graph.start,
         },
       })),
@@ -258,10 +274,15 @@ function fromSaved(graph: SavedGraph | null): {
 function Editor({
   organisationId,
   campaignId,
+  contentSource,
+  onSaved,
 }: {
   organisationId: string;
   campaignId: string;
+  contentSource: ContentSource;
+  onSaved?: () => void;
 }): React.ReactElement {
+  const uploaded = contentSource === "IMPORTED";
   const toast = useToast();
   const url = `/api/organisations/${organisationId}/campaigns/${campaignId}/journey`;
 
@@ -284,7 +305,7 @@ function Editor({
           data: { graph: (SavedGraph & { variables?: Record<string, Variable> }) | null } | null,
         ) => {
           if (cancelled) return;
-          const state = fromSaved(data?.graph ?? null);
+          const state = fromSaved(data?.graph ?? null, contentSource);
           setNodes(state.nodes);
           setEdges(state.edges);
           setVariables(data?.graph?.variables ?? {});
@@ -304,8 +325,9 @@ function Editor({
   const selectedNode = emailNodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
 
-  // Tall enough for the lowest email plus room to work, but never taller than
-  // the window, so the canvas grows with the journey instead of being a fixed box.
+  // Tall enough for the lowest email plus room to work (1.5x the original
+  // 480px / +260 / 85% sizing), so the canvas grows with the journey instead of
+  // being a fixed box.
   const [viewportHeight, setViewportHeight] = useState(800);
   useEffect(() => {
     const update = () => setViewportHeight(window.innerHeight);
@@ -315,7 +337,7 @@ function Editor({
   }, []);
   const lowest = nodes.reduce((max, node) => Math.max(max, node.position.y), 0);
   const canvasHeight = Math.round(
-    Math.min(Math.max(480, lowest + 260), Math.max(480, viewportHeight * 0.85)),
+    Math.min(Math.max(720, lowest + 390), Math.max(720, viewportHeight * 1.275)),
   );
 
   const tokens = useMemo(
@@ -382,7 +404,13 @@ function Editor({
         id,
         type: "email",
         position: { x: 40 + (emailNodes.length % 4) * 60, y: 60 + emailNodes.length * 90 },
-        data: { label: `Email ${n}`, subject: "", body: "", isStart: false },
+        data: {
+          label: `Email ${n}`,
+          subject: "",
+          body: "",
+          importedSequence: uploaded ? Math.min(20, emailNodes.length + 1) : undefined,
+          isStart: false,
+        },
       },
     ]);
     setSelectedNodeId(id);
@@ -506,6 +534,7 @@ function Editor({
       if (response.ok) {
         setDirty(false);
         toast.show("Journey saved");
+        onSaved?.();
       } else {
         const body = (await response.json().catch(() => null)) as {
           errors?: string[];
@@ -526,12 +555,29 @@ function Editor({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outlined" onClick={addEmail}>
-          Add email
-        </Button>
-        <Button loading={saving} disabled={!dirty} onClick={handleSave}>
-          Save journey
-        </Button>
+        <Tooltip content="Add email" side="bottom">
+          <IconButton
+            icon={<Plus size={20} aria-hidden="true" />}
+            label="Add email"
+            variant="tonal"
+            onClick={addEmail}
+          />
+        </Tooltip>
+        <Tooltip content="Save journey" side="bottom">
+          <IconButton
+            icon={
+              saving ? (
+                <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Save size={20} aria-hidden="true" />
+              )
+            }
+            label="Save journey"
+            variant="filled"
+            disabled={!dirty || saving}
+            onClick={handleSave}
+          />
+        </Tooltip>
         {dirty ? <span className="text-sm text-on-surface-variant">Unsaved changes</span> : null}
         <span className="text-sm text-on-surface-variant">
           Drag from an email&apos;s right dot to another email (or END) to connect them.
@@ -594,20 +640,7 @@ function Editor({
                   value={selectedNode.data.label}
                   onChange={(e) => updateNode(selectedNode.id, { label: e.target.value })}
                 />
-                <Select
-                  label="Content"
-                  value={selectedNode.data.importedSequence ? "imported" : "template"}
-                  options={[
-                    { value: "template", label: "Write it here (template)" },
-                    { value: "imported", label: "Use the lead's uploaded email…" },
-                  ]}
-                  onChange={(e) =>
-                    updateNode(selectedNode.id, {
-                      importedSequence: e.target.value === "imported" ? 1 : undefined,
-                    })
-                  }
-                />
-                {selectedNode.data.importedSequence ? (
+                {uploaded ? (
                   <TextInput
                     label="Uploaded email sequence number"
                     type="number"
@@ -640,7 +673,7 @@ function Editor({
                     />
                   </>
                 )}
-                {selectedNode.data.importedSequence ? null : (
+                {uploaded ? null : (
                   <div className="flex flex-wrap gap-1.5">
                     {LEAD_FIELDS.map((field) => (
                       <button
@@ -658,7 +691,7 @@ function Editor({
                     ))}
                   </div>
                 )}
-                {selectedNode.data.importedSequence ? null : (
+                {uploaded ? null : (
                   <div className="rounded-md-md border border-outline/30 bg-surface-container p-3">
                     <p className="text-xs font-medium text-on-surface-variant">
                       Preview (sample lead)
@@ -845,6 +878,8 @@ function Editor({
 export function JourneyEditor(props: {
   organisationId: string;
   campaignId: string;
+  contentSource: ContentSource;
+  onSaved?: () => void;
 }): React.ReactElement {
   return (
     <ReactFlowProvider>

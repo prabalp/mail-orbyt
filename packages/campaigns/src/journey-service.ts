@@ -44,6 +44,19 @@ export async function saveJourneyGraph(
   const parsed = parseJourneyGraph(input);
   if (!parsed.ok) throw new InvalidJourneyGraphError(parsed.errors);
 
+  // Every email follows the campaign's content source, chosen at creation.
+  const uploaded = parsed.graph.nodes.filter((node) => node.importedSequence);
+  if (campaign.contentSource === "IMPORTED" && uploaded.length < parsed.graph.nodes.length) {
+    throw new InvalidJourneyGraphError([
+      "This campaign sends the lead's uploaded emails — give every email an uploaded sequence number.",
+    ]);
+  }
+  if (campaign.contentSource !== "IMPORTED" && uploaded.length > 0) {
+    throw new InvalidJourneyGraphError([
+      "This campaign uses written emails — remove the uploaded-email sequence numbers, or create an uploaded-list campaign.",
+    ]);
+  }
+
   const keys = new Set(parsed.graph.nodes.map((node) => node.key));
   const live = await prisma.campaignEnrollment.findMany({
     where: { campaignId, status: { in: ["PENDING", "ACTIVE", "PAUSED"] } },
@@ -76,11 +89,16 @@ export async function saveJourneyGraph(
  */
 export async function requiredImportedSequences(
   prisma: Pick<PrismaClient, "campaignStep">,
-  campaign: { id: string; routingMode: string; journeyGraph?: unknown },
+  campaign: { id: string; routingMode: string; contentSource?: string; journeyGraph?: unknown },
 ): Promise<number[]> {
-  if (campaign.routingMode === "JOURNEY" && campaign.journeyGraph) {
-    const parsed = parseJourneyGraph(campaign.journeyGraph);
-    if (parsed.ok) return importedSequencesIn(parsed.graph);
+  if (campaign.routingMode === "JOURNEY") {
+    if (campaign.journeyGraph) {
+      const parsed = parseJourneyGraph(campaign.journeyGraph);
+      if (parsed.ok) return importedSequencesIn(parsed.graph);
+    }
+    // A journey with written emails carries them itself; only an uploaded-list
+    // journey with no editor graph reads the lead's own imported graph.
+    if (campaign.contentSource === "TEMPLATE") return [];
   }
   const steps = await prisma.campaignStep.findMany({
     where: { campaignId: campaign.id, useImportedContent: true },

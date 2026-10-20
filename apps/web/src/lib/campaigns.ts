@@ -33,6 +33,7 @@ import {
   enqueueDueOutboxItems,
   processOutboxItem,
 } from "@mail-orbyt/scheduling";
+import { parseJourneyGraph, renderJourneyTemplate } from "@mail-orbyt/leads";
 import { redisConnection } from "@/lib/queue";
 
 export {
@@ -213,6 +214,16 @@ export async function sendCampaignNow(organisationId: string, campaignId: string
 /** A generic placeholder recipient for test sends — no real Lead row exists to attach a research snapshot to, so AI generation runs with an empty fact list (the model writes a generic-but-relevant email per prompt rule 2). */
 const SAMPLE_RECIPIENT = { firstName: null, lastName: null, title: null };
 
+/** Sample values for previewing a journey email, so variables read naturally instead of blank. */
+const SAMPLE_LEAD_VALUES = {
+  firstName: "Jamie",
+  lastName: "Rivera",
+  title: "CTO",
+  company: "Acme",
+  industry: "Software",
+  email: "jamie@example.com",
+};
+
 /**
  * Sends the campaign's first step to 1-2 user-supplied addresses, exactly as
  * it would go out to a real prospect, so the sender can visually confirm
@@ -245,13 +256,26 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
   let subject: string;
   let body: string;
 
-  if (step.useImportedContent) {
+  if (campaign.routingMode === "JOURNEY") {
+    // Preview the journey's starting email with a sample lead; the greeting is
+    // not added here, matching how manual steps are test-sent.
+    const parsed = campaign.journeyGraph ? parseJourneyGraph(campaign.journeyGraph) : null;
+    if (!parsed?.ok) {
+      throw new CampaignActivationError("Build and save the journey before sending a test email.");
+    }
+    const startNode = parsed.graph.nodes.find((node) => node.key === parsed.graph.start);
+    if (!startNode || startNode.importedSequence) {
+      throw new CampaignActivationError(
+        "The starting email uses each lead's uploaded email, so a test send has no single body to preview.",
+      );
+    }
+    subject = renderJourneyTemplate(startNode.subject, parsed.graph.variables, SAMPLE_LEAD_VALUES);
+    body = renderJourneyTemplate(startNode.body, parsed.graph.variables, SAMPLE_LEAD_VALUES);
+  } else if (step.useImportedContent) {
     throw new CampaignActivationError(
       "This step sends each lead's imported email, so a test send has no single body to preview.",
     );
-  }
-
-  if (!step.useAiGeneration) {
+  } else if (!step.useAiGeneration) {
     if (!step.manualSubject || !step.manualBody) {
       throw new Error("Manual step is missing subject/body.");
     }

@@ -26,7 +26,12 @@ function fakePrisma(options: {
   };
 }
 
-const OWNED_CAMPAIGN = { id: "campaign-1", organisationId: "org-1" };
+const OWNED_CAMPAIGN = {
+  id: "campaign-1",
+  organisationId: "org-1",
+  routingMode: "LINEAR",
+  contentSource: "AI",
+};
 
 describe("addStep", () => {
   it("appends a step at the next orderIndex", async () => {
@@ -42,7 +47,10 @@ describe("addStep", () => {
   });
 
   it("stores an imported-email step without a shared template", async () => {
-    const prisma = fakePrisma({ campaign: OWNED_CAMPAIGN, lastStep: null });
+    const prisma = fakePrisma({
+      campaign: { ...OWNED_CAMPAIGN, contentSource: "IMPORTED" },
+      lastStep: null,
+    });
     const step = await addStep(prisma, "org-1", "campaign-1", {
       stepType: "INITIAL",
       useImportedContent: true,
@@ -56,6 +64,34 @@ describe("addStep", () => {
     await expect(
       addStep(prisma, "org-1", "campaign-1", { stepType: "INITIAL", useAiGeneration: false }),
     ).rejects.toBeInstanceOf(InvalidStepError);
+  });
+
+  it("gives a step the campaign's content source when the caller doesn't say", async () => {
+    const template = fakePrisma({
+      campaign: { ...OWNED_CAMPAIGN, contentSource: "TEMPLATE" },
+      lastStep: null,
+    });
+    await expect(
+      addStep(template, "org-1", "campaign-1", { stepType: "INITIAL" }),
+    ).rejects.toBeInstanceOf(InvalidStepError); // template needs subject/body
+    const step = await addStep(template, "org-1", "campaign-1", {
+      stepType: "INITIAL",
+      manualSubject: "Hi",
+      manualBody: "Hello",
+    });
+    expect(step).toMatchObject({ useAiGeneration: false, useImportedContent: false });
+  });
+
+  it("rejects a step whose content differs from the campaign's source", async () => {
+    const prisma = fakePrisma({ campaign: OWNED_CAMPAIGN, lastStep: null });
+    await expect(
+      addStep(prisma, "org-1", "campaign-1", {
+        stepType: "INITIAL",
+        useAiGeneration: false,
+        manualSubject: "Hi",
+        manualBody: "Hello",
+      }),
+    ).rejects.toThrow(/AI-written campaign/);
   });
 
   it("returns null for a campaign in a different organisation", async () => {

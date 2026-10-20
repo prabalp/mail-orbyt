@@ -43,6 +43,29 @@ async function assertOwnedCampaign(prisma: Prisma, organisationId: string, campa
   return campaign;
 }
 
+const SOURCE_LABEL = {
+  AI: "AI-written",
+  TEMPLATE: "template",
+  IMPORTED: "uploaded-list",
+} as const;
+
+/** The content source a set of step flags amounts to. */
+function stepSource(flags: { useAiGeneration: boolean; useImportedContent: boolean }) {
+  if (flags.useImportedContent) return "IMPORTED" as const;
+  return flags.useAiGeneration ? ("AI" as const) : ("TEMPLATE" as const);
+}
+
+function assertMatchesCampaignSource(
+  campaign: { contentSource: "AI" | "TEMPLATE" | "IMPORTED" },
+  flags: { useAiGeneration: boolean; useImportedContent: boolean },
+) {
+  if (stepSource(flags) !== campaign.contentSource) {
+    throw new InvalidStepError(
+      `This is a ${SOURCE_LABEL[campaign.contentSource]} campaign, so its steps must be too.`,
+    );
+  }
+}
+
 export async function addStep(
   prisma: Prisma,
   organisationId: string,
@@ -51,7 +74,15 @@ export async function addStep(
 ) {
   const campaign = await assertOwnedCampaign(prisma, organisationId, campaignId);
   if (!campaign) return null;
+  // Steps follow the campaign's content source; a caller that doesn't say gets it.
+  const flags = {
+    useImportedContent: params.useImportedContent ?? campaign.contentSource === "IMPORTED",
+    useAiGeneration: params.useAiGeneration ?? campaign.contentSource === "AI",
+  };
+  if (flags.useImportedContent) flags.useAiGeneration = false;
+  params = { ...params, ...flags };
   assertValidContent(params);
+  if (campaign.routingMode !== "JOURNEY") assertMatchesCampaignSource(campaign, flags);
 
   const lastStep = await prisma.campaignStep.findFirst({
     where: { campaignId },
@@ -102,6 +133,11 @@ export async function updateStep(
   const useAiGeneration = useImportedContent
     ? false
     : (patch.useAiGeneration ?? step.useAiGeneration);
+  const touchesContent =
+    patch.useAiGeneration !== undefined || patch.useImportedContent !== undefined;
+  if (touchesContent && campaign.routingMode !== "JOURNEY") {
+    assertMatchesCampaignSource(campaign, { useAiGeneration, useImportedContent });
+  }
   assertValidContent({
     useAiGeneration,
     useImportedContent,

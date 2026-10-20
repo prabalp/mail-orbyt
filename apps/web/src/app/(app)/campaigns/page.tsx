@@ -6,20 +6,20 @@ import {
   Badge,
   Button,
   Card,
-  Dialog,
   EmptyState,
   PageHeader,
-  Select,
   Table,
-  TextInput,
   useToast,
 } from "@mail-orbyt/design-system";
 import { Send } from "lucide-react";
 import { useOrganisation } from "../organisation-context";
+import { NewCampaignDialog } from "./new-campaign-dialog";
 
 interface Campaign {
   id: string;
   name: string;
+  routingMode?: "LINEAR" | "JOURNEY";
+  contentSource?: "AI" | "TEMPLATE" | "IMPORTED";
   status: "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
   createdAt: string;
 }
@@ -38,9 +38,6 @@ export default function CampaignsPage(): React.ReactElement {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [routingMode, setRoutingMode] = useState<"LINEAR" | "JOURNEY">("LINEAR");
-  const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -55,27 +52,6 @@ export default function CampaignsPage(): React.ReactElement {
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function handleCreate() {
-    setCreating(true);
-    try {
-      const response = await fetch(`/api/organisations/${organisationId}/campaigns`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, routingMode }),
-      });
-      if (response.ok) {
-        setDialogOpen(false);
-        setName("");
-        setRoutingMode("LINEAR");
-        await load();
-      } else {
-        toast.show("Could not create campaign", "error");
-      }
-    } finally {
-      setCreating(false);
-    }
-  }
 
   async function handleDelete(campaign: Campaign) {
     const confirmed = window.confirm(
@@ -130,6 +106,20 @@ export default function CampaignsPage(): React.ReactElement {
                 ),
               },
               {
+                key: "type",
+                header: "Type",
+                render: (campaign: Campaign) => (
+                  <span className="text-sm text-on-surface-variant">
+                    {campaign.routingMode === "JOURNEY" ? "Journey" : "Linear"} ·{" "}
+                    {campaign.contentSource === "TEMPLATE"
+                      ? "Template"
+                      : campaign.contentSource === "IMPORTED"
+                        ? "Uploaded list"
+                        : "AI"}
+                  </span>
+                ),
+              },
+              {
                 key: "status",
                 header: "Status",
                 render: (campaign: Campaign) => (
@@ -156,44 +146,11 @@ export default function CampaignsPage(): React.ReactElement {
         )}
       </Card>
 
-      <Dialog
+      <NewCampaignDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        title="New campaign"
-        footer={
-          <>
-            <Button variant="outlined" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button loading={creating} disabled={!name} onClick={handleCreate}>
-              Create
-            </Button>
-          </>
-        }
-      >
-        <TextInput
-          label="Campaign name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <div className="mt-4">
-          <Select
-            label="Sequence type"
-            value={routingMode}
-            options={[
-              { value: "LINEAR", label: "Linear — steps sent in order" },
-              { value: "JOURNEY", label: "Journey — branches on replies and silence" },
-            ]}
-            onChange={(event) => setRoutingMode(event.target.value as "LINEAR" | "JOURNEY")}
-          />
-          {routingMode === "JOURNEY" ? (
-            <p className="mt-2 text-sm text-on-surface-variant">
-              Each lead is imported with its own graph of emails (CSV <code>emails</code> column as
-              a JSON object). Replies and silence pick the next email.
-            </p>
-          ) : null}
-        </div>
-      </Dialog>
+        organisationId={organisationId}
+      />
     </div>
   );
 }
