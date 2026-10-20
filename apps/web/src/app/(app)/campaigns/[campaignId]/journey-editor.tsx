@@ -53,6 +53,8 @@ interface EmailData extends Record<string, unknown> {
   label: string;
   subject: string;
   body: string;
+  /** Use each lead's uploaded email at this sequence number instead of the text above. */
+  importedSequence?: number;
   isStart: boolean;
 }
 
@@ -69,12 +71,36 @@ type FlowEdge = Edge<EdgeData>;
 
 interface SavedGraph {
   start: string;
-  nodes: { key: string; label: string; subject: string; body: string; x: number; y: number }[];
+  nodes: {
+    key: string;
+    label: string;
+    subject: string;
+    body: string;
+    importedSequence?: number;
+    x: number;
+    y: number;
+  }[];
   edges: { from: string; outcome: string; to: string; afterDays?: number; when?: string }[];
   variables: Record<string, Variable>;
 }
 
 const END_ID = "END";
+
+/** React Flow reads its colours from these variables; point them at the app's design tokens so the canvas matches the theme (the app is light-only, so "system" colour mode would go dark with the OS). */
+const FLOW_THEME = {
+  "--xy-background-color": "rgb(var(--md-surface-rgb))",
+  "--xy-node-background-color": "rgb(var(--md-surface-rgb))",
+  "--xy-node-color": "rgb(var(--md-on-surface-rgb))",
+  "--xy-node-border": "1px solid rgb(var(--md-outline-rgb) / 0.5)",
+  "--xy-edge-stroke": "rgb(var(--md-outline-rgb))",
+  "--xy-edge-label-color": "rgb(var(--md-on-surface-rgb))",
+  "--xy-edge-label-background-color": "rgb(var(--md-surface-rgb))",
+  "--xy-controls-button-background-color": "rgb(var(--md-surface-rgb))",
+  "--xy-controls-button-color": "rgb(var(--md-on-surface-rgb))",
+  "--xy-controls-button-border-color": "rgb(var(--md-outline-rgb) / 0.4)",
+  "--xy-handle-background-color": "rgb(var(--md-outline-rgb))",
+  "--xy-handle-border-color": "rgb(var(--md-surface-rgb))",
+} as React.CSSProperties;
 
 const OUTCOMES: { value: string; label: string; help: string }[] = [
   { value: "no_reply", label: "No reply", help: "Nothing came back within the delay." },
@@ -157,7 +183,9 @@ function EmailNodeView({ data, selected }: NodeProps<EmailNode>) {
         ) : null}
       </div>
       <p className="mt-1 truncate text-xs text-on-surface-variant">
-        {data.subject || "No subject"}
+        {data.importedSequence
+          ? `Uploaded email #${data.importedSequence}`
+          : data.subject || "No subject"}
       </p>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -211,6 +239,7 @@ function fromSaved(graph: SavedGraph | null): {
           label: node.label || node.key,
           subject: node.subject,
           body: node.body,
+          importedSequence: node.importedSequence,
           isStart: node.key === graph.start,
         },
       })),
@@ -275,10 +304,26 @@ function Editor({
   const selectedNode = emailNodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
 
+  // Tall enough for the lowest email plus room to work, but never taller than
+  // the window, so the canvas grows with the journey instead of being a fixed box.
+  const [viewportHeight, setViewportHeight] = useState(800);
+  useEffect(() => {
+    const update = () => setViewportHeight(window.innerHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  const lowest = nodes.reduce((max, node) => Math.max(max, node.position.y), 0);
+  const canvasHeight = Math.round(
+    Math.min(Math.max(480, lowest + 260), Math.max(480, viewportHeight * 0.85)),
+  );
+
   const tokens = useMemo(
     () => [
       ...new Set(
-        emailNodes.flatMap((n) => [...tokensIn(n.data.subject), ...tokensIn(n.data.body)]),
+        emailNodes.flatMap((n) =>
+          n.data.importedSequence ? [] : [...tokensIn(n.data.subject), ...tokensIn(n.data.body)],
+        ),
       ),
     ],
     [emailNodes],
@@ -436,8 +481,9 @@ function Editor({
         nodes: emailNodes.map((node) => ({
           key: node.id,
           label: node.data.label,
-          subject: node.data.subject,
-          body: node.data.body,
+          subject: node.data.importedSequence ? "" : node.data.subject,
+          body: node.data.importedSequence ? "" : node.data.body,
+          ...(node.data.importedSequence ? { importedSequence: node.data.importedSequence } : {}),
           x: Math.round(node.position.x),
           y: Math.round(node.position.y),
         })),
@@ -503,7 +549,10 @@ function Editor({
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
-        <div className="h-[560px] rounded-md-md border border-outline/30">
+        <div
+          className="overflow-hidden rounded-md-md border border-outline/30"
+          style={{ height: canvasHeight, ...FLOW_THEME }}
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -523,11 +572,11 @@ function Editor({
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
             }}
-            colorMode="system"
+            colorMode="light"
             fitView
             deleteKeyCode={null}
           >
-            <Background />
+            <Background color="rgb(var(--md-outline-rgb) / 0.35)" gap={20} />
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
@@ -542,45 +591,83 @@ function Editor({
                   value={selectedNode.data.label}
                   onChange={(e) => updateNode(selectedNode.id, { label: e.target.value })}
                 />
-                <TextInput
-                  label="Subject"
-                  value={selectedNode.data.subject}
-                  onChange={(e) => updateNode(selectedNode.id, { subject: e.target.value })}
+                <Select
+                  label="Content"
+                  value={selectedNode.data.importedSequence ? "imported" : "template"}
+                  options={[
+                    { value: "template", label: "Write it here (template)" },
+                    { value: "imported", label: "Use the lead's uploaded email…" },
+                  ]}
+                  onChange={(e) =>
+                    updateNode(selectedNode.id, {
+                      importedSequence: e.target.value === "imported" ? 1 : undefined,
+                    })
+                  }
                 />
-                <TextArea
-                  label="Body"
-                  rows={8}
-                  value={selectedNode.data.body}
-                  onChange={(e) => updateNode(selectedNode.id, { body: e.target.value })}
-                  helperText='The greeting ("Hey Jamie,") and your signature are added automatically.'
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {LEAD_FIELDS.map((field) => (
-                    <button
-                      key={field}
-                      type="button"
-                      className="rounded bg-surface-container px-2 py-0.5 text-xs text-on-surface-variant hover:bg-surface-container-high"
-                      onClick={() =>
-                        updateNode(selectedNode.id, {
-                          body: `${selectedNode.data.body}{{${field}}}`,
-                        })
-                      }
-                    >
-                      {`{{${field}}}`}
-                    </button>
-                  ))}
-                </div>
-                <div className="rounded-md-md border border-outline/30 bg-surface-container p-3">
-                  <p className="text-xs font-medium text-on-surface-variant">
-                    Preview (sample lead)
-                  </p>
-                  <p className="mt-1 text-sm font-medium">
-                    {render(selectedNode.data.subject, variables) || "—"}
-                  </p>
-                  <p className="mt-1 whitespace-pre-line text-sm text-on-surface-variant">
-                    {render(selectedNode.data.body, variables)}
-                  </p>
-                </div>
+                {selectedNode.data.importedSequence ? (
+                  <TextInput
+                    label="Uploaded email sequence number"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={String(selectedNode.data.importedSequence)}
+                    helperText="Each lead's email with this sequence number (from the CSV emails column) is sent. Every enrolled lead needs it. The greeting and your signature are added automatically."
+                    onChange={(e) =>
+                      updateNode(selectedNode.id, {
+                        importedSequence: Math.min(
+                          20,
+                          Math.max(1, Math.round(Number(e.target.value)) || 1),
+                        ),
+                      })
+                    }
+                  />
+                ) : (
+                  <>
+                    <TextInput
+                      label="Subject"
+                      value={selectedNode.data.subject}
+                      onChange={(e) => updateNode(selectedNode.id, { subject: e.target.value })}
+                    />
+                    <TextArea
+                      label="Body"
+                      rows={8}
+                      value={selectedNode.data.body}
+                      onChange={(e) => updateNode(selectedNode.id, { body: e.target.value })}
+                      helperText='The greeting ("Hey Jamie,") and your signature are added automatically.'
+                    />
+                  </>
+                )}
+                {selectedNode.data.importedSequence ? null : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {LEAD_FIELDS.map((field) => (
+                      <button
+                        key={field}
+                        type="button"
+                        className="rounded bg-surface-container px-2 py-0.5 text-xs text-on-surface-variant hover:bg-surface-container-high"
+                        onClick={() =>
+                          updateNode(selectedNode.id, {
+                            body: `${selectedNode.data.body}{{${field}}}`,
+                          })
+                        }
+                      >
+                        {`{{${field}}}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedNode.data.importedSequence ? null : (
+                  <div className="rounded-md-md border border-outline/30 bg-surface-container p-3">
+                    <p className="text-xs font-medium text-on-surface-variant">
+                      Preview (sample lead)
+                    </p>
+                    <p className="mt-1 text-sm font-medium">
+                      {render(selectedNode.data.subject, variables) || "—"}
+                    </p>
+                    <p className="mt-1 whitespace-pre-line text-sm text-on-surface-variant">
+                      {render(selectedNode.data.body, variables)}
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   {!selectedNode.data.isStart ? (
                     <Button variant="outlined" onClick={() => setStart(selectedNode.id)}>

@@ -220,4 +220,21 @@ describe("journey routing (end to end against real Postgres)", () => {
     await tickAndSendAll();
     expect(sent.map((m) => m.subject)).toEqual(["Jamie, about Acme", "Bump"]);
   });
+
+  it("sends a graph node that uses the lead's uploaded email by sequence number", async () => {
+    const { campaign, sent, tickAndSendAll } = await setup({
+      journeyGraph: {
+        start: "first",
+        nodes: [
+          { key: "first", label: "First", subject: "", body: "", importedSequence: 2, x: 0, y: 0 },
+        ],
+        edges: [],
+        variables: {},
+      },
+    });
+    expect(campaign.id).toBeTruthy();
+    await tickAndSendAll();
+    // The lead's sequence-2 upload is the "bump" email from the imported graph.
+    expect(sent.map((m) => m.subject)).toEqual(["Bump"]);
+  });
 });

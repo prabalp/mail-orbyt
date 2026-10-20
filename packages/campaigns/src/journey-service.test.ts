@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { getJourneyGraph, InvalidJourneyGraphError, saveJourneyGraph } from "./journey-service";
+import {
+  getJourneyGraph,
+  InvalidJourneyGraphError,
+  requiredImportedSequences,
+  saveJourneyGraph,
+} from "./journey-service";
 
 const GRAPH = {
   start: "a",
@@ -72,5 +77,32 @@ describe("getJourneyGraph", () => {
         "c1",
       ),
     ).toEqual({ found: true, graph: null });
+  });
+});
+
+describe("requiredImportedSequences", () => {
+  const steps = { campaignStep: { findMany: vi.fn().mockResolvedValue([{ orderIndex: 0 }]) } };
+
+  it("uses the graph's uploaded-email nodes for an editor-built journey", async () => {
+    const graph = {
+      ...GRAPH,
+      nodes: [
+        { key: "a", label: "A", subject: "", body: "", importedSequence: 3, x: 0, y: 0 },
+        { key: "b", label: "B", subject: "s", body: "b", x: 0, y: 0 },
+      ],
+    };
+    expect(
+      await requiredImportedSequences(steps as never, {
+        id: "c1",
+        routingMode: "JOURNEY",
+        journeyGraph: graph,
+      }),
+    ).toEqual([3]);
+  });
+
+  it("falls back to imported-content steps otherwise", async () => {
+    expect(
+      await requiredImportedSequences(steps as never, { id: "c1", routingMode: "LINEAR" }),
+    ).toEqual([1]);
   });
 });

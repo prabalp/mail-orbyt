@@ -1,6 +1,7 @@
 import { isSuppressed } from "@mail-orbyt/leads";
 import type { PrismaClient } from "@mail-orbyt/database";
 import { CampaignActivationError } from "./campaign-service";
+import { requiredImportedSequences } from "./journey-service";
 
 type Prisma = Pick<
   PrismaClient,
@@ -36,13 +37,8 @@ export async function enrollLeads(
     where: { id: { in: leadIds }, organisationId },
   });
 
-  const importedSteps = await prisma.campaignStep.findMany({
-    where: { campaignId, useImportedContent: true },
-    select: { orderIndex: true },
-  });
-  const hasCampaignGraph = campaign.routingMode === "JOURNEY" && Boolean(campaign.journeyGraph);
-  if (importedSteps.length > 0 && leads.length > 0 && !hasCampaignGraph) {
-    const sequences = importedSteps.map((step) => step.orderIndex + 1);
+  const sequences = await requiredImportedSequences(prisma, campaign);
+  if (sequences.length > 0 && leads.length > 0) {
     const imported = await prisma.leadImportedEmail.findMany({
       where: { leadId: { in: leads.map((lead) => lead.id) }, sequence: { in: sequences } },
       select: { leadId: true, sequence: true },

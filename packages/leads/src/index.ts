@@ -75,6 +75,7 @@ export {
 export {
   JOURNEY_LEAD_FIELDS,
   graphNodeEdges,
+  importedSequencesIn,
   journeyGraphSchema,
   parseJourneyGraph,
   renderJourneyTemplate,

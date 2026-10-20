@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   graphNodeEdges,
+  importedSequencesIn,
   parseJourneyGraph,
   renderJourneyTemplate,
   templateTokens,
@@ -109,5 +110,31 @@ describe("helpers", () => {
     expect(graphNodeEdges(parsed.graph, "intro")).toEqual({
       no_reply: { to: "bump", afterDays: 3 },
     });
+  });
+});
+
+describe("uploaded-email nodes", () => {
+  const imported = {
+    ...GRAPH,
+    nodes: [
+      { key: "intro", label: "Intro", subject: "", body: "", importedSequence: 2, x: 0, y: 0 },
+      GRAPH.nodes[1],
+    ],
+    variables: {},
+  };
+
+  it("needs no subject or body, and skips variable checks on uploaded text", () => {
+    const result = parseJourneyGraph(imported);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(importedSequencesIn(result.graph)).toEqual([2]);
+  });
+
+  it("rejects an out-of-range sequence number", () => {
+    expect(
+      parseJourneyGraph({
+        ...imported,
+        nodes: [{ ...imported.nodes[0], importedSequence: 0 }, GRAPH.nodes[1]],
+      }).ok,
+    ).toBe(false);
   });
 });

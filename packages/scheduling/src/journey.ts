@@ -96,9 +96,16 @@ async function loadJourneyNode(
   const graph = campaignGraph(source);
   if (graph) {
     const node = graph.nodes.find((candidate) => candidate.key === nodeKey);
-    return node
-      ? { subject: node.subject, body: node.body, edges: graphNodeEdges(graph, nodeKey) }
-      : null;
+    if (!node) return null;
+    let { subject, body } = node;
+    if (node.importedSequence) {
+      const imported = await prisma.leadImportedEmail.findUnique({
+        where: { leadId_sequence: { leadId: source.leadId, sequence: node.importedSequence } },
+      });
+      subject = imported?.subject ?? "";
+      body = imported?.body ?? "";
+    }
+    return { subject, body, edges: graphNodeEdges(graph, nodeKey) };
   }
   const node = await prisma.leadImportedEmail.findUnique({
     where: { leadId_nodeKey: { leadId: source.leadId, nodeKey } },

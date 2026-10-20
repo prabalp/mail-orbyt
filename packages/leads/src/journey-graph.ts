@@ -45,8 +45,11 @@ export const journeyGraphSchema = z.object({
       z.object({
         key: z.string(),
         label: z.string().trim().max(80).default(""),
-        subject: z.string().trim().max(150),
-        body: z.string().trim().max(4000),
+        /** Blank when the email comes from the lead's uploaded emails (importedSequence). */
+        subject: z.string().trim().max(150).default(""),
+        body: z.string().trim().max(4000).default(""),
+        /** Use each lead's uploaded email at this sequence number instead of the template above. */
+        importedSequence: z.number().int().min(1).max(MAX_JOURNEY_NODES).optional(),
         x: z.number().default(0),
         y: z.number().default(0),
       }),
@@ -97,8 +100,10 @@ export function parseJourneyGraph(input: unknown): ParsedJourneyGraph {
     if (node.key === JOURNEY_END) errors.push(`node id "${JOURNEY_END}" is reserved`);
     if (keys.has(node.key)) errors.push(`duplicate node id "${node.key}"`);
     keys.add(node.key);
-    if (!node.subject) errors.push(`${node.label || node.key}: subject is empty`);
-    if (!node.body) errors.push(`${node.label || node.key}: body is empty`);
+    if (!node.importedSequence) {
+      if (!node.subject) errors.push(`${node.label || node.key}: subject is empty`);
+      if (!node.body) errors.push(`${node.label || node.key}: body is empty`);
+    }
   }
   if (graph.nodes.length === 0) errors.push("add at least one email");
   if (graph.nodes.length > 0 && !keys.has(graph.start)) {
@@ -123,6 +128,7 @@ export function parseJourneyGraph(input: unknown): ParsedJourneyGraph {
     if (!/^[A-Za-z0-9_]{1,40}$/.test(token)) errors.push(`variable "${token}" has an invalid name`);
   }
   for (const node of graph.nodes) {
+    if (node.importedSequence) continue;
     for (const token of [...templateTokens(node.subject), ...templateTokens(node.body)]) {
       if (!graph.variables[token] && !isBuiltinToken(token)) {
         errors.push(
@@ -188,4 +194,13 @@ export function graphNodeEdges(
     };
   }
   return edges;
+}
+
+/** The uploaded-email sequence numbers a graph needs every enrolled lead to have. */
+export function importedSequencesIn(graph: JourneyGraph): number[] {
+  return [
+    ...new Set(
+      graph.nodes.flatMap((node) => (node.importedSequence ? [node.importedSequence] : [])),
+    ),
+  ].sort((a, b) => a - b);
 }

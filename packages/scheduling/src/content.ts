@@ -88,13 +88,26 @@ function renderImportedEmail(
 }
 
 /** The node's subject/body with the campaign's variable mapping already applied for this lead; null if the campaign has no such node. */
-function journeyGraphNode(
+async function journeyGraphNode(
+  prisma: Prisma,
   params: MaterializeContentParams,
-): { subject: string; body: string } | null {
+): Promise<{ subject: string; body: string } | null> {
   const parsed = parseJourneyGraph(params.journeyGraph);
   if (!parsed.ok) return null;
-  const node = parsed.graph.nodes.find((candidate) => candidate.key === params.nodeKey);
-  if (!node) return null;
+  const graphNode = parsed.graph.nodes.find((candidate) => candidate.key === params.nodeKey);
+  if (!graphNode) return null;
+  // "Use uploaded email #N": the text comes from the lead's own import, and
+  // still goes through the campaign's variable mapping.
+  let node = graphNode;
+  if (graphNode.importedSequence) {
+    const imported = await prisma.leadImportedEmail.findUnique({
+      where: {
+        leadId_sequence: { leadId: params.lead.id, sequence: graphNode.importedSequence },
+      },
+    });
+    if (!imported) throw new MissingImportedEmailError(graphNode.importedSequence);
+    node = { ...graphNode, subject: imported.subject, body: imported.body };
+  }
   const { lead } = params;
   const values = {
     firstName: lead.firstName,
@@ -117,7 +130,8 @@ function journeyGraphNode(
 
 /** Produces the subject/body for a step's send — either a manual template with {{firstName}}-style merge tokens, or an AI-generated email built from the lead's current research snapshot. Never both. */
 export async function materializeStepContent(prisma: Prisma, params: MaterializeContentParams) {
-  const graphNode = params.nodeKey && params.journeyGraph ? journeyGraphNode(params) : null;
+  const graphNode =
+    params.nodeKey && params.journeyGraph ? await journeyGraphNode(prisma, params) : null;
   if (graphNode) {
     return renderImportedEmail(params.lead, graphNode, params.senderName, params.signatureText);
   }

@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@mail-orbyt/database";
-import { parseJourneyGraph, type JourneyGraph } from "@mail-orbyt/leads";
+import { importedSequencesIn, parseJourneyGraph, type JourneyGraph } from "@mail-orbyt/leads";
 
 type Prisma = Pick<PrismaClient, "campaign" | "campaignEnrollment">;
 
@@ -66,4 +66,25 @@ export async function saveJourneyGraph(
     data: { journeyGraph: JSON.parse(JSON.stringify(parsed.graph)) as object },
   });
   return parsed.graph;
+}
+
+/**
+ * The uploaded-email sequence numbers every enrolled lead must have for this
+ * campaign to send: the graph's "use uploaded email #N" nodes for a journey
+ * built in the editor, otherwise the sequences of the steps set to imported
+ * content (a step's sequence is its orderIndex + 1).
+ */
+export async function requiredImportedSequences(
+  prisma: Pick<PrismaClient, "campaignStep">,
+  campaign: { id: string; routingMode: string; journeyGraph?: unknown },
+): Promise<number[]> {
+  if (campaign.routingMode === "JOURNEY" && campaign.journeyGraph) {
+    const parsed = parseJourneyGraph(campaign.journeyGraph);
+    if (parsed.ok) return importedSequencesIn(parsed.graph);
+  }
+  const steps = await prisma.campaignStep.findMany({
+    where: { campaignId: campaign.id, useImportedContent: true },
+    select: { orderIndex: true },
+  });
+  return steps.map((step) => step.orderIndex + 1);
 }

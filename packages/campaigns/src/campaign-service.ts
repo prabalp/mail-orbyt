@@ -1,6 +1,7 @@
 import { recordAuditEvent } from "@mail-orbyt/authentication";
 import type { Campaign, CampaignStatus, PrismaClient } from "@mail-orbyt/database";
 import { rescheduleCampaignOutboxItems } from "@mail-orbyt/scheduling";
+import { requiredImportedSequences } from "./journey-service";
 
 type Prisma = Pick<PrismaClient, "campaign">;
 
@@ -147,14 +148,11 @@ function movesSendingWindow(campaign: Campaign, patch: UpdateCampaignParams): bo
 
 async function assertImportedEmailsCoverEnrollments(
   prisma: Pick<PrismaClient, "campaignStep" | "campaignEnrollment" | "leadImportedEmail">,
-  campaignId: string,
+  campaign: { id: string; routingMode: string; journeyGraph?: unknown },
 ) {
-  const steps = await prisma.campaignStep.findMany({
-    where: { campaignId, useImportedContent: true },
-    select: { orderIndex: true },
-  });
-  if (steps.length === 0) return;
-  const sequences = steps.map((step) => step.orderIndex + 1);
+  const campaignId = campaign.id;
+  const sequences = await requiredImportedSequences(prisma, campaign);
+  if (sequences.length === 0) return;
   const enrollments = await prisma.campaignEnrollment.findMany({
     where: { campaignId, status: { in: ["PENDING", "ACTIVE", "PAUSED"] } },
     select: { leadId: true, lead: { select: { email: true } } },
@@ -219,11 +217,7 @@ export async function updateCampaign(
         "A campaign needs at least one connected inbox before it can go active.",
       );
     }
-    // A campaign-level journey graph carries its own emails; only per-lead
-    // imports need checking against the enrolled leads.
-    if (!(campaign.routingMode === "JOURNEY" && campaign.journeyGraph)) {
-      await assertImportedEmailsCoverEnrollments(prisma, campaignId);
-    }
+    await assertImportedEmailsCoverEnrollments(prisma, campaign);
   }
 
   // Resuming re-anchors pending sends for the same reason a window edit does:
