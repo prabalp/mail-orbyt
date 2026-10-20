@@ -57,6 +57,18 @@ export async function addStep(
     where: { campaignId },
     orderBy: { orderIndex: "desc" },
   });
+  if (campaign.routingMode === "JOURNEY") {
+    // A journey's sequence lives in each lead's imported email graph; the one
+    // step is just the placeholder every node send hangs off.
+    if (lastStep) {
+      throw new InvalidStepError(
+        "A journey campaign has a single step; its emails come from the imported graph.",
+      );
+    }
+    if (!params.useImportedContent) {
+      throw new InvalidStepError("A journey campaign's step must use imported content.");
+    }
+  }
 
   return prisma.campaignStep.create({
     data: {

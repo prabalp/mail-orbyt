@@ -4,6 +4,7 @@ import type { AiEmailGenerator } from "@mail-orbyt/email-generation";
 import { resolveDefaultSignatureText, resolveInboxSenderName } from "@mail-orbyt/gmail";
 import { buildPixelImgTag, getVerifiedTrackingDomain } from "@mail-orbyt/tracking";
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
+import { journeyStateAfterSend } from "./journey";
 import { markInboxSent, pickNextInbox } from "./inbox-rotation";
 import { materializeStepContent, MissingImportedEmailError } from "./content";
 import { nextSendableTime } from "./sending-window";
@@ -21,6 +22,7 @@ type Prisma = Pick<
   | "researchSource"
   | "researchPageText"
   | "leadImportedEmail"
+  | "enrollmentRoutingDecision"
   | "signature"
   | "inbox"
   | "trackingDomain"
@@ -32,7 +34,14 @@ const DEFER_WHEN_NO_INBOX_MS = 60 * 60_000;
 
 /** Ensures every ACTIVE campaign's PENDING/ACTIVE enrollments have their next due OutboxItem scheduled. Safe to call repeatedly (e.g. every scheduler tick) — scheduleNextStepForEnrollment is itself idempotent. Pass `campaignId` to narrow it to one campaign, as the resume path does: reactivating one campaign should not walk every organisation's enrollments. */
 export async function enqueueDueOutboxItems(
-  prisma: Pick<PrismaClient, "campaignEnrollment" | "campaignStep" | "outboxItem">,
+  prisma: Pick<
+    PrismaClient,
+    | "campaignEnrollment"
+    | "campaignStep"
+    | "outboxItem"
+    | "leadImportedEmail"
+    | "enrollmentRoutingDecision"
+  >,
   options: { campaignId?: string } = {},
 ) {
   const enrollments = await prisma.campaignEnrollment.findMany({
@@ -171,10 +180,11 @@ export async function processOutboxItem(
       if (priorStep) {
         const priorItem = await prisma.outboxItem.findUnique({
           where: {
-            campaignId_leadId_campaignStepId: {
+            campaignId_leadId_campaignStepId_sendNo: {
               campaignId: item.campaignId,
               leadId: item.leadId,
               campaignStepId: priorStep.id,
+              sendNo: 0,
             },
           },
         });
@@ -205,6 +215,7 @@ export async function processOutboxItem(
         organisationId: item.organisationId,
         lead: item.lead,
         step: item.campaignStep,
+        nodeKey: item.nodeKey ?? undefined,
         senderName: resolveInboxSenderName(inbox),
         senderCompanyName,
         priorEmail,
@@ -271,7 +282,14 @@ export async function processOutboxItem(
       }),
       prisma.campaignEnrollment.update({
         where: { id: item.enrollmentId },
-        data: { status: "ACTIVE", currentStepIndex: { increment: 1 }, lastStepSentAt: sentAt },
+        data: {
+          status: "ACTIVE",
+          currentStepIndex: { increment: 1 },
+          lastStepSentAt: sentAt,
+          ...(item.nodeKey
+            ? await journeyStateAfterSend(prisma, item.enrollmentId, item.nodeKey, sentAt)
+            : {}),
+        },
       }),
     ]);
 

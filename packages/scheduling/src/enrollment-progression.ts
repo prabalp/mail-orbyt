@@ -1,7 +1,15 @@
 import type { PrismaClient } from "@mail-orbyt/database";
+import { scheduleJourneyStep } from "./journey";
 import { nextSendableTime } from "./sending-window";
 
-type Prisma = Pick<PrismaClient, "campaignEnrollment" | "campaignStep" | "outboxItem">;
+type Prisma = Pick<
+  PrismaClient,
+  | "campaignEnrollment"
+  | "campaignStep"
+  | "outboxItem"
+  | "leadImportedEmail"
+  | "enrollmentRoutingDecision"
+>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -30,6 +38,9 @@ export async function scheduleNextStepForEnrollment(prisma: Prisma, enrollmentId
   });
   if (!enrollment) return null;
   if (enrollment.status !== "PENDING" && enrollment.status !== "ACTIVE") return null;
+  if (enrollment.campaign.routingMode === "JOURNEY") {
+    return scheduleJourneyStep(prisma, enrollmentId);
+  }
 
   const step = await prisma.campaignStep.findUnique({
     where: {
@@ -50,10 +61,11 @@ export async function scheduleNextStepForEnrollment(prisma: Prisma, enrollmentId
 
   const existing = await prisma.outboxItem.findUnique({
     where: {
-      campaignId_leadId_campaignStepId: {
+      campaignId_leadId_campaignStepId_sendNo: {
         campaignId: enrollment.campaignId,
         leadId: enrollment.leadId,
         campaignStepId: step.id,
+        sendNo: 0,
       },
     },
   });

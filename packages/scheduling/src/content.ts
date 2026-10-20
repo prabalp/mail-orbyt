@@ -51,6 +51,8 @@ export interface MaterializeContentParams {
     manualSubject: string | null;
     manualBody: string | null;
   };
+  /** Journey sends: the graph node whose imported email to send, instead of the step's sequence number. */
+  nodeKey?: string;
   senderName: string;
   senderCompanyName: string;
   priorEmail?: { subject: string; body: string };
@@ -83,9 +85,13 @@ function renderImportedEmail(
 export async function materializeStepContent(prisma: Prisma, params: MaterializeContentParams) {
   if (params.step.useImportedContent) {
     const sequence = (params.step.orderIndex ?? 0) + 1;
-    const imported = await prisma.leadImportedEmail.findUnique({
-      where: { leadId_sequence: { leadId: params.lead.id, sequence } },
-    });
+    const imported = params.nodeKey
+      ? await prisma.leadImportedEmail.findUnique({
+          where: { leadId_nodeKey: { leadId: params.lead.id, nodeKey: params.nodeKey } },
+        })
+      : await prisma.leadImportedEmail.findUnique({
+          where: { leadId_sequence: { leadId: params.lead.id, sequence } },
+        });
     if (!imported) throw new MissingImportedEmailError(sequence);
     return renderImportedEmail(params.lead, imported, params.senderName, params.signatureText);
   }

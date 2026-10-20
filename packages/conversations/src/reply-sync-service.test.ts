@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 const addSuppressionEntryMock = vi.fn();
 vi.mock("@mail-orbyt/leads", () => ({ addSuppressionEntry: addSuppressionEntryMock }));
 
+const applyJourneyOutcomeMock = vi.fn();
+vi.mock("@mail-orbyt/scheduling", () => ({ applyJourneyOutcome: applyJourneyOutcomeMock }));
+
 const { syncRepliesForOutboxItem } = await import("./reply-sync-service");
 
 const SENT_ITEM = {
@@ -32,7 +35,10 @@ function fakePrisma(item: unknown, existingMessage: unknown = null) {
       findUnique: vi.fn().mockResolvedValue(existingMessage),
       create: vi.fn().mockResolvedValue({}),
     },
-    campaignEnrollment: { update: vi.fn().mockResolvedValue({}) },
+    campaignEnrollment: {
+      update: vi.fn().mockResolvedValue({}),
+      findUnique: vi.fn().mockResolvedValue({ campaign: { routingMode: "LINEAR" } }),
+    },
   };
 }
 
@@ -143,5 +149,50 @@ describe("syncRepliesForOutboxItem", () => {
     expect(result.newReplies).toBe(0);
     expect(prisma.conversationMessage.create).not.toHaveBeenCalled();
     expect(prisma.campaignEnrollment.update).not.toHaveBeenCalled();
+  });
+  it("on a journey campaign, routes an interested reply instead of exiting when an edge exists", async () => {
+    const prisma = fakePrisma(SENT_ITEM);
+    prisma.campaignEnrollment.findUnique.mockResolvedValue({
+      campaign: { routingMode: "JOURNEY" },
+    });
+    applyJourneyOutcomeMock.mockResolvedValue({ routed: true, toNodeKey: "book", ended: false });
+    const fetchThread = vi.fn().mockResolvedValue([
+      {
+        gmailMessageId: "m-1",
+        from: "Prospect <prospect@example.com>",
+        subject: "Re: Hi",
+        snippet: "Happy to chat, sounds interesting",
+        internalDate: new Date(),
+      },
+    ]);
+    await syncRepliesForOutboxItem(prisma as never, fetchThread, "outbox-1");
+    expect(applyJourneyOutcomeMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "enrollment-1",
+      expect.objectContaining({ trigger: "REPLY", outcome: "interested", source: "RULE" }),
+    );
+    expect(prisma.campaignEnrollment.update).not.toHaveBeenCalled();
+  });
+
+  it("exits a journey enrollment when no edge matches the reply", async () => {
+    const prisma = fakePrisma(SENT_ITEM);
+    prisma.campaignEnrollment.findUnique.mockResolvedValue({
+      campaign: { routingMode: "JOURNEY" },
+    });
+    applyJourneyOutcomeMock.mockResolvedValue({ routed: false });
+    const fetchThread = vi.fn().mockResolvedValue([
+      {
+        gmailMessageId: "m-2",
+        from: "Prospect <prospect@example.com>",
+        subject: "Re: Hi",
+        snippet: "Not interested, thanks",
+        internalDate: new Date(),
+      },
+    ]);
+    await syncRepliesForOutboxItem(prisma as never, fetchThread, "outbox-1");
+    expect(prisma.campaignEnrollment.update).toHaveBeenCalledWith({
+      where: { id: "enrollment-1" },
+      data: expect.objectContaining({ status: "EXITED" }),
+    });
   });
 });

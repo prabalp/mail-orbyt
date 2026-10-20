@@ -16,6 +16,7 @@ const createSchema = z.object({
   sendingWindowStartMinute: z.number().int().min(0).max(1439).optional(),
   sendingWindowEndMinute: z.number().int().min(0).max(1439).optional(),
   inboxCooldownMinutes: z.number().int().min(0).max(180).optional(),
+  routingMode: z.enum(["LINEAR", "JOURNEY"]).optional(),
 });
 
 export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {

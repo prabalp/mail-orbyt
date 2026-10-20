@@ -14,6 +14,8 @@ export interface CreateCampaignParams {
   sendingWindowEndMinute?: number;
   inboxCooldownMinutes?: number;
   emailPromptInstructions?: string | null;
+  /** JOURNEY campaigns follow each lead's own email graph instead of an ordered step list. */
+  routingMode?: "LINEAR" | "JOURNEY";
   createdByUserId: string;
 }
 
@@ -29,6 +31,7 @@ export async function createCampaign(prisma: Prisma, params: CreateCampaignParam
       sendingWindowEndMinute: params.sendingWindowEndMinute,
       inboxCooldownMinutes: params.inboxCooldownMinutes,
       emailPromptInstructions: params.emailPromptInstructions,
+      routingMode: params.routingMode,
       createdByUserId: params.createdByUserId,
     },
   });

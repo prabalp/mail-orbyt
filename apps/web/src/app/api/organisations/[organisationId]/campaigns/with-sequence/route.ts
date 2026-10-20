@@ -39,8 +39,10 @@ const bodySchema = z.object({
   sendingWindowEndMinute: z.number().int().min(0).max(1439).optional(),
   inboxCooldownMinutes: z.number().int().min(0).max(180).optional(),
   emailPromptInstructions: z.string().max(4000).optional(),
+  /** JOURNEY follows each lead's imported email graph; steps are then optional (one placeholder step is created). */
+  routingMode: z.enum(["LINEAR", "JOURNEY"]).optional(),
   /** Ordered — steps are created in array order, which becomes their orderIndex. */
-  steps: z.array(stepSchema).min(1).max(20),
+  steps: z.array(stepSchema).max(20).optional(),
   inboxIds: z.array(z.string().min(1)).optional(),
   leadListId: z.string().min(1).optional(),
   leadIds: z.array(z.string().min(1)).min(1).max(50000).optional(),
@@ -84,7 +86,33 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { steps, inboxIds, leadListId, leadIds, activate, ...campaignFields } = parsed.data;
+  const {
+    steps: requestedSteps,
+    inboxIds,
+    leadListId,
+    leadIds,
+    activate,
+    ...campaignFields
+  } = parsed.data;
+
+  const isJourney = campaignFields.routingMode === "JOURNEY";
+  const steps = isJourney
+    ? [{ stepType: "INITIAL" as const, useAiGeneration: false, useImportedContent: true }]
+    : requestedSteps;
+  if (!steps?.length) {
+    return NextResponse.json(
+      { error: "A linear campaign needs at least one step" },
+      { status: 400 },
+    );
+  }
+  if (isJourney && requestedSteps?.length) {
+    return NextResponse.json(
+      {
+        error: "A journey campaign takes no steps; its emails come from each lead's imported graph",
+      },
+      { status: 400 },
+    );
+  }
 
   if (leadListId && leadIds) {
     return NextResponse.json(

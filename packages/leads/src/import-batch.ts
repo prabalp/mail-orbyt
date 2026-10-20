@@ -300,6 +300,11 @@ export async function processImportBatch(
                 emailType: email.emailType,
                 subject: email.subject,
                 body: email.body,
+                nodeKey: email.nodeKey ?? null,
+                isStart: email.isStart ?? false,
+                edges: email.edges
+                  ? (JSON.parse(JSON.stringify(email.edges)) as Record<string, unknown> as object)
+                  : undefined,
               })),
             }),
           ]);

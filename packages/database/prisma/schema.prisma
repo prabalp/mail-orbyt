@@ -1278,21 +1278,21 @@ enum CampaignStatus {
 /// the scheduler (Phase 8) is responsible for converting to each send's
 /// actual wall-clock time.
 model Campaign {
-  id                       String         @id @default(cuid())
+  id                       String              @id @default(cuid())
   organisationId           String
   name                     String
   description              String?
-  status                   CampaignStatus @default(DRAFT)
-  timezone                 String         @default("UTC")
+  status                   CampaignStatus      @default(DRAFT)
+  timezone                 String              @default("UTC")
   /// 0 (Sunday) - 6 (Saturday).
-  sendingDaysOfWeek        Int[]          @default([1, 2, 3, 4, 5])
-  sendingWindowStartMinute Int            @default(540)
-  sendingWindowEndMinute   Int            @default(1020)
+  sendingDaysOfWeek        Int[]               @default([1, 2, 3, 4, 5])
+  sendingWindowStartMinute Int                 @default(540)
+  sendingWindowEndMinute   Int                 @default(1020)
   /// Minimum gap between two sends from the SAME inbox, for inbox health —
   /// without it a whole batch of due items leaves one mailbox in seconds,
   /// which is what spam filters look for. Enforced per inbox, so a pool of
   /// N inboxes still sends N emails concurrently. 0 disables the throttle.
-  inboxCooldownMinutes     Int            @default(3)
+  inboxCooldownMinutes     Int                 @default(3)
   /// Tone/style guidance for AI-generated copy in THIS campaign. When set it
   /// replaces Organisation.emailPromptInstructions outright (it does not
   /// stack with it) so a campaign's voice is readable in one place; null/empty
@@ -1300,6 +1300,11 @@ model Campaign {
   /// field this is style guidance only — the hard rules in the generation
   /// system prompt always take priority (see packages/email-generation/src/prompt.ts).
   emailPromptInstructions  String?
+  /// LINEAR walks Campaign.steps in order; JOURNEY follows each lead's own
+  /// imported email graph (LeadImportedEmail.edges) — see journey.ts in
+  /// packages/scheduling. A JOURNEY campaign has one placeholder step that
+  /// every node send is attached to.
+  routingMode              CampaignRoutingMode @default(LINEAR)
   createdByUserId          String
 
   organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
@@ -1313,6 +1318,11 @@ model Campaign {
 
   @@index([organisationId])
   @@index([organisationId, status])
+}
+
+enum CampaignRoutingMode {
+  LINEAR
+  JOURNEY
 }
 
 enum SequenceStepType {
@@ -1332,6 +1342,12 @@ model LeadImportedEmail {
   emailType      SequenceStepType
   subject        String
   body           String
+  /// Journey graph fields (null for plain linear imports). nodeKey is this
+  /// email's id inside the lead's graph; edges maps an outcome label to
+  /// { to: nodeKey | "END", afterDays?: number }.
+  nodeKey        String?
+  isStart        Boolean          @default(false)
+  edges          Json?
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -1339,6 +1355,7 @@ model LeadImportedEmail {
   updatedAt DateTime @updatedAt
 
   @@unique([leadId, sequence])
+  @@unique([leadId, nodeKey])
   @@index([leadId])
   @@index([organisationId])
 }
@@ -1429,10 +1446,21 @@ model CampaignEnrollment {
   /// enrolledAt (which never changes).
   lastStepSentAt   DateTime?
   exitReason       String?
+  /// Journey routing state (JOURNEY campaigns only). currentNodeKey is the
+  /// last node SENT; nextNodeKey/nextDueAt is the node chosen to send next;
+  /// nextDecisionAt is when "no reply" fires if nothing else routes first.
+  currentNodeKey   String?
+  nextNodeKey      String?
+  nextDueAt        DateTime?
+  nextDecisionAt   DateTime?
+  sendCount        Int                      @default(0)
+  /// nodeKey -> times sent, enforcing the per-node revisit cap.
+  visitCounts      Json                     @default("{}")
 
-  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaign    Campaign                    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead        Lead                        @relation(fields: [leadId], references: [id], onDelete: Cascade)
   outboxItems OutboxItem[]
+  decisions   EnrollmentRoutingDecision[]
 
   enrolledAt DateTime  @default(now())
   exitedAt   DateTime?
@@ -1442,6 +1470,26 @@ model CampaignEnrollment {
   @@unique([campaignId, leadId])
   @@index([campaignId])
   @@index([leadId])
+}
+
+/// Audit trail of every routing decision on a journey enrollment: what
+/// happened (trigger), which outcome it was mapped to, who decided it
+/// (RULE now; DECIDER once the external model is wired in), and where it led.
+model EnrollmentRoutingDecision {
+  id           String  @id @default(cuid())
+  enrollmentId String
+  fromNodeKey  String?
+  trigger      String
+  outcome      String
+  toNodeKey    String?
+  source       String
+  reason       String?
+
+  enrollment CampaignEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([enrollmentId])
 }
 
 enum OutboxItemStatus {
@@ -1467,6 +1515,11 @@ model OutboxItem {
   leadId            String
   campaignStepId    String
   enrollmentId      String
+  /// Journey sends: which graph node this is and the n-th send of the
+  /// enrollment (0 for linear campaigns), so a node can be revisited without
+  /// tripping the idempotency unique.
+  nodeKey           String?
+  sendNo            Int              @default(0)
   status            OutboxItemStatus @default(SCHEDULED)
   scheduledFor      DateTime
   inboxId           String?
@@ -1495,7 +1548,7 @@ model OutboxItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([campaignId, leadId, campaignStepId])
+  @@unique([campaignId, leadId, campaignStepId, sendNo])
   @@index([organisationId])
   @@index([status, scheduledFor])
   @@index([inboxId])

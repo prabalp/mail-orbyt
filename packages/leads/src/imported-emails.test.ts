@@ -65,3 +65,72 @@ describe("validateMappedRow imported emails", () => {
     if (result.valid) expect(result.importedEmails).toHaveLength(2);
   });
 });
+
+describe("parseImportedEmails journey graph", () => {
+  const journey = (overrides: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      start: "intro",
+      emails: {
+        intro: {
+          subject: "Hi",
+          body: "Hello {{firstName}}",
+          next: { no_reply: { to: "bump", afterDays: 3 }, interested: "book" },
+        },
+        bump: { subject: "Bump", body: "Checking in", next: { no_reply: { to: "END" } } },
+        book: { subject: "Book", body: "Pick a time" },
+      },
+      ...overrides,
+    });
+
+  it("parses nodes with the start email as sequence 1 and normalises string edges", () => {
+    const result = parseImportedEmails("3", journey());
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.emails[0]).toMatchObject({ sequence: 1, nodeKey: "intro", isStart: true });
+      expect(result.emails[0]?.edges).toEqual({
+        no_reply: { to: "bump", afterDays: 3 },
+        interested: { to: "book" },
+      });
+      expect(result.emails.map((email) => email.sequence)).toEqual([1, 2, 3]);
+    }
+  });
+
+  it("rejects an edge pointing at an unknown node", () => {
+    const bad = JSON.stringify({
+      start: "intro",
+      emails: { intro: { subject: "a", body: "b", next: { no_reply: "ghost" } } },
+    });
+    const result = parseImportedEmails("1", bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors[0]).toContain('unknown node "ghost"');
+  });
+
+  it("rejects a missing start and unreachable emails", () => {
+    expect(parseImportedEmails("3", journey({ start: "nope" })).ok).toBe(false);
+    const orphan = JSON.stringify({
+      start: "intro",
+      emails: {
+        intro: { subject: "a", body: "b" },
+        lonely: { subject: "c", body: "d" },
+      },
+    });
+    const result = parseImportedEmails("2", orphan);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors[0]).toContain("lonely");
+  });
+
+  it("rejects a total_mails that does not match the node count", () => {
+    expect(parseImportedEmails("2", journey()).ok).toBe(false);
+  });
+
+  it("allows a cycle back to an earlier node", () => {
+    const cyc = JSON.stringify({
+      start: "a",
+      emails: {
+        a: { subject: "a", body: "a", next: { no_reply: "b" } },
+        b: { subject: "b", body: "b", next: { no_reply: "a" } },
+      },
+    });
+    expect(parseImportedEmails("2", cyc).ok).toBe(true);
+  });
+});

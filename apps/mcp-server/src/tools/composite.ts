@@ -63,11 +63,19 @@ export const COMPOSITE_TOOLS: RouteToolDescriptor[] = [
       sendingWindowEndMinute: z.number().int().min(0).max(1439).optional(),
       inboxCooldownMinutes: z.number().int().min(0).max(180).optional(),
       emailPromptInstructions: z.string().max(4000).optional(),
+      routingMode: z
+        .enum(["LINEAR", "JOURNEY"])
+        .optional()
+        .describe(
+          "LINEAR (default) sends the ordered steps. JOURNEY follows each lead's imported email graph (branching on replies and silence) and takes no steps.",
+        ),
       steps: z
         .array(stepInputSchema)
-        .min(1)
         .max(20)
-        .describe("In send order — this becomes each step's position in the sequence"),
+        .optional()
+        .describe(
+          "Required for LINEAR campaigns, in send order — this becomes each step's position in the sequence. Omit for JOURNEY.",
+        ),
       inboxIds: z
         .array(z.string().min(1))
         .optional()

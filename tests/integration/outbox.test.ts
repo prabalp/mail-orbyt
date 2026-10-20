@@ -127,10 +127,11 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
     await enqueueDueOutboxItems(prisma);
     const item1 = await prisma.outboxItem.findUniqueOrThrow({
       where: {
-        campaignId_leadId_campaignStepId: {
+        campaignId_leadId_campaignStepId_sendNo: {
           campaignId: campaign.id,
           leadId: lead.id,
           campaignStepId: step1.id,
+          sendNo: 0,
         },
       },
     });
@@ -157,10 +158,11 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
     });
     const item2 = await prisma.outboxItem.findUniqueOrThrow({
       where: {
-        campaignId_leadId_campaignStepId: {
+        campaignId_leadId_campaignStepId_sendNo: {
           campaignId: campaign.id,
           leadId: lead.id,
           campaignStepId: step2.id,
+          sendNo: 0,
         },
       },
     });
@@ -228,10 +230,11 @@ describe("outbox pipeline (end to end against real Postgres)", () => {
     await enqueueDueOutboxItems(prisma);
     const item = await prisma.outboxItem.findUniqueOrThrow({
       where: {
-        campaignId_leadId_campaignStepId: {
+        campaignId_leadId_campaignStepId_sendNo: {
           campaignId: campaign.id,
           leadId: lead.id,
           campaignStepId: step.id,
+          sendNo: 0,
         },
       },
     });

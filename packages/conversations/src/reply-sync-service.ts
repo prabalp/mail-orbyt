@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@mail-orbyt/database";
 import type { ThreadMessage } from "@mail-orbyt/gmail";
 import { addSuppressionEntry } from "@mail-orbyt/leads";
+import { applyJourneyOutcome } from "@mail-orbyt/scheduling";
 import { classifyReply } from "./reply-classifier";
 
 export type FetchThreadFn = (
@@ -12,6 +13,35 @@ export type FetchThreadFn = (
 function parseFromAddress(fromHeader: string): string {
   const match = /<([^>]+)>/.exec(fromHeader);
   return (match?.[1] ?? fromHeader).trim().toLowerCase();
+}
+
+const ALWAYS_EXIT = new Set<string>(["UNSUBSCRIBE_REQUEST", "BOUNCE"]);
+
+/** The outcome label a journey graph uses for each rule-based reply classification. */
+const REPLY_OUTCOMES: Record<string, string> = {
+  INTERESTED: "interested",
+  NOT_INTERESTED: "not_interested",
+  OUT_OF_OFFICE: "out_of_office",
+  UNCLASSIFIED: "replied",
+};
+
+async function tryRouteJourneyReply(
+  prisma: PrismaClient,
+  enrollmentId: string,
+  classification: string,
+): Promise<boolean> {
+  const enrollment = await prisma.campaignEnrollment.findUnique({
+    where: { id: enrollmentId },
+    include: { campaign: { select: { routingMode: true } } },
+  });
+  if (enrollment?.campaign.routingMode !== "JOURNEY") return false;
+  const result = await applyJourneyOutcome(prisma, enrollmentId, {
+    trigger: "REPLY",
+    outcome: REPLY_OUTCOMES[classification] ?? "replied",
+    source: "RULE",
+    reason: `Reply classified ${classification}`,
+  });
+  return result.routed;
 }
 
 export interface SyncRepliesResult {
@@ -70,6 +100,7 @@ export async function syncRepliesForOutboxItem(
   });
 
   let newReplies = 0;
+  let lastClassification: ReturnType<typeof classifyReply> | undefined;
   for (const reply of replies) {
     const existing = await prisma.conversationMessage.findUnique({
       where: {
@@ -94,6 +125,7 @@ export async function syncRepliesForOutboxItem(
       },
     });
     newReplies += 1;
+    lastClassification = classification;
 
     // An unsubscribe request must take effect immediately and permanently
     // — added to the canonical suppression list so every future campaign
@@ -109,10 +141,20 @@ export async function syncRepliesForOutboxItem(
   }
 
   if (newReplies > 0) {
-    await prisma.campaignEnrollment.update({
-      where: { id: item.enrollmentId },
-      data: { status: "EXITED", exitedAt: new Date(), exitReason: "Lead replied" },
-    });
+    // On a journey campaign a reply is a routing trigger, not an automatic
+    // exit: if the current node defines an edge for it, follow it. Unsubscribes
+    // and bounces always exit, and so does a reply with no matching edge —
+    // that still hands the lead to a human, as on linear campaigns.
+    const routed =
+      lastClassification !== undefined &&
+      !ALWAYS_EXIT.has(lastClassification) &&
+      (await tryRouteJourneyReply(prisma, item.enrollmentId, lastClassification));
+    if (!routed) {
+      await prisma.campaignEnrollment.update({
+        where: { id: item.enrollmentId },
+        data: { status: "EXITED", exitedAt: new Date(), exitReason: "Lead replied" },
+      });
+    }
   }
 
   return { newReplies, conversationId: conversation.id };

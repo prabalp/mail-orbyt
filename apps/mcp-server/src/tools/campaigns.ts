@@ -128,7 +128,13 @@ export const CAMPAIGN_TOOLS: RouteToolDescriptor[] = [
     method: "POST",
     pathTemplate: "/api/organisations/{organisationId}/campaigns",
     requiredScope: "campaigns:manage",
-    inputShape: { ...campaignScheduleFields },
+    inputShape: {
+      ...campaignScheduleFields,
+      routingMode: z
+        .enum(["LINEAR", "JOURNEY"])
+        .optional()
+        .describe("JOURNEY follows each lead's imported email graph; default LINEAR"),
+    },
     // Creates a new row every call, so never idempotent.
     annotations: {
       readOnlyHint: false,

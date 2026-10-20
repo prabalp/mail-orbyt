@@ -9,6 +9,14 @@ export {
   rescheduleCampaignOutboxItems,
 } from "./enrollment-progression";
 export {
+  applyJourneyOutcome,
+  scheduleJourneyStep,
+  JOURNEY_MAX_NODE_VISITS,
+  JOURNEY_DEFAULT_WAIT_DAYS,
+  type JourneyTrigger,
+  type ApplyOutcomeResult,
+} from "./journey";
+export {
   materializeStepContent,
   applyMergeTokens,
   AiNotConfiguredForStepError,
