@@ -44,6 +44,10 @@ export interface SocialPlatformAdapter {
   refreshAccessToken?(refreshToken: string): Promise<PlatformTokens>;
   fetchAccountIdentity(accessToken: string): Promise<PlatformAccountIdentity>;
   publishPost(accessToken: string, content: string): Promise<PublishResult>;
-  publishReply(accessToken: string, threadOrCommentId: string, content: string): Promise<PublishResult>;
+  publishReply(
+    accessToken: string,
+    threadOrCommentId: string,
+    content: string,
+  ): Promise<PublishResult>;
   pollForEvents?(accessToken: string, since: Date): Promise<RawInboundEvent[]>;
 }

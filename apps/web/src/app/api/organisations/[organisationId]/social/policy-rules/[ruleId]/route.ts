@@ -8,9 +8,13 @@ interface RouteParams {
 
 export async function DELETE(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId, ruleId } = await params;
-  return handleSocialRoute(request, { organisationId, permission: "social:manage" }, async (actor) => {
-    const deleted = await deleteSocialPolicyRule(organisationId, actor.userId, ruleId);
-    if (!deleted) return NextResponse.json({ error: "Policy rule not found" }, { status: 404 });
-    return NextResponse.json(deleted);
-  });
+  return handleSocialRoute(
+    request,
+    { organisationId, permission: "social:manage" },
+    async (actor) => {
+      const deleted = await deleteSocialPolicyRule(organisationId, actor.userId, ruleId);
+      if (!deleted) return NextResponse.json({ error: "Policy rule not found" }, { status: 404 });
+      return NextResponse.json(deleted);
+    },
+  );
 }

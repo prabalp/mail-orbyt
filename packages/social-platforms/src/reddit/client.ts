@@ -169,16 +169,23 @@ export async function pollForEvents(
   ]);
 
   if (!unreadResponse.ok) {
-    throw new RedditApiError(`Fetching Reddit unread mail failed with status ${unreadResponse.status}`);
+    throw new RedditApiError(
+      `Fetching Reddit unread mail failed with status ${unreadResponse.status}`,
+    );
   }
   if (!mentionsResponse.ok) {
-    throw new RedditApiError(`Fetching Reddit mentions failed with status ${mentionsResponse.status}`);
+    throw new RedditApiError(
+      `Fetching Reddit mentions failed with status ${mentionsResponse.status}`,
+    );
   }
 
   const [unreadData, mentionsData] = (await Promise.all([
     unreadResponse.json(),
     mentionsResponse.json(),
-  ])) as [{ data?: { children?: RedditListingChild[] } }, { data?: { children?: RedditListingChild[] } }];
+  ])) as [
+    { data?: { children?: RedditListingChild[] } },
+    { data?: { children?: RedditListingChild[] } },
+  ];
 
   const sinceSeconds = since.getTime() / 1000;
   const events: RawInboundEvent[] = [];

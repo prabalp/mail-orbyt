@@ -35,7 +35,11 @@ describe("decideEscalation", () => {
   });
 
   it("escalates on first-time contact regardless of confidence", () => {
-    const result = decideEscalation({ ...base, isFirstTimeContact: true, compositeConfidence: 0.99 });
+    const result = decideEscalation({
+      ...base,
+      isFirstTimeContact: true,
+      compositeConfidence: 0.99,
+    });
     expect(result.decision).toBe("ESCALATE");
     expect(result.reasons).toContain("first-time-contact");
   });

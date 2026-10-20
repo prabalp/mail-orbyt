@@ -34,8 +34,9 @@ export async function fetchAccountIdentity(
   const data = (await pagesResponse.json()) as {
     data?: { instagram_business_account?: { id?: string; username?: string } }[];
   };
-  const igAccount = data.data?.find((page) => page.instagram_business_account?.id)
-    ?.instagram_business_account;
+  const igAccount = data.data?.find(
+    (page) => page.instagram_business_account?.id,
+  )?.instagram_business_account;
 
   if (!igAccount?.id) {
     throw new InstagramApiError("No Instagram business account is linked to this user's Pages.");
@@ -82,7 +83,9 @@ export async function publishPost(
   });
 
   if (!containerResponse.ok) {
-    throw new InstagramApiError(`Creating IG media container failed with status ${containerResponse.status}`);
+    throw new InstagramApiError(
+      `Creating IG media container failed with status ${containerResponse.status}`,
+    );
   }
 
   const containerData = (await containerResponse.json()) as { id?: string };
@@ -121,7 +124,9 @@ export async function publishReply(
   });
 
   if (!response.ok) {
-    throw new InstagramApiError(`Publishing IG comment reply failed with status ${response.status}`);
+    throw new InstagramApiError(
+      `Publishing IG comment reply failed with status ${response.status}`,
+    );
   }
 
   const data = (await response.json()) as { id?: string };

@@ -9,7 +9,10 @@ const BASE_INPUT: GenerateSocialContentInput = {
 
 describe("validateSocialContent", () => {
   it("passes clean content unchanged", () => {
-    const result = validateSocialContent("A short, clean post about our product launch.", BASE_INPUT);
+    const result = validateSocialContent(
+      "A short, clean post about our product launch.",
+      BASE_INPUT,
+    );
     expect(result).toEqual({
       valid: true,
       fixedContent: "A short, clean post about our product launch.",

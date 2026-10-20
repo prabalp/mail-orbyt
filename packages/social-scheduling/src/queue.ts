@@ -41,9 +41,12 @@ export function getSocialEventProcessingQueue(
   connection: ConnectionOptions,
 ): Queue<SocialEventProcessingJobData> {
   if (!eventProcessingQueue) {
-    eventProcessingQueue = new Queue<SocialEventProcessingJobData>(SOCIAL_EVENT_PROCESSING_QUEUE_NAME, {
-      connection,
-    });
+    eventProcessingQueue = new Queue<SocialEventProcessingJobData>(
+      SOCIAL_EVENT_PROCESSING_QUEUE_NAME,
+      {
+        connection,
+      },
+    );
   }
   return eventProcessingQueue;
 }

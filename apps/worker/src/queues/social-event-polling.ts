@@ -5,7 +5,10 @@ import {
   getAdapterForPlatform,
   getValidAccessToken,
 } from "@mail-orbyt/social-platforms";
-import { SOCIAL_POLL_QUEUE_NAME, enqueueSocialEventProcessing } from "@mail-orbyt/social-scheduling";
+import {
+  SOCIAL_POLL_QUEUE_NAME,
+  enqueueSocialEventProcessing,
+} from "@mail-orbyt/social-scheduling";
 import { Worker, type ConnectionOptions } from "bullmq";
 
 /**
@@ -40,7 +43,11 @@ export function createSocialPollWorker(params: {
           const adapter = getAdapterForPlatform(socialConnection.platform, adapterConfig);
           if (!adapter.pollForEvents) continue;
 
-          const accessToken = await getValidAccessToken(params.prisma, adapter, socialConnection.id);
+          const accessToken = await getValidAccessToken(
+            params.prisma,
+            adapter,
+            socialConnection.id,
+          );
           const since = socialConnection.lastSyncedAt ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
           const rawEvents = await adapter.pollForEvents(accessToken, since);
 

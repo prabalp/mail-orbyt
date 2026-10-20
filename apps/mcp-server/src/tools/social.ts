@@ -70,7 +70,11 @@ const actionShape = z
   .partial()
   .passthrough();
 
-const reviewNotes = z.string().max(2000).optional().describe("Optional note recorded on the audit log.");
+const reviewNotes = z
+  .string()
+  .max(2000)
+  .optional()
+  .describe("Optional note recorded on the audit log.");
 
 export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
   {
@@ -97,7 +101,12 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/social/connections/{connectionId}",
     requiredScope: "social:manage",
     inputShape: { connectionId: z.string().min(1) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "get_social_agent_settings",
@@ -122,12 +131,20 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
     inputShape: {
       platform: platformEnum.optional().describe("Omit for the org-wide default."),
       autonomyEnabled: z.boolean().optional(),
-      dryRunMode: z.boolean().optional().describe("true = drafts are recorded as simulated, never published."),
+      dryRunMode: z
+        .boolean()
+        .optional()
+        .describe("true = drafts are recorded as simulated, never published."),
       maxActionsPerHour: z.number().int().min(0).max(100).optional(),
       maxActionsPerDay: z.number().int().min(0).max(1000).optional(),
       requireApprovalBelowConfidence: z.number().min(0).max(1).optional(),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: autonomyShape.shape,
   },
   {
@@ -142,7 +159,12 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
       active: z.boolean().describe("true stops publishing; false resumes it."),
       platform: platformEnum.optional().describe("Omit to apply to every platform."),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputShape: {
       config: autonomyShape.optional(),
       killSwitchStillActiveFor: z.array(z.string()).optional(),
@@ -174,7 +196,12 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
       isRegex: z.boolean().optional(),
       platform: platformEnum.optional().describe("Omit to apply on every platform."),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     outputShape: ruleShape.shape,
   },
   {
@@ -185,7 +212,12 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/social/policy-rules/{ruleId}",
     requiredScope: "social:manage",
     inputShape: { ruleId: z.string().min(1) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "list_social_actions",
@@ -224,7 +256,12 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/social/actions/{actionId}/approve",
     requiredScope: "social:review",
     inputShape: { actionId: z.string().min(1), notes: reviewNotes },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
   },
   {
     name: "reject_social_action",
@@ -235,7 +272,12 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
     pathTemplate: "/api/organisations/{organisationId}/social/actions/{actionId}/reject",
     requiredScope: "social:review",
     inputShape: { actionId: z.string().min(1), notes: reviewNotes },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "draft_social_post",
@@ -250,7 +292,12 @@ export const SOCIAL_TOOLS: RouteToolDescriptor[] = [
       brief: z.string().min(1).max(2000).describe("What the post should be about."),
       voiceInstructions: z.string().max(2000).optional().describe("Tone/style guidance."),
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     outputShape: {
       decision: z.string().optional(),
       validationViolations: z.array(z.string()).optional(),

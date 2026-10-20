@@ -87,8 +87,16 @@ describe("evaluateSocialAction", () => {
 
   it("always persists a SocialAction row even for a DENY, with the full audit fields", async () => {
     const { prisma, created } = fakePrisma({
-      autonomyConfig: { autonomyEnabled: true, dryRunMode: false, maxActionsPerHour: 5, maxActionsPerDay: 20, requireApprovalBelowConfidence: 0.85 },
-      rules: [{ id: "r1", kind: "BANNED_TOPIC", pattern: "thanks", isRegex: false, platform: null }],
+      autonomyConfig: {
+        autonomyEnabled: true,
+        dryRunMode: false,
+        maxActionsPerHour: 5,
+        maxActionsPerDay: 20,
+        requireApprovalBelowConfidence: 0.85,
+      },
+      rules: [
+        { id: "r1", kind: "BANNED_TOPIC", pattern: "thanks", isRegex: false, platform: null },
+      ],
     });
     const result = await evaluateSocialAction(prisma as never, fakeRedis() as never, baseInput);
     expect(result.decision).toBe("DENY");

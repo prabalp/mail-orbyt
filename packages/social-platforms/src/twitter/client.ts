@@ -112,13 +112,16 @@ export async function pollForEvents(
     includes?: { users?: { id: string; username: string }[] };
   };
 
-  const usernameById = new Map((data.includes?.users ?? []).map((user) => [user.id, user.username]));
+  const usernameById = new Map(
+    (data.includes?.users ?? []).map((user) => [user.id, user.username]),
+  );
 
   return (data.data ?? []).map((tweet) => ({
     externalEventId: tweet.id,
     externalThreadId: tweet.conversation_id,
     eventType: "MENTION" as const,
-    authorHandle: (tweet.author_id && usernameById.get(tweet.author_id)) ?? tweet.author_id ?? "unknown",
+    authorHandle:
+      (tweet.author_id && usernameById.get(tweet.author_id)) ?? tweet.author_id ?? "unknown",
     contentText: tweet.text,
     rawPayload: tweet,
     occurredAt: tweet.created_at ? new Date(tweet.created_at) : new Date(),

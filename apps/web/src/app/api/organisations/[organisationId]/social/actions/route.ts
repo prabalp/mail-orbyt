@@ -29,7 +29,11 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
   const { organisationId } = await params;
   return handleSocialRoute(request, { organisationId }, async () => {
     const query = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
-    if (!query.success) return NextResponse.json({ error: "Invalid request", details: query.error.flatten() }, { status: 400 });
+    if (!query.success)
+      return NextResponse.json(
+        { error: "Invalid request", details: query.error.flatten() },
+        { status: 400 },
+      );
     return NextResponse.json(await listSocialActions(organisationId, query.data));
   });
 }

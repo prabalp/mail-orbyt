@@ -24,13 +24,21 @@ export async function GET(request: Request, { params }: RouteParams): Promise<Ne
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId } = await params;
-  return handleSocialRoute(request, { organisationId, permission: "social:manage" }, async (actor) => {
-    const body = createSchema.safeParse(await readJsonBody(request));
-    if (!body.success) return NextResponse.json({ error: "Invalid request", details: body.error.flatten() }, { status: 400 });
-    const rule = await createSocialPolicyRule(organisationId, actor.userId, {
-      ...body.data,
-      platform: body.data.platform ?? null,
-    });
-    return NextResponse.json(rule, { status: 201 });
-  });
+  return handleSocialRoute(
+    request,
+    { organisationId, permission: "social:manage" },
+    async (actor) => {
+      const body = createSchema.safeParse(await readJsonBody(request));
+      if (!body.success)
+        return NextResponse.json(
+          { error: "Invalid request", details: body.error.flatten() },
+          { status: 400 },
+        );
+      const rule = await createSocialPolicyRule(organisationId, actor.userId, {
+        ...body.data,
+        platform: body.data.platform ?? null,
+      });
+      return NextResponse.json(rule, { status: 201 });
+    },
+  );
 }

@@ -11,7 +11,10 @@ import {
   loadEffectiveAutonomyConfig,
   reserveRateLimit,
 } from "@mail-orbyt/social-policy";
-import { SOCIAL_PUBLISH_QUEUE_NAME, type SocialPublishJobData } from "@mail-orbyt/social-scheduling";
+import {
+  SOCIAL_PUBLISH_QUEUE_NAME,
+  type SocialPublishJobData,
+} from "@mail-orbyt/social-scheduling";
 import { Worker, type ConnectionOptions, type Job } from "bullmq";
 import type { Redis } from "ioredis";
 
@@ -57,7 +60,12 @@ export function createSocialPublishWorker(params: {
       if (action.status !== "APPROVED") return;
 
       try {
-        await checkAndThrowIfKilled(params.prisma, params.redis, action.organisationId, action.platform);
+        await checkAndThrowIfKilled(
+          params.prisma,
+          params.redis,
+          action.organisationId,
+          action.platform,
+        );
       } catch (error) {
         if (error instanceof KillSwitchActiveError) {
           await params.prisma.socialAction.update({
@@ -113,7 +121,11 @@ export function createSocialPublishWorker(params: {
               `Action ${action.id} is a ${action.actionType} with no trigger thread/comment id to reply to.`,
             );
           }
-          publishResult = await adapter.publishReply(accessToken, threadOrCommentId, action.generatedContent);
+          publishResult = await adapter.publishReply(
+            accessToken,
+            threadOrCommentId,
+            action.generatedContent,
+          );
         } else {
           throw new Error(`Action type ${action.actionType} has no publish implementation.`);
         }
@@ -130,7 +142,11 @@ export function createSocialPublishWorker(params: {
           data: {
             organisationId: action.organisationId,
             type: "SOCIAL_ACTION_PUBLISHED",
-            metadata: { socialActionId: action.id, platform: action.platform, actionType: action.actionType },
+            metadata: {
+              socialActionId: action.id,
+              platform: action.platform,
+              actionType: action.actionType,
+            },
           },
         });
       } catch (error) {
@@ -149,13 +165,18 @@ export function createSocialPublishWorker(params: {
   worker.on("failed", (job, error) => {
     params.logger.error("social publish job failed", { jobId: job?.id, error });
 
-    if (job && error instanceof RateLimitExceededError && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    if (
+      job &&
+      error instanceof RateLimitExceededError &&
+      job.attemptsMade >= (job.opts.attempts ?? 1)
+    ) {
       params.prisma.socialAction
         .update({
           where: { id: error.socialActionId },
           data: {
             status: "PENDING_HUMAN_APPROVAL",
-            failureReason: "Rate limit repeatedly exceeded across retries; escalated for manual review.",
+            failureReason:
+              "Rate limit repeatedly exceeded across retries; escalated for manual review.",
           },
         })
         .catch((updateError: unknown) => {

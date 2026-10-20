@@ -12,7 +12,9 @@ export class KillSwitchActiveError extends Error {
     public readonly organisationId: string,
     public readonly platform: SocialPlatformName,
   ) {
-    super(`Social autonomy kill switch is active for organisation ${organisationId} (${platform}).`);
+    super(
+      `Social autonomy kill switch is active for organisation ${organisationId} (${platform}).`,
+    );
     this.name = "KillSwitchActiveError";
   }
 }
@@ -77,7 +79,10 @@ export async function checkAndThrowIfKilled(
  * for both the org-wide key and every platform-specific key, so a flip is
  * visible before the TTL would otherwise expire it.
  */
-export async function invalidateKillSwitchCache(redis: Redis, organisationId: string): Promise<void> {
+export async function invalidateKillSwitchCache(
+  redis: Redis,
+  organisationId: string,
+): Promise<void> {
   await Promise.all(
     ALL_SOCIAL_PLATFORMS.map((platform) => redis.del(cacheKey(organisationId, platform))),
   );

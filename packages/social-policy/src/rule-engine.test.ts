@@ -22,7 +22,12 @@ const rule = (overrides: Partial<Record<string, unknown>>) => ({
 describe("evaluateContentAgainstRules", () => {
   it("allows content with no matching rules and no allow-list", async () => {
     const prisma = fakePrisma([rule({ pattern: "nft" })]);
-    const result = await evaluateContentAgainstRules(prisma as never, "org-1", "TWITTER", "hello world");
+    const result = await evaluateContentAgainstRules(
+      prisma as never,
+      "org-1",
+      "TWITTER",
+      "hello world",
+    );
     expect(result.verdict).toBe("ALLOW");
     expect(result.matchedRules).toEqual([]);
   });
@@ -66,7 +71,12 @@ describe("evaluateContentAgainstRules", () => {
 
   it("denies content matching no ALLOWED_TOPIC rule when allow-list rules exist", async () => {
     const prisma = fakePrisma([rule({ kind: "ALLOWED_TOPIC", pattern: "product update" })]);
-    const result = await evaluateContentAgainstRules(prisma as never, "org-1", "TWITTER", "off-topic content");
+    const result = await evaluateContentAgainstRules(
+      prisma as never,
+      "org-1",
+      "TWITTER",
+      "off-topic content",
+    );
     expect(result.verdict).toBe("DENY");
   });
 
@@ -83,7 +93,12 @@ describe("evaluateContentAgainstRules", () => {
 
   it("treats a malformed regex rule as a non-match instead of throwing", async () => {
     const prisma = fakePrisma([rule({ isRegex: true, pattern: "(unclosed" })]);
-    const result = await evaluateContentAgainstRules(prisma as never, "org-1", "TWITTER", "anything");
+    const result = await evaluateContentAgainstRules(
+      prisma as never,
+      "org-1",
+      "TWITTER",
+      "anything",
+    );
     expect(result.verdict).toBe("ALLOW");
   });
 });

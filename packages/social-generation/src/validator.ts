@@ -40,7 +40,9 @@ function matchesPriorEscalationPhrase(content: string, priorEscalationPhrases: s
   return priorEscalationPhrases.some((phrase) => {
     const normalizedPhrase = phrase.trim().toLowerCase();
     if (!normalizedPhrase) return false;
-    return normalizedContent.includes(normalizedPhrase) || normalizedPhrase.includes(normalizedContent);
+    return (
+      normalizedContent.includes(normalizedPhrase) || normalizedPhrase.includes(normalizedContent)
+    );
   });
 }
 

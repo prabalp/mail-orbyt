@@ -45,7 +45,9 @@ describe("kill-switch", () => {
   it("is inactive when no SocialAutonomyConfig row exists for the org/platform", async () => {
     const redis = fakeRedis();
     const prisma = { socialAutonomyConfig: { findMany: vi.fn(async () => []) } };
-    expect(await isKillSwitchActive(prisma as never, redis as never, "org-1", "TWITTER")).toBe(false);
+    expect(await isKillSwitchActive(prisma as never, redis as never, "org-1", "TWITTER")).toBe(
+      false,
+    );
   });
 
   it("is active when the platform-specific row has killSwitchActivatedAt set", async () => {
@@ -55,7 +57,9 @@ describe("kill-switch", () => {
         findMany: vi.fn(async () => [{ killSwitchActivatedAt: new Date() }]),
       },
     };
-    expect(await isKillSwitchActive(prisma as never, redis as never, "org-1", "TWITTER")).toBe(true);
+    expect(await isKillSwitchActive(prisma as never, redis as never, "org-1", "TWITTER")).toBe(
+      true,
+    );
   });
 
   it("checkAndThrowIfKilled throws KillSwitchActiveError when active", async () => {
@@ -84,7 +88,9 @@ describe("kill-switch", () => {
     __resetEnvForTests();
     const redis = fakeRedis();
     const prisma = { socialAutonomyConfig: { findMany: vi.fn(async () => []) } };
-    expect(await isKillSwitchActive(prisma as never, redis as never, "org-1", "TWITTER")).toBe(true);
+    expect(await isKillSwitchActive(prisma as never, redis as never, "org-1", "TWITTER")).toBe(
+      true,
+    );
     expect(redis.get).not.toHaveBeenCalled();
   });
 });

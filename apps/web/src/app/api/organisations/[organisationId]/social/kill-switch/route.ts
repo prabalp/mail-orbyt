@@ -15,11 +15,24 @@ const bodySchema = z.object({
 
 export async function POST(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { organisationId } = await params;
-  return handleSocialRoute(request, { organisationId, permission: "social:kill_switch" }, async (actor) => {
-    const body = bodySchema.safeParse(await readJsonBody(request));
-    if (!body.success) return NextResponse.json({ error: "Invalid request", details: body.error.flatten() }, { status: 400 });
-    return NextResponse.json(
-      await setSocialKillSwitch(organisationId, actor.userId, body.data.active, body.data.platform ?? null),
-    );
-  });
+  return handleSocialRoute(
+    request,
+    { organisationId, permission: "social:kill_switch" },
+    async (actor) => {
+      const body = bodySchema.safeParse(await readJsonBody(request));
+      if (!body.success)
+        return NextResponse.json(
+          { error: "Invalid request", details: body.error.flatten() },
+          { status: 400 },
+        );
+      return NextResponse.json(
+        await setSocialKillSwitch(
+          organisationId,
+          actor.userId,
+          body.data.active,
+          body.data.platform ?? null,
+        ),
+      );
+    },
+  );
 }

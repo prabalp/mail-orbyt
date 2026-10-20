@@ -36,7 +36,11 @@ export async function PATCH(request: Request, { params }: RouteParams): Promise<
   const { organisationId } = await params;
   return handleSocialRoute(request, { organisationId, permission: "social:manage" }, async () => {
     const body = patchSchema.safeParse(await readJsonBody(request));
-    if (!body.success) return NextResponse.json({ error: "Invalid request", details: body.error.flatten() }, { status: 400 });
+    if (!body.success)
+      return NextResponse.json(
+        { error: "Invalid request", details: body.error.flatten() },
+        { status: 400 },
+      );
     const { platform, ...changes } = body.data;
     return NextResponse.json(await updateSocialAutonomy(organisationId, platform ?? null, changes));
   });

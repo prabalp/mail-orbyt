@@ -1,6 +1,9 @@
 import { ForbiddenError, UnauthenticatedError, type Permission } from "@mail-orbyt/authentication";
 import { NextResponse } from "next/server";
-import { authenticateOrganisationRequest, type AuthenticatedOrganisationActor } from "@/lib/api-auth";
+import {
+  authenticateOrganisationRequest,
+  type AuthenticatedOrganisationActor,
+} from "@/lib/api-auth";
 import { SocialRequestError } from "@/lib/social";
 
 /**

@@ -48,7 +48,9 @@ async function createAndPublishContainer(
   });
 
   if (!containerResponse.ok) {
-    throw new ThreadsApiError(`Creating Threads container failed with status ${containerResponse.status}`);
+    throw new ThreadsApiError(
+      `Creating Threads container failed with status ${containerResponse.status}`,
+    );
   }
 
   const containerData = (await containerResponse.json()) as { id?: string };
@@ -63,7 +65,9 @@ async function createAndPublishContainer(
   });
 
   if (!publishResponse.ok) {
-    throw new ThreadsApiError(`Publishing Threads post failed with status ${publishResponse.status}`);
+    throw new ThreadsApiError(
+      `Publishing Threads post failed with status ${publishResponse.status}`,
+    );
   }
 
   const publishData = (await publishResponse.json()) as { id?: string };

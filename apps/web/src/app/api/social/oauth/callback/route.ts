@@ -21,12 +21,16 @@ function resultPage(title: string, message: string, status: number): NextRespons
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.5}</style>
 </head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p>You can close this tab.</p></body></html>`;
-  return new NextResponse(html, { status, headers: { "Content-Type": "text/html; charset=utf-8" } });
+  return new NextResponse(html, {
+    status,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
   const session = await auth();
-  if (!session?.user?.id) return resultPage("Not signed in", "Sign in to Mail Orbyt and try again.", 401);
+  if (!session?.user?.id)
+    return resultPage("Not signed in", "Sign in to Mail Orbyt and try again.", 401);
 
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -48,8 +52,19 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   if (providerError) return resultPage("Connection cancelled", providerError, 400);
-  if (!code || !state || !expectedState || !organisationId || !platform || state !== expectedState) {
-    return resultPage("Connection failed", "Invalid or expired OAuth state — start the connection again.", 400);
+  if (
+    !code ||
+    !state ||
+    !expectedState ||
+    !organisationId ||
+    !platform ||
+    state !== expectedState
+  ) {
+    return resultPage(
+      "Connection failed",
+      "Invalid or expired OAuth state — start the connection again.",
+      400,
+    );
   }
 
   try {
@@ -60,7 +75,11 @@ export async function GET(request: Request): Promise<NextResponse> {
     });
   } catch (error) {
     if (error instanceof ForbiddenError) {
-      return resultPage("Not allowed", "You do not have permission to connect social accounts.", 403);
+      return resultPage(
+        "Not allowed",
+        "You do not have permission to connect social accounts.",
+        403,
+      );
     }
     throw error;
   }

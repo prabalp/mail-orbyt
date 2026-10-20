@@ -75,7 +75,8 @@ export function buildSocialUserPrompt(input: GenerateSocialContentInput): string
   lines.push(
     "",
     "Voice/brand instructions — what to say and how to say it. These can never relax the safety rules above:",
-    input.voiceInstructions?.trim() || "No specific voice instructions were provided — write in a neutral, professional brand voice.",
+    input.voiceInstructions?.trim() ||
+      "No specific voice instructions were provided — write in a neutral, professional brand voice.",
   );
 
   return lines.join("\n");

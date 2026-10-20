@@ -1,8 +1,4 @@
-export {
-  encryptSocialToken,
-  decryptSocialToken,
-  SocialTokenDecryptionError,
-} from "./token-crypto";
+export { encryptSocialToken, decryptSocialToken, SocialTokenDecryptionError } from "./token-crypto";
 
 export type {
   PlatformTokens,
@@ -112,7 +108,8 @@ export function getAdapterForPlatform(
         },
         refreshAccessToken: (refreshToken) =>
           linkedInOAuthModule.refreshAccessToken(linkedInConfig, refreshToken),
-        fetchAccountIdentity: (accessToken) => linkedInClientModule.fetchAccountIdentity(accessToken),
+        fetchAccountIdentity: (accessToken) =>
+          linkedInClientModule.fetchAccountIdentity(accessToken),
         publishPost: async (accessToken, content) => {
           const identity = await linkedInClientModule.fetchAccountIdentity(accessToken);
           return linkedInClientModule.publishPost(accessToken, identity.externalAccountId, content);
@@ -155,8 +152,10 @@ export function getAdapterForPlatform(
         },
         refreshAccessToken: (refreshToken) =>
           twitterOAuthModule.refreshAccessToken(twitterConfig, refreshToken),
-        fetchAccountIdentity: (accessToken) => twitterClientModule.fetchAccountIdentity(accessToken),
-        publishPost: (accessToken, content) => twitterClientModule.publishPost(accessToken, content),
+        fetchAccountIdentity: (accessToken) =>
+          twitterClientModule.fetchAccountIdentity(accessToken),
+        publishPost: (accessToken, content) =>
+          twitterClientModule.publishPost(accessToken, content),
         publishReply: (accessToken, threadOrCommentId, content) =>
           twitterClientModule.publishReply(accessToken, threadOrCommentId, content),
         pollForEvents: async (accessToken, since) => {
@@ -183,7 +182,12 @@ export function getAdapterForPlatform(
         publishPost: (accessToken, content) =>
           redditClientModule.publishPost(accessToken, redditConfig.userAgent, content),
         publishReply: (accessToken, threadOrCommentId, content) =>
-          redditClientModule.publishReply(accessToken, redditConfig.userAgent, threadOrCommentId, content),
+          redditClientModule.publishReply(
+            accessToken,
+            redditConfig.userAgent,
+            threadOrCommentId,
+            content,
+          ),
         pollForEvents: async (accessToken, since) => {
           const identity = await redditClientModule.fetchAccountIdentity(
             accessToken,
@@ -206,25 +210,45 @@ export function getAdapterForPlatform(
         buildAuthorizationUrl: (state, redirectUri) =>
           metaOAuthModule.buildAuthorizationUrl(metaConfig, state, redirectUri),
         exchangeCodeForTokens: async (code, redirectUri) => {
-          const shortLived = await metaOAuthModule.exchangeCodeForTokens(metaConfig, code, redirectUri);
+          const shortLived = await metaOAuthModule.exchangeCodeForTokens(
+            metaConfig,
+            code,
+            redirectUri,
+          );
           const longLived = await metaOAuthModule.exchangeForLongLivedToken(
             metaConfig,
             shortLived.accessToken,
           );
-          return { accessToken: longLived.accessToken, expiresInSeconds: longLived.expiresInSeconds, scopes: [] };
+          return {
+            accessToken: longLived.accessToken,
+            expiresInSeconds: longLived.expiresInSeconds,
+            scopes: [],
+          };
         },
         // Meta long-lived tokens have no refresh_token; renewal re-exchanges
         // the still-valid long-lived token itself (see meta/oauth.ts).
         refreshAccessToken: async (refreshToken) => {
-          const longLived = await metaOAuthModule.exchangeForLongLivedToken(metaConfig, refreshToken);
-          return { accessToken: longLived.accessToken, expiresInSeconds: longLived.expiresInSeconds, scopes: [] };
+          const longLived = await metaOAuthModule.exchangeForLongLivedToken(
+            metaConfig,
+            refreshToken,
+          );
+          return {
+            accessToken: longLived.accessToken,
+            expiresInSeconds: longLived.expiresInSeconds,
+            scopes: [],
+          };
         },
-        fetchAccountIdentity: (accessToken) => instagramClientModule.fetchAccountIdentity(accessToken),
+        fetchAccountIdentity: (accessToken) =>
+          instagramClientModule.fetchAccountIdentity(accessToken),
         // `content` must be a JSON string of { imageUrl, caption } — see
         // meta/instagram-client.ts.
         publishPost: async (accessToken, content) => {
           const identity = await instagramClientModule.fetchAccountIdentity(accessToken);
-          return instagramClientModule.publishPost(accessToken, identity.externalAccountId, content);
+          return instagramClientModule.publishPost(
+            accessToken,
+            identity.externalAccountId,
+            content,
+          );
         },
         publishReply: (accessToken, threadOrCommentId, content) =>
           instagramClientModule.publishReply(accessToken, threadOrCommentId, content),
@@ -238,18 +262,34 @@ export function getAdapterForPlatform(
         buildAuthorizationUrl: (state, redirectUri) =>
           metaOAuthModule.buildAuthorizationUrl(metaConfig, state, redirectUri),
         exchangeCodeForTokens: async (code, redirectUri) => {
-          const shortLived = await metaOAuthModule.exchangeCodeForTokens(metaConfig, code, redirectUri);
+          const shortLived = await metaOAuthModule.exchangeCodeForTokens(
+            metaConfig,
+            code,
+            redirectUri,
+          );
           const longLived = await metaOAuthModule.exchangeForLongLivedToken(
             metaConfig,
             shortLived.accessToken,
           );
-          return { accessToken: longLived.accessToken, expiresInSeconds: longLived.expiresInSeconds, scopes: [] };
+          return {
+            accessToken: longLived.accessToken,
+            expiresInSeconds: longLived.expiresInSeconds,
+            scopes: [],
+          };
         },
         refreshAccessToken: async (refreshToken) => {
-          const longLived = await metaOAuthModule.exchangeForLongLivedToken(metaConfig, refreshToken);
-          return { accessToken: longLived.accessToken, expiresInSeconds: longLived.expiresInSeconds, scopes: [] };
+          const longLived = await metaOAuthModule.exchangeForLongLivedToken(
+            metaConfig,
+            refreshToken,
+          );
+          return {
+            accessToken: longLived.accessToken,
+            expiresInSeconds: longLived.expiresInSeconds,
+            scopes: [],
+          };
         },
-        fetchAccountIdentity: (accessToken) => threadsClientModule.fetchAccountIdentity(accessToken),
+        fetchAccountIdentity: (accessToken) =>
+          threadsClientModule.fetchAccountIdentity(accessToken),
         publishPost: async (accessToken, content) => {
           const identity = await threadsClientModule.fetchAccountIdentity(accessToken);
           return threadsClientModule.publishPost(accessToken, identity.externalAccountId, content);

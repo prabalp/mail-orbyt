@@ -260,7 +260,10 @@ export async function updateSocialAutonomy(
   },
 ) {
   const row = await findOrCreateAutonomyRow(organisationId, platform);
-  const updated = await prisma.socialAutonomyConfig.update({ where: { id: row.id }, data: changes });
+  const updated = await prisma.socialAutonomyConfig.update({
+    where: { id: row.id },
+    data: changes,
+  });
   return toAutonomyDto(updated);
 }
 
@@ -328,7 +331,12 @@ export async function listSocialPolicyRules(organisationId: string) {
 export async function createSocialPolicyRule(
   organisationId: string,
   userId: string,
-  input: { kind: SocialPolicyRuleKind; pattern: string; isRegex: boolean; platform: SocialPlatform | null },
+  input: {
+    kind: SocialPolicyRuleKind;
+    pattern: string;
+    isRegex: boolean;
+    platform: SocialPlatform | null;
+  },
 ) {
   if (input.isRegex) {
     try {
@@ -351,7 +359,11 @@ export async function createSocialPolicyRule(
   return toRuleDto(rule);
 }
 
-export async function deleteSocialPolicyRule(organisationId: string, userId: string, ruleId: string) {
+export async function deleteSocialPolicyRule(
+  organisationId: string,
+  userId: string,
+  ruleId: string,
+) {
   const rule = await prisma.socialPolicyRule.findUnique({ where: { id: ruleId } });
   if (!rule || rule.organisationId !== organisationId) return null;
   await prisma.socialPolicyRule.delete({ where: { id: ruleId } });
@@ -440,7 +452,12 @@ export async function approveSocialAction(
 ) {
   const result = await prisma.socialAction.updateMany({
     where: { id: actionId, organisationId, status: "PENDING_HUMAN_APPROVAL" },
-    data: { status: "APPROVED", reviewedByUserId: userId, reviewedAt: new Date(), reviewNotes: notes },
+    data: {
+      status: "APPROVED",
+      reviewedByUserId: userId,
+      reviewedAt: new Date(),
+      reviewNotes: notes,
+    },
   });
   if (result.count === 0) return reviewConflict(organisationId, actionId);
 
@@ -487,7 +504,11 @@ async function reviewConflict(organisationId: string, actionId: string): Promise
  * neither of which a single generated text body provides — so proactive
  * posting is limited to the text-first platforms for now.
  */
-const PROACTIVE_POST_PLATFORMS: ReadonlySet<SocialPlatform> = new Set(["LINKEDIN", "TWITTER", "THREADS"]);
+const PROACTIVE_POST_PLATFORMS: ReadonlySet<SocialPlatform> = new Set([
+  "LINKEDIN",
+  "TWITTER",
+  "THREADS",
+]);
 
 /**
  * Drafts a new post and hands it to the policy engine, which decides
@@ -499,7 +520,9 @@ export async function draftSocialPost(
   organisationId: string,
   input: { connectionId: string; brief: string; voiceInstructions?: string },
 ) {
-  const connection = await prisma.socialConnection.findUnique({ where: { id: input.connectionId } });
+  const connection = await prisma.socialConnection.findUnique({
+    where: { id: input.connectionId },
+  });
   if (!connection || connection.organisationId !== organisationId) {
     throw new SocialRequestError("Social connection not found", 404);
   }
@@ -530,7 +553,10 @@ export async function draftSocialPost(
   };
   const generated = await generateSocialContent(getAiSocialGenerator(aiConfig), generationInput);
   const validation = validateSocialContent(generated.content, generationInput);
-  const compositeConfidence = computeCompositeConfidence(generated.modelSelfReportedConfidence, validation);
+  const compositeConfidence = computeCompositeConfidence(
+    generated.modelSelfReportedConfidence,
+    validation,
+  );
 
   const result = await evaluateSocialAction(prisma, redisConnection, {
     organisationId,

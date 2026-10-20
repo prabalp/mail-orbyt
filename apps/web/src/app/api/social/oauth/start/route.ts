@@ -28,7 +28,10 @@ export async function GET(request: Request): Promise<NextResponse> {
   const platform = parseSocialPlatform(searchParams.get("platform"));
   if (!organisationId || !platform) {
     return NextResponse.json(
-      { error: "organisationId and platform (LINKEDIN|TWITTER|REDDIT|INSTAGRAM|THREADS) are required" },
+      {
+        error:
+          "organisationId and platform (LINKEDIN|TWITTER|REDDIT|INSTAGRAM|THREADS) are required",
+      },
       { status: 400 },
     );
   }
@@ -40,7 +43,8 @@ export async function GET(request: Request): Promise<NextResponse> {
       permission: "social:manage",
     });
   } catch (error) {
-    if (error instanceof ForbiddenError) return NextResponse.json({ error: error.message }, { status: 403 });
+    if (error instanceof ForbiddenError)
+      return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
   }
 
