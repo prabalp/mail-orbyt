@@ -548,7 +548,7 @@ function Editor({
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
+      <div className="grid items-start gap-4 lg:grid-cols-[1fr_22rem]">
         <div
           className="overflow-hidden rounded-md-md border border-outline/30"
           style={{ height: canvasHeight, ...FLOW_THEME }}
@@ -581,7 +581,10 @@ function Editor({
           </ReactFlow>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div
+          className="flex flex-col gap-4 lg:max-h-[var(--journey-h)] lg:overflow-y-auto lg:pr-1"
+          style={{ "--journey-h": `${canvasHeight}px` } as React.CSSProperties}
+        >
           {selectedNode ? (
             <Card>
               <h4 className="mb-3 text-sm font-medium text-on-surface-variant">Email</h4>
