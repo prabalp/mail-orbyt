@@ -13,6 +13,9 @@ const ALL_PERMISSION_SCOPES: Permission[] = [
   "research:review",
   "conversations:review",
   "analytics:view",
+  "social:manage",
+  "social:review",
+  "social:kill_switch",
 ];
 
 export const PROFILE_SCOPE = "profile";

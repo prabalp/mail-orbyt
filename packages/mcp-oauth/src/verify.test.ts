@@ -55,6 +55,7 @@ describe("verifyAccessToken", () => {
           organisationId: "org-1",
           scope: "profile leads:manage",
           clientId: "client-1",
+          resource: "urn:orbyt:mail-orbyt-mcp-server",
           revokedAt: null,
           expiresAt: new Date(Date.now() + 60_000),
         }),
@@ -67,6 +68,7 @@ describe("verifyAccessToken", () => {
       organisationId: "org-1",
       scope: "profile leads:manage",
       clientId: "client-1",
+      resource: "urn:orbyt:mail-orbyt-mcp-server",
     });
     expect(prisma.mcpAccessToken.findUnique).toHaveBeenCalledWith({
       where: { tokenHash: hashToken(rawToken) },

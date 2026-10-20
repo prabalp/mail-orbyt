@@ -6,6 +6,8 @@ export interface VerifiedAccessToken {
   organisationId: string;
   scope: string;
   clientId: string;
+  /** RFC 8707 audience this token is valid for — a resource server must additionally check this equals its own resource URI (ARCHITECTURE.md §4.3); this function only checks the token itself is unrevoked/unexpired, not who it's audienced to. */
+  resource: string;
 }
 
 /**
@@ -30,5 +32,6 @@ export async function verifyAccessToken(
     organisationId: token.organisationId,
     scope: token.scope,
     clientId: token.clientId,
+    resource: token.resource,
   };
 }

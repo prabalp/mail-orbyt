@@ -10,7 +10,10 @@ export type Permission =
   | "leads:manage"
   | "research:review"
   | "conversations:review"
-  | "analytics:view";
+  | "analytics:view"
+  | "social:manage"
+  | "social:review"
+  | "social:kill_switch";
 
 const ROLE_PERMISSIONS: Record<OrganisationRole, ReadonlySet<Permission>> = {
   OWNER: new Set([
@@ -24,6 +27,9 @@ const ROLE_PERMISSIONS: Record<OrganisationRole, ReadonlySet<Permission>> = {
     "research:review",
     "conversations:review",
     "analytics:view",
+    "social:manage",
+    "social:review",
+    "social:kill_switch",
   ]),
   ADMIN: new Set([
     "members:manage",
@@ -33,8 +39,17 @@ const ROLE_PERMISSIONS: Record<OrganisationRole, ReadonlySet<Permission>> = {
     "research:review",
     "conversations:review",
     "analytics:view",
+    "social:manage",
+    "social:review",
+    "social:kill_switch",
   ]),
-  MEMBER: new Set(["leads:manage", "campaigns:manage", "research:review", "conversations:review"]),
+  MEMBER: new Set([
+    "leads:manage",
+    "campaigns:manage",
+    "research:review",
+    "conversations:review",
+    "social:review",
+  ]),
   VIEWER: new Set([]),
 };
 

@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
+import { requireOrganisationMembership } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
+import { completeAuthorization, findActivePlatformGrant } from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";
+import { getCurrentOrganisation } from "@/lib/current-organisation";
+import { appendCallback } from "./callback-url";
 import { AuthorizeClient } from "./authorize-client";
 import { AuthorizeError } from "./authorize-error";
 
@@ -35,6 +39,10 @@ export default async function AuthorizePage({
   const state = stringParam(params, "state") ?? "";
   const codeChallenge = stringParam(params, "code_challenge");
   const codeChallengeMethod = stringParam(params, "code_challenge_method");
+  // RFC 8707 resource indicator — the audience the resulting token should be
+  // scoped to (typically the Gateway's own resource URI). Omitted entirely
+  // defaults to mail-orbyt's own resource inside completeAuthorization().
+  const resource = stringParam(params, "resource") ?? undefined;
 
   if (
     !clientId ||
@@ -63,13 +71,37 @@ export default async function AuthorizePage({
     redirect(`/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   }
 
-  const memberships = await prisma.organisationMembership.findMany({
-    where: { userId: session.user.id },
-    include: { organisation: true },
-    orderBy: { createdAt: "asc" },
+  const current = await getCurrentOrganisation(session.user.id);
+  if (!current) redirect("/onboarding");
+
+  // Skip the consent render entirely when this (user, organisation, client)
+  // already has an active platform-level grant — this is what makes
+  // reconnecting the same client, or connecting a second/future Orbyt MCP
+  // under it, silent after the first approval. ARCHITECTURE.md §4.1/§6.
+  const existingGrant = await findActivePlatformGrant(prisma, {
+    userId: session.user.id,
+    organisationId: current.organisationId,
+    clientRowId: client.id,
   });
 
-  if (memberships.length === 0) redirect("/onboarding");
+  if (existingGrant) {
+    const membership = await requireOrganisationMembership(prisma, {
+      userId: session.user.id,
+      organisationId: current.organisationId,
+    });
+    const { rawCode } = await completeAuthorization(prisma, {
+      clientRowId: client.id,
+      userId: session.user.id,
+      organisationId: current.organisationId,
+      role: membership.role,
+      requestedScope: scope,
+      redirectUri,
+      codeChallenge,
+      codeChallengeMethod,
+      resource,
+    });
+    redirect(appendCallback(new URL(redirectUri), { code: rawCode, state }));
+  }
 
   return (
     <AuthorizeClient
@@ -80,11 +112,8 @@ export default async function AuthorizePage({
       state={state}
       codeChallenge={codeChallenge}
       codeChallengeMethod={codeChallengeMethod}
-      organisations={memberships.map((m) => ({
-        id: m.organisationId,
-        name: m.organisation.name,
-        role: m.role,
-      }))}
+      resource={resource ?? ""}
+      organisations={current.memberships}
     />
   );
 }

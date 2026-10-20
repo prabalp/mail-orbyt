@@ -11,6 +11,8 @@ export interface CreateAuthorizationCodeParams {
   redirectUri: string;
   codeChallenge: string;
   codeChallengeMethod: string;
+  /** RFC 8707 resource indicator the client requested — see constants.ts for the default used when a client omits it. */
+  resource: string;
 }
 
 /**
@@ -35,6 +37,7 @@ export async function createAuthorizationCode(
       redirectUri: params.redirectUri,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: params.codeChallengeMethod,
+      resource: params.resource,
       expiresAt: tokenExpiryDate(AUTHORIZATION_CODE_TTL_MS),
     },
   });

@@ -3,18 +3,9 @@
 import { redirect } from "next/navigation";
 import { requireOrganisationMembership } from "@mail-orbyt/authentication";
 import { prisma } from "@mail-orbyt/database";
-import { createAuthorizationCode, intersectScopes } from "@mail-orbyt/mcp-oauth";
+import { completeAuthorization } from "@mail-orbyt/mcp-oauth";
 import { auth } from "@/lib/auth";
-
-function appendCallback(
-  url: URL,
-  params: { code?: string; error?: string; state: string },
-): string {
-  if (params.code) url.searchParams.set("code", params.code);
-  if (params.error) url.searchParams.set("error", params.error);
-  if (params.state) url.searchParams.set("state", params.state);
-  return url.toString();
-}
+import { appendCallback } from "./callback-url";
 
 /**
  * Approves the consent screen. Re-validates everything server-side rather
@@ -22,6 +13,11 @@ function appendCallback(
  * is re-checked against McpOAuthClient, and the granted scope is
  * re-intersected against the user's CURRENT role in the chosen
  * organisation — never the role as it may have been implied by the UI.
+ *
+ * This is also where the platform-level consent grant is recorded
+ * (completeAuthorization, in @mail-orbyt/mcp-oauth) — see page.tsx for the
+ * silent skip-consent path that reads it back on a later connect.
+ * ARCHITECTURE.md §6.
  */
 export async function approveAuthorization(formData: FormData): Promise<void> {
   const session = await auth();
@@ -34,6 +30,7 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
   const codeChallenge = String(formData.get("codeChallenge") ?? "");
   const codeChallengeMethod = String(formData.get("codeChallengeMethod") ?? "");
   const organisationId = String(formData.get("organisationId") ?? "");
+  const resource = String(formData.get("resource") ?? "") || undefined;
 
   const client = await prisma.mcpOAuthClient.findUnique({ where: { clientId } });
   if (!client || !client.redirectUris.includes(redirectUri)) {
@@ -48,16 +45,16 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
     redirect("/oauth/authorize/error");
   }
 
-  const scope = intersectScopes(requestedScope, membership.role);
-
-  const { rawCode } = await createAuthorizationCode(prisma, {
+  const { rawCode } = await completeAuthorization(prisma, {
     clientRowId: client.id,
     userId: session.user.id,
     organisationId,
-    scope,
+    role: membership.role,
+    requestedScope,
     redirectUri,
     codeChallenge,
     codeChallengeMethod,
+    resource,
   });
 
   redirect(appendCallback(new URL(redirectUri), { code: rawCode, state }));

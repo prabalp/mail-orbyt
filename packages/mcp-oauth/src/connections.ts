@@ -1,14 +1,35 @@
 import type { PrismaClient } from "@mail-orbyt/database";
-import { hashToken } from "@mail-orbyt/authentication";
+import { hashToken, recordAuditEvent } from "@mail-orbyt/authentication";
+import { revokePlatformGrant } from "./platform-grants";
 
 export async function revokeToken(
-  prisma: Pick<PrismaClient, "mcpAccessToken" | "mcpRefreshToken">,
+  prisma: Pick<PrismaClient, "mcpAccessToken" | "mcpRefreshToken" | "auditEvent">,
   rawToken: string,
 ): Promise<void> {
   const tokenHash = hashToken(rawToken);
+  const [access, refresh] = await Promise.all([
+    prisma.mcpAccessToken.findFirst({
+      where: { tokenHash, revokedAt: null },
+      select: { userId: true, organisationId: true, clientId: true },
+    }),
+    prisma.mcpRefreshToken.findFirst({
+      where: { tokenHash, revokedAt: null },
+      select: { userId: true, organisationId: true, clientId: true },
+    }),
+  ]);
   const now = new Date();
   await prisma.mcpAccessToken.updateMany({ where: { tokenHash }, data: { revokedAt: now } });
   await prisma.mcpRefreshToken.updateMany({ where: { tokenHash }, data: { revokedAt: now } });
+
+  const subject = access ?? refresh;
+  if (!subject) return;
+
+  await recordAuditEvent(prisma, {
+    type: "MCP_TOKEN_REVOKED",
+    userId: subject.userId,
+    organisationId: subject.organisationId,
+    metadata: { clientRowId: subject.clientId, via: "token" },
+  });
 }
 
 export interface McpConnectionSummary {
@@ -47,7 +68,10 @@ export async function listActiveConnections(
 }
 
 export async function revokeConnection(
-  prisma: Pick<PrismaClient, "mcpAccessToken" | "mcpRefreshToken" | "mcpOAuthClient">,
+  prisma: Pick<
+    PrismaClient,
+    "mcpAccessToken" | "mcpRefreshToken" | "mcpOAuthClient" | "mcpPlatformGrant" | "auditEvent"
+  >,
   params: { userId: string; clientId: string; organisationId: string },
 ): Promise<void> {
   const client = await prisma.mcpOAuthClient.findUnique({ where: { clientId: params.clientId } });
@@ -60,6 +84,33 @@ export async function revokeConnection(
     organisationId: params.organisationId,
     revokedAt: null,
   };
+  // Covers any token whose platformGrantId is null (pre-migration rows, or
+  // a defensive gap) directly by (user, client, organisation) ...
   await prisma.mcpAccessToken.updateMany({ where: scope, data: { revokedAt: now } });
   await prisma.mcpRefreshToken.updateMany({ where: scope, data: { revokedAt: now } });
+
+  // ... and, the normal case going forward, also revokes the platform
+  // grant itself so a later reconnect doesn't silently skip consent again
+  // (ARCHITECTURE.md §6) — without this, "disconnect" in the MCP
+  // connections settings UI would only kill the current tokens, not the
+  // standing consent they were minted under.
+  const grant = await prisma.mcpPlatformGrant.findFirst({
+    where: {
+      userId: params.userId,
+      organisationId: params.organisationId,
+      clientId: client.id,
+      revokedAt: null,
+    },
+    select: { id: true },
+  });
+  if (grant) {
+    await revokePlatformGrant(prisma, { platformGrantId: grant.id });
+  }
+
+  await recordAuditEvent(prisma, {
+    type: "MCP_TOKEN_REVOKED",
+    userId: params.userId,
+    organisationId: params.organisationId,
+    metadata: { clientId: params.clientId, via: "connection" },
+  });
 }

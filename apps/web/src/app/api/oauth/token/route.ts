@@ -2,6 +2,7 @@ import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
 import {
   exchangeAuthorizationCode,
+  exchangeTokenForResource,
   OAuthGrantError,
   refreshAccessToken,
 } from "@mail-orbyt/mcp-oauth";
@@ -26,9 +27,24 @@ const refreshTokenSchema = z.object({
   client_id: z.string().min(1),
 });
 
+// RFC 8693 token-exchange grant (ARCHITECTURE.md §4.2/§6): the Gateway
+// silently exchanges its own (typically Gateway-audienced) access token for
+// a short-TTL token scoped to a specific downstream resource, with no user
+// interaction. `resource` is deliberately a plain string, not a URL — these
+// are logical RFC 8707 identifiers (see constants.ts), not necessarily
+// dereferenceable HTTP URLs.
+const tokenExchangeSchema = z.object({
+  grant_type: z.literal("urn:ietf:params:oauth:grant-type:token-exchange"),
+  subject_token: z.string().min(1),
+  subject_token_type: z.literal("urn:ietf:params:oauth:token-type:access_token"),
+  resource: z.string().min(1),
+  client_id: z.string().min(1),
+});
+
 const bodySchema = z.discriminatedUnion("grant_type", [
   authorizationCodeSchema,
   refreshTokenSchema,
+  tokenExchangeSchema,
 ]);
 
 function oauthError(code: string, status: number): NextResponse {
@@ -61,6 +77,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   const env = loadEnv();
 
   try {
+    if (parsed.data.grant_type === "urn:ietf:params:oauth:grant-type:token-exchange") {
+      const result = await exchangeTokenForResource(prisma, {
+        clientId: parsed.data.client_id,
+        subjectToken: parsed.data.subject_token,
+        resource: parsed.data.resource,
+      });
+      return NextResponse.json({
+        access_token: result.accessToken,
+        issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+        token_type: result.tokenType,
+        expires_in: result.expiresIn,
+        scope: result.scope,
+      });
+    }
+
     const result =
       parsed.data.grant_type === "authorization_code"
         ? await exchangeAuthorizationCode(prisma, {

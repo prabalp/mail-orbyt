@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { recordAuditEvent } from "@mail-orbyt/authentication";
 import type { PrismaClient } from "@mail-orbyt/database";
 
 export interface RegisterClientParams {
@@ -22,7 +23,7 @@ function generateClientId(): string {
  * secured by PKCE instead (see pkce.ts).
  */
 export async function registerClient(
-  prisma: Pick<PrismaClient, "mcpOAuthClient">,
+  prisma: Pick<PrismaClient, "mcpOAuthClient" | "auditEvent">,
   params: RegisterClientParams,
 ): Promise<RegisteredClient> {
   if (params.redirectUris.length === 0) {
@@ -35,6 +36,11 @@ export async function registerClient(
       clientName: params.clientName,
       redirectUris: params.redirectUris,
     },
+  });
+
+  await recordAuditEvent(prisma, {
+    type: "MCP_CLIENT_REGISTERED",
+    metadata: { clientId: client.clientId, clientName: client.clientName },
   });
 
   return {
