@@ -203,6 +203,31 @@ export default function LeadsPage(): React.ReactElement {
     }
   }
 
+  async function handleDeleteList() {
+    const list = leadLists.find((item) => item.id === leadListId);
+    if (!list) return;
+    if (
+      !window.confirm(
+        `Delete the list "${list.name}"? The ${list.leadCount} lead${list.leadCount === 1 ? "" : "s"} in it ` +
+          `are kept — only the list is removed.`,
+      )
+    ) {
+      return;
+    }
+    const response = await fetch(`/api/organisations/${organisationId}/lead-lists/${list.id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      toast.show("Could not delete list", "error");
+      return;
+    }
+    toast.show("List deleted");
+    setLeadLists((current) => current.filter((item) => item.id !== list.id));
+    setPage(1);
+    resetSelection();
+    setLeadListId("");
+  }
+
   const hasFilter = Boolean(search || leadListId || status !== "ACTIVE");
 
   return (
@@ -273,6 +298,11 @@ export default function LeadsPage(): React.ReactElement {
             }))}
           />
         </div>
+        {leadListId ? (
+          <Button variant="outlined" onClick={handleDeleteList}>
+            Delete list
+          </Button>
+        ) : null}
         {selectionCount > 0 ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-on-surface-variant">{selectionCount} selected</span>

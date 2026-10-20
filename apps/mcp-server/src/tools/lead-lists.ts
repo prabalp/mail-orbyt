@@ -60,4 +60,22 @@ export const LEAD_LIST_TOOLS: RouteToolDescriptor[] = [
       added: z.number().optional().describe("How many leads this call newly added to the list"),
     },
   },
+  {
+    name: "delete_lead_list",
+    title: "Delete lead list",
+    description:
+      "Delete a lead list. The leads in it are not deleted — only the list and its membership links.",
+    method: "DELETE",
+    pathTemplate: "/api/organisations/{organisationId}/lead-lists/{leadListId}",
+    requiredScope: "leads:manage",
+    inputShape: {
+      leadListId: z.string().min(1),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ];
