@@ -33,7 +33,7 @@ export function invitationEmail(params: {
   organisationName: string;
   inviterName: string;
 }): TransactionalEmail {
-  const link = `${params.appUrl}/invitations/${params.rawToken}/accept`;
+  const link = `${params.appUrl}/invitations/${params.rawToken}`;
   return {
     to: params.to,
     subject: `${params.inviterName} invited you to ${params.organisationName} on Mail Orbyt`,
