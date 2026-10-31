@@ -431,6 +431,9 @@ model McpAccessToken {
   /// The platform grant this token was issued/exchanged under, if any.
   /// Revoking the grant revokes every token carrying its id.
   platformGrantId String?
+  /// Label for a personal access token (created by hand in Settings → MCP
+  /// connections); null for OAuth-issued tokens.
+  name            String?
 
   client        McpOAuthClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)

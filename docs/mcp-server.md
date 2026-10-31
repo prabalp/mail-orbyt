@@ -59,6 +59,28 @@ apps/mcp-server --Bearer token--> apps/web REST API
 Users can review and revoke active connections at **Settings → MCP
 connections**.
 
+## Personal access tokens (no OAuth)
+
+For clients that can't run the OAuth flow (server-to-server integrations),
+a user can generate a token by hand at **Settings → MCP connections →
+Personal access tokens**, then call the MCP URL (`${MCP_SERVER_URL}/mcp`)
+with `Authorization: Bearer mo_pat_...`.
+
+- A personal token is an ordinary `McpAccessToken` row (hashed at rest,
+  revocable, audience = mail-orbyt's MCP server) owned by a built-in
+  `mail-orbyt-personal-access-token` client, with a user-chosen `name` and
+  no refresh token. `verifyAccessToken` treats it exactly like an OAuth
+  access token, so both `apps/mcp-server` and the `apps/web` REST API
+  accept it with no extra code path.
+- It is bound to one organisation and gets every scope the creator's role
+  held at creation. Membership and permissions are still re-checked on
+  every request, so removing or demoting the user takes effect at once.
+- Expiry is 30 / 90 / 365 days or never (stored as 9999-12-31).
+- Tokens can only be created, listed and revoked with a browser session
+  (`/api/organisations/{id}/settings/mcp-tokens`); any request carrying an
+  `Authorization` header is refused, so a token can never mint more tokens.
+- The raw token is shown once, at creation.
+
 ## Tool surface
 
 `apps/mcp-server/src/tools/*.ts` defines one MCP tool per REST endpoint
