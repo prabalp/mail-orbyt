@@ -42,9 +42,13 @@ export function mcpAuthMiddleware() {
       // route (only `/.well-known/oauth-authorization-server` does); a
       // client following APP_URL here would 404 and never discover how to
       // authenticate.
+      // RFC 6750 §3.1: when a token WAS presented (expired, revoked, wrong
+      // audience), say so — clients use `invalid_token` as the cue to
+      // refresh rather than restart the whole authorization flow.
+      const errorParam = rawToken ? `error="invalid_token", ` : "";
       res.setHeader(
         "WWW-Authenticate",
-        `Bearer resource_metadata="${resourceUrl()}/.well-known/oauth-protected-resource"`,
+        `Bearer ${errorParam}resource_metadata="${resourceUrl()}/.well-known/oauth-protected-resource"`,
       );
       res.status(401).json({ error: "unauthorized" });
       return;

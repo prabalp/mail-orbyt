@@ -105,9 +105,11 @@ export async function resolveAuthorizeResource(
 ): Promise<ResolvedResource | null> {
   const normalise = (u: string): string => u.replace(/\/+$/, "");
   const requested = params.requested;
-  const uri =
-    !requested || normalise(requested) === normalise(params.mcpServerUrl)
-      ? MAIL_ORBYT_MCP_RESOURCE_URI
-      : requested;
+  const serverUrl = normalise(params.mcpServerUrl);
+  // Clients that skip protected-resource metadata send the endpoint URL
+  // they were given (".../mcp") rather than the server's base URL.
+  const isOwnServer =
+    !requested || normalise(requested) === serverUrl || normalise(requested) === `${serverUrl}/mcp`;
+  const uri = isOwnServer ? MAIL_ORBYT_MCP_RESOURCE_URI : requested;
   return findResource(prisma, uri);
 }

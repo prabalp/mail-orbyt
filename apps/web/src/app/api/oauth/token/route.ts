@@ -5,6 +5,7 @@ import {
   exchangeAuthorizationCode,
   exchangeTokenForResource,
   OAuthGrantError,
+  parseBasicAuth,
   refreshAccessToken,
   TOKEN_EXCHANGE_GRANT_TYPE,
 } from "@mail-orbyt/mcp-oauth";
@@ -61,6 +62,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   } else {
     const form = await request.formData().catch(() => null);
     raw = form ? Object.fromEntries(form.entries()) : null;
+  }
+
+  // Some clients put client_id in an HTTP Basic header even for a public
+  // client (RFC 6749 §2.3.1) instead of the body.
+  if (raw && raw.client_id === undefined) {
+    const basic = parseBasicAuth(request.headers.get("authorization"));
+    if (basic) raw.client_id = basic.id;
   }
 
   const parsed = bodySchema.safeParse(raw);

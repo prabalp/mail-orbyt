@@ -17,6 +17,9 @@ const SCOPE_LABELS: Record<string, string> = {
   "organisation:delete": "Delete the organisation",
   "organisation:transfer_ownership": "Transfer organisation ownership",
   "billing:manage": "Manage billing",
+  "social:manage": "Manage social accounts, posts, and agent settings",
+  "social:review": "Review and approve social actions",
+  "social:kill_switch": "Pause or resume all social automation",
 };
 
 export interface AuthorizeClientProps {

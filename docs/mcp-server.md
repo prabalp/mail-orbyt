@@ -39,7 +39,9 @@ apps/mcp-server --Bearer token--> apps/web REST API
    Registration, RFC 7591) — a public client, no client secret, since PKCE
    secures the code exchange instead.
 2. The client sends the user to `/oauth/authorize` with a PKCE
-   `code_challenge` and requested `scope`. If not already signed in, the
+   `code_challenge` and requested `scope`. A request with no `scope` (many
+   clients send none) asks for every scope in `scopes_supported`; step 3
+   then narrows that to the user's role. If not already signed in, the
    user is bounced through `/sign-in?callbackUrl=...` and back.
 3. The consent screen lets the user pick which organisation the connection
    is for, and shows the scopes being requested in plain language.
@@ -293,3 +295,43 @@ To test locally without a tunnel:
 pnpm --filter @mail-orbyt/mcp-server dev
 npx @modelcontextprotocol/inspector http://localhost:3001/mcp
 ```
+
+## Connecting a client
+
+The server speaks **Streamable HTTP** at `${MCP_SERVER_URL}/mcp`, statelessly
+(POST only; `GET`/`DELETE` return `405`). Any client with remote-server
+OAuth support connects with just that URL. It discovers everything else from
+the `401` challenge and `/.well-known/oauth-protected-resource`, and
+registers itself dynamically.
+
+```bash
+# Claude Code
+claude mcp add --transport http mail-orbyt https://mcp.example.com/mcp
+```
+
+```jsonc
+// Cursor (~/.cursor/mcp.json), VS Code (.vscode/mcp.json uses "servers"), Windsurf, etc.
+{ "mcpServers": { "mail-orbyt": { "url": "https://mcp.example.com/mcp" } } }
+```
+
+For claude.ai or Claude Desktop, add a custom connector with the same URL.
+For a client that only speaks stdio, bridge it with
+`npx mcp-remote https://mcp.example.com/mcp`.
+
+Compatibility details the server handles:
+
+- Protected-resource metadata is served at the root and at the
+  path-suffixed `/.well-known/oauth-protected-resource/mcp`, and advertises
+  `scopes_supported`.
+- Older (2025-03-26) clients that look for
+  `/.well-known/oauth-authorization-server`, `/authorize`, `/token`,
+  `/register` or `/revoke` on the MCP origin are proxied to `apps/web`, with
+  the body, `Authorization` and `X-Forwarded-For` preserved.
+- A `resource` of either the server's base URL or its `/mcp` endpoint URL
+  maps to this server.
+- CORS is open (`*`, no cookies) on `/mcp`, the discovery documents, and the
+  public OAuth endpoints, so browser-based clients such as MCP Inspector
+  work. `WWW-Authenticate` and `Mcp-Session-Id` are exposed to browser
+  clients.
+- A 401 for an expired or revoked token carries `error="invalid_token"`,
+  so clients refresh rather than restarting authorization.

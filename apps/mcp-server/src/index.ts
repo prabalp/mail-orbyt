@@ -2,6 +2,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { loadEnv } from "@mail-orbyt/config";
 import { prisma } from "@mail-orbyt/database";
 import { createLogger } from "@mail-orbyt/logging";
+import { ALL_SCOPES } from "@mail-orbyt/mcp-oauth";
 import express from "express";
 import { type AuthenticatedRequest, mcpAuthMiddleware } from "./auth-middleware.js";
 import { createMcpServer } from "./create-server.js";
@@ -13,7 +14,26 @@ const env = loadEnv();
 const logger = createLogger({ service: "mcp-server", level: env.LOG_LEVEL });
 
 const app = express();
-app.use(express.json());
+
+// Browser-based MCP clients (e.g. MCP Inspector) call this server
+// cross-origin. Auth is a bearer token, never a cookie, so a wildcard origin
+// grants nothing a non-browser client couldn't already do. Clients must be
+// able to read WWW-Authenticate (to start OAuth) and Mcp-Session-Id.
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID",
+  );
+  res.setHeader("Access-Control-Expose-Headers", "WWW-Authenticate, Mcp-Session-Id");
+  res.setHeader("Access-Control-Max-Age", "86400");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -32,31 +52,56 @@ app.get("/ready", async (_req, res) => {
 // RFC 9728 OAuth Protected Resource Metadata — tells a connecting MCP
 // client which authorization server (apps/web) it must use to obtain an
 // access token for this resource.
-app.get("/.well-known/oauth-protected-resource", (_req, res) => {
-  res.json({
-    resource: resourceUrl(),
-    authorization_servers: [env.APP_URL.replace(/\/$/, "")],
-  });
-});
+//
+// Served at both the root and the path-suffixed location: since the
+// 2025-06-18 spec, clients try `/.well-known/oauth-protected-resource/mcp`
+// (derived from the endpoint path) before the root.
+const authServerUrl = env.APP_URL.replace(/\/+$/, "");
+const protectedResourceMetadata = {
+  resource: resourceUrl(),
+  authorization_servers: [authServerUrl],
+  scopes_supported: ALL_SCOPES,
+  bearer_methods_supported: ["header"],
+  resource_name: "Mail Orbyt",
+};
+app.get(
+  ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"],
+  (_req, res) => {
+    res.json(protectedResourceMetadata);
+  },
+);
 
 // Some MCP clients' automatic 401-triggered auth flow assumes the OAuth
 // endpoints live at conventional paths on the RESOURCE server's own origin
 // (this process), rather than always resolving them from the discovered
 // authorization-server metadata (apps/web). These proxy straight through to
 // the real authorization server so such clients work anyway.
-const authServerUrl = env.APP_URL.replace(/\/$/, "");
-
+//
+// The body is forwarded byte-for-byte with its original Content-Type (the
+// token endpoint is normally form-encoded), along with Authorization and the
+// caller's IP — apps/web rate-limits these endpoints per client IP, and
+// without X-Forwarded-For every proxied client would share one bucket.
 async function proxyToAuthServer(
   path: string,
   req: express.Request,
   res: express.Response,
 ): Promise<void> {
   try {
+    const headers: Record<string, string> = {};
+    const requestContentType = req.headers["content-type"];
+    if (requestContentType) headers["Content-Type"] = requestContentType;
+    if (req.headers.authorization) headers.Authorization = req.headers.authorization;
+    const clientIp = req.socket.remoteAddress;
+    const forwardedFor = req.headers["x-forwarded-for"];
+    const priorHops = Array.isArray(forwardedFor) ? forwardedFor.join(", ") : forwardedFor;
+    const chain = [priorHops, clientIp].filter(Boolean).join(", ");
+    if (chain) headers["X-Forwarded-For"] = chain;
+
+    const hasBody = req.method !== "GET" && req.method !== "HEAD" && Buffer.isBuffer(req.body);
     const upstream = await fetch(`${authServerUrl}${path}`, {
       method: req.method,
-      headers: { "Content-Type": "application/json" },
-      body:
-        req.method === "GET" || req.method === "HEAD" ? undefined : JSON.stringify(req.body ?? {}),
+      headers,
+      body: hasBody ? new Uint8Array(req.body as Buffer) : undefined,
     });
     const text = await upstream.text();
     res.status(upstream.status);
@@ -69,16 +114,48 @@ async function proxyToAuthServer(
   }
 }
 
-app.post("/register", (req, res) => void proxyToAuthServer("/api/oauth/register", req, res));
-app.post("/token", (req, res) => void proxyToAuthServer("/api/oauth/token", req, res));
-app.post("/revoke", (req, res) => void proxyToAuthServer("/api/oauth/revoke", req, res));
+const rawBody = express.raw({ type: () => true, limit: "64kb" });
+app.post(
+  "/register",
+  rawBody,
+  (req, res) => void proxyToAuthServer("/api/oauth/register", req, res),
+);
+app.post("/token", rawBody, (req, res) => void proxyToAuthServer("/api/oauth/token", req, res));
+app.post("/revoke", rawBody, (req, res) => void proxyToAuthServer("/api/oauth/revoke", req, res));
 app.get("/authorize", (req, res) => {
-  const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-  res.redirect(`${authServerUrl}/oauth/authorize${queryString ? `?${queryString}` : ""}`);
+  // Forward the query string untouched (re-serialising req.query would
+  // mangle repeated or array-valued parameters).
+  const queryIndex = req.originalUrl.indexOf("?");
+  const queryString = queryIndex === -1 ? "" : req.originalUrl.slice(queryIndex);
+  res.redirect(`${authServerUrl}/oauth/authorize${queryString}`);
+});
+// Clients written against the 2025-03-26 spec skip protected-resource
+// metadata and look for authorization-server metadata on the MCP server's
+// own origin. Serving apps/web's document here points them at the real
+// endpoints.
+app.get("/.well-known/oauth-authorization-server", (req, res) => {
+  void proxyToAuthServer("/.well-known/oauth-authorization-server", req, res);
+});
+
+// Stateless server: there is no standalone SSE stream to open (GET) and no
+// session to terminate (DELETE). The spec requires 405 here, which clients
+// treat as "not supported"; a 404 can make some of them give up.
+app.all(["/mcp"], (req, res, next) => {
+  if (req.method === "POST") {
+    next();
+    return;
+  }
+  res.setHeader("Allow", "POST, OPTIONS");
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Method not allowed. This server is stateless; use POST." },
+    id: null,
+  });
 });
 
 app.post(
   "/mcp",
+  express.json({ limit: "4mb" }),
   mcpAuthMiddleware(),
   mcpRateLimitMiddleware(),
   async (req: AuthenticatedRequest, res) => {

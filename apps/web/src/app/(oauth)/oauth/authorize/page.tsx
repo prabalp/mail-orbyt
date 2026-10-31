@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@mail-orbyt/database";
 import {
+  ALL_SCOPES,
   createAuthorizationCode,
   findActivePlatformGrant,
   intersectScopes,
@@ -40,7 +41,11 @@ export default async function AuthorizePage({
   const clientId = stringParam(params, "client_id");
   const redirectUri = stringParam(params, "redirect_uri");
   const responseType = stringParam(params, "response_type");
-  const scope = stringParam(params, "scope") ?? "profile";
+  // Many MCP clients send no `scope` at all. Falling back to just "profile"
+  // made almost every tool fail with a missing-permission error, so request
+  // everything instead: the consent screen lists it, and approval narrows
+  // it to what the user's role actually holds (intersectScopes in actions.ts).
+  const scope = stringParam(params, "scope")?.trim() || ALL_SCOPES.join(" ");
   const state = stringParam(params, "state") ?? "";
   const codeChallenge = stringParam(params, "code_challenge");
   const codeChallengeMethod = stringParam(params, "code_challenge_method");

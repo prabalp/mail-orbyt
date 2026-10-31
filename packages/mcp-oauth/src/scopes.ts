@@ -1,19 +1,28 @@
 import type { OrganisationRole } from "@mail-orbyt/database";
 import { hasPermission, type Permission } from "@mail-orbyt/authentication";
 
-/** Every scope backed by a real permission check, plus the bare "profile" scope for membership-only routes (no specific permission required). */
-const ALL_PERMISSION_SCOPES: Permission[] = [
-  "billing:manage",
-  "organisation:delete",
-  "organisation:transfer_ownership",
-  "members:manage",
-  "campaigns:manage",
-  "inboxes:manage",
-  "leads:manage",
-  "research:review",
-  "conversations:review",
-  "analytics:view",
-];
+/**
+ * Every scope backed by a real permission check. Keyed as a
+ * `Record<Permission, true>` so adding a Permission without listing it here
+ * is a compile error — a permission missing from this list can never be
+ * granted over OAuth, which silently breaks every MCP tool that requires it.
+ */
+const PERMISSION_SCOPES: Record<Permission, true> = {
+  "billing:manage": true,
+  "organisation:delete": true,
+  "organisation:transfer_ownership": true,
+  "members:manage": true,
+  "campaigns:manage": true,
+  "inboxes:manage": true,
+  "leads:manage": true,
+  "research:review": true,
+  "conversations:review": true,
+  "analytics:view": true,
+  "social:manage": true,
+  "social:review": true,
+  "social:kill_switch": true,
+};
+const ALL_PERMISSION_SCOPES = Object.keys(PERMISSION_SCOPES) as Permission[];
 
 export const PROFILE_SCOPE = "profile";
 

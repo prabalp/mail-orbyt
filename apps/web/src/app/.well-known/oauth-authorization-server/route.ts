@@ -9,7 +9,10 @@ import { NextResponse } from "next/server";
  * challenge method.
  */
 export async function GET(): Promise<NextResponse> {
-  const issuer = loadEnv().APP_URL;
+  // No trailing slash: clients build this document's URL from the
+  // protected-resource metadata's `authorization_servers` entry (also
+  // slash-free) and RFC 8414 §3.3 requires `issuer` to match it exactly.
+  const issuer = loadEnv().APP_URL.replace(/\/+$/, "");
 
   return NextResponse.json({
     issuer,
@@ -24,5 +27,6 @@ export async function GET(): Promise<NextResponse> {
     grant_types_supported: ["authorization_code", "refresh_token", TOKEN_EXCHANGE_GRANT_TYPE],
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none"],
+    revocation_endpoint_auth_methods_supported: ["none"],
   });
 }

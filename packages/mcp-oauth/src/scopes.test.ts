@@ -9,6 +9,13 @@ describe("scopesGrantedByRole", () => {
     expect(scopes).toContain("profile");
   });
 
+  it("grants the social scopes to roles that hold them", () => {
+    expect(scopesGrantedByRole("OWNER")).toEqual(
+      expect.arrayContaining(["social:manage", "social:review", "social:kill_switch"]),
+    );
+    expect(scopesGrantedByRole("MEMBER")).toContain("social:review");
+  });
+
   it("grants VIEWER only profile and leads:read", () => {
     expect(scopesGrantedByRole("VIEWER")).toEqual(["profile", "leads:read"]);
   });
