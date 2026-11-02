@@ -4,10 +4,11 @@ import { prisma } from "@mail-orbyt/database";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
+import { publicUrl } from "@/lib/app-url";
 import { GMAIL_OAUTH_ORG_COOKIE, GMAIL_OAUTH_STATE_COOKIE, completeGmailOAuth } from "@/lib/gmail";
 
 function redirectToInboxes(request: Request, status: "connected" | "error", message?: string) {
-  const url = new URL("/inboxes", request.url);
+  const url = publicUrl("/inboxes", request);
   url.searchParams.set("gmailOAuth", status);
   if (message) url.searchParams.set("message", message);
   return NextResponse.redirect(url);

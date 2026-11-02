@@ -3,6 +3,7 @@ import { prisma } from "@mail-orbyt/database";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { publicUrl } from "@/lib/app-url";
 import {
   SOCIAL_OAUTH_ORG_COOKIE,
   SOCIAL_OAUTH_PLATFORM_COOKIE,
@@ -18,8 +19,8 @@ import {
 export async function GET(request: Request): Promise<NextResponse> {
   const session = await auth();
   if (!session?.user?.id) {
-    const signIn = new URL("/sign-in", request.url);
-    signIn.searchParams.set("callbackUrl", request.url);
+    const signIn = publicUrl("/sign-in", request);
+    signIn.searchParams.set("callbackUrl", publicUrl(new URL(request.url).pathname + new URL(request.url).search, request).toString());
     return NextResponse.redirect(signIn);
   }
 
