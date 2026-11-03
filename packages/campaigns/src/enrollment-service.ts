@@ -1,4 +1,5 @@
 import { isSuppressed } from "@mail-orbyt/leads";
+import { isCampaignExcluded } from "@mail-orbyt/scheduling";
 import type { PrismaClient } from "@mail-orbyt/database";
 import { CampaignActivationError } from "./campaign-service";
 import { requiredImportedSequences } from "./journey-service";
@@ -11,6 +12,7 @@ type Prisma = Pick<
   | "campaignStep"
   | "leadImportedEmail"
   | "suppressionEntry"
+  | "campaignExclusion"
   | "leadListMembership"
   | "auditEvent"
 >;
@@ -72,7 +74,10 @@ export async function enrollLeads(
       continue;
     }
 
-    const suppressed = lead.email ? await isSuppressed(prisma, organisationId, lead.email) : false;
+    const suppressed = lead.email
+      ? (await isSuppressed(prisma, organisationId, lead.email)) ||
+        (await isCampaignExcluded(prisma, campaignId, lead.email))
+      : false;
     await prisma.campaignEnrollment.create({
       data: { campaignId, leadId: lead.id, status: suppressed ? "SUPPRESSED" : "PENDING" },
     });

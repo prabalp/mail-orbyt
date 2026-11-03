@@ -16,13 +16,17 @@ vi.mock("./enrollment-progression", () => ({
 }));
 
 const materializeStepContentMock = vi.fn();
-vi.mock("./content", () => ({ materializeStepContent: materializeStepContentMock }));
+vi.mock("./content", () => ({
+  materializeStepContent: materializeStepContentMock,
+  MissingImportedEmailError: class MissingImportedEmailError extends Error {},
+  BookingLinkNotConfiguredError: class BookingLinkNotConfiguredError extends Error {},
+}));
 
 const { processOutboxItem } = await import("./outbox-service");
 
 const NOW = new Date("2026-07-27T12:00:00Z");
 
-function fakePrisma(item: unknown) {
+function fakePrisma(item: unknown, excluded = false) {
   return {
     outboxItem: {
       findUnique: vi.fn().mockResolvedValue(item),
@@ -34,6 +38,7 @@ function fakePrisma(item: unknown) {
       update: vi.fn().mockResolvedValue({}),
     },
     campaignStep: { findUnique: vi.fn().mockResolvedValue(null) },
+    campaignExclusion: { findUnique: vi.fn().mockResolvedValue(excluded ? { id: "x" } : null) },
     signature: { findFirst: vi.fn().mockResolvedValue(null) },
     inbox: { update: vi.fn().mockResolvedValue({}) },
     trackingDomain: { findUnique: vi.fn().mockResolvedValue(null) },
@@ -123,6 +128,22 @@ describe("processOutboxItem", () => {
     expect(prisma.campaignEnrollment.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "SUPPRESSED" }) }),
     );
+  });
+
+  it("marks the item SKIPPED_SUPPRESSED when the lead is on the campaign's no-contact list", async () => {
+    isSuppressedMock.mockResolvedValueOnce(false);
+    const prisma = fakePrisma(BASE_ITEM, true);
+    const result = await processOutboxItem(prisma as never, BASE_DEPS as never, "outbox-1");
+    expect(result?.status).toBe("SKIPPED_SUPPRESSED");
+    expect(prisma.campaignEnrollment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "SUPPRESSED",
+          exitReason: "On campaign no-contact list",
+        }),
+      }),
+    );
+    expect(BASE_DEPS.sendEmail).not.toHaveBeenCalled();
   });
 
   it("defers the item (reschedules, stays SCHEDULED) when no inbox is available", async () => {

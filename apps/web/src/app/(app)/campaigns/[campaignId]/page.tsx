@@ -318,19 +318,30 @@ export default function CampaignDetailPage(): React.ReactElement {
     subject: string;
     body: string;
     results: { email: string; ok: boolean; error?: string }[];
+    previewedLead?: { name: string; company: string | null };
   } | null>(null);
 
+  const [noContact, setNoContact] = useState<{ id: string; email: string; createdAt: string }[]>(
+    [],
+  );
+  const [noContactInput, setNoContactInput] = useState("");
+  const [savingNoContact, setSavingNoContact] = useState(false);
+
   const load = useCallback(async () => {
-    const [campaignRes, enrollmentsRes, inboxesRes, leadListsRes] = await Promise.all([
-      fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`),
-      fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}/enrollments`),
-      fetch(`/api/organisations/${organisationId}/inboxes`),
-      fetch(`/api/organisations/${organisationId}/lead-lists`),
-    ]);
+    const [campaignRes, enrollmentsRes, inboxesRes, leadListsRes, noContactRes] = await Promise.all(
+      [
+        fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}`),
+        fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}/enrollments`),
+        fetch(`/api/organisations/${organisationId}/inboxes`),
+        fetch(`/api/organisations/${organisationId}/lead-lists`),
+        fetch(`/api/organisations/${organisationId}/campaigns/${campaignId}/no-contact`),
+      ],
+    );
     if (campaignRes.ok) setCampaign(await campaignRes.json());
     if (enrollmentsRes.ok) setEnrollments((await enrollmentsRes.json()).enrollments);
     if (inboxesRes.ok) setAllInboxes((await inboxesRes.json()).inboxes);
     if (leadListsRes.ok) setLeadLists((await leadListsRes.json()).leadLists);
+    if (noContactRes.ok) setNoContact((await noContactRes.json()).entries);
     setLoading(false);
   }, [organisationId, campaignId]);
 
@@ -386,6 +397,51 @@ export default function CampaignDetailPage(): React.ReactElement {
     } finally {
       setSavingSchedule(false);
     }
+  }
+
+  async function handleAddNoContact() {
+    const emails = noContactInput
+      .split(/[\s,;]+/)
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (emails.length === 0) return;
+    setSavingNoContact(true);
+    try {
+      const response = await fetch(
+        `/api/organisations/${organisationId}/campaigns/${campaignId}/no-contact`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emails }),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        setNoContactInput("");
+        toast.show(
+          `Added ${data.added}${data.enrollmentsStopped ? `, stopped ${data.enrollmentsStopped} pending enrollment(s)` : ""}`,
+          "success",
+        );
+        await load();
+      } else {
+        toast.show("Could not add — check the email addresses", "error");
+      }
+    } finally {
+      setSavingNoContact(false);
+    }
+  }
+
+  async function handleRemoveNoContact(email: string) {
+    const response = await fetch(
+      `/api/organisations/${organisationId}/campaigns/${campaignId}/no-contact`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      },
+    );
+    if (response.ok) await load();
+    else toast.show("Could not remove that address", "error");
   }
 
   async function handleSendTest() {
@@ -909,16 +965,20 @@ export default function CampaignDetailPage(): React.ReactElement {
         </div>
       </CollapsibleCard>
 
-      {campaign.contentSource !== "IMPORTED" ? (
+      <>
         <CollapsibleCard title="Send test email">
           <p className="mb-4 text-sm text-on-surface-variant">
-            Sends this campaign&apos;s first step to 1-2 addresses you control, exactly what a real
-            prospect would receive, so you can check formatting, signature, and tone before going
-            live. This never enrolls a real lead or affects campaign progress.
+            Sends this campaign&apos;s first email to an address you choose, exactly as a real
+            prospect would receive it.{" "}
+            {campaign.contentSource === "IMPORTED"
+              ? "Each click picks a random lead from this campaign and sends that lead's real email (with the Calendly link filled in) to your address. "
+              : ""}
+            The address must not be one of the campaign&apos;s leads. This never emails a lead or
+            affects campaign progress.
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <TextInput
-              label="Test email 1"
+              label="Send test to"
               type="email"
               value={testEmail1}
               onChange={(event) => setTestEmail1(event.target.value)}
@@ -943,6 +1003,13 @@ export default function CampaignDetailPage(): React.ReactElement {
                   </Badge>
                 ))}
               </div>
+              {testResult.previewedLead ? (
+                <p className="text-sm text-on-surface-variant">
+                  Previewing the email for {testResult.previewedLead.name}
+                  {testResult.previewedLead.company ? ` (${testResult.previewedLead.company})` : ""}
+                  .
+                </p>
+              ) : null}
               <div className="rounded-md-md border border-outline/30 p-3">
                 <p className="text-sm font-medium text-on-surface">Subject: {testResult.subject}</p>
                 <p className="mt-2 whitespace-pre-line text-sm text-on-surface-variant">
@@ -952,7 +1019,45 @@ export default function CampaignDetailPage(): React.ReactElement {
             </div>
           ) : null}
         </CollapsibleCard>
-      ) : null}
+
+        <CollapsibleCard title="No-contact list">
+          <p className="mb-4 text-sm text-on-surface-variant">
+            Addresses here are never emailed by this campaign, including emails already scheduled.
+            Other campaigns are not affected.
+          </p>
+          <div className="flex flex-col gap-3">
+            <TextArea
+              label="Email addresses (separate with spaces, commas or new lines)"
+              value={noContactInput}
+              onChange={(event) => setNoContactInput(event.target.value)}
+              rows={3}
+            />
+            <div>
+              <Button
+                loading={savingNoContact}
+                disabled={!noContactInput.trim()}
+                onClick={handleAddNoContact}
+              >
+                Add to no-contact list
+              </Button>
+            </div>
+            {noContact.length > 0 ? (
+              <ul className="flex flex-col divide-y divide-outline/15 border-t border-outline/15">
+                {noContact.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between gap-3 py-2">
+                    <span className="text-sm text-on-surface">{entry.email}</span>
+                    <Button variant="text" onClick={() => handleRemoveNoContact(entry.email)}>
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-on-surface-variant">No addresses on the list.</p>
+            )}
+          </div>
+        </CollapsibleCard>
+      </>
 
       {campaign.routingMode === "JOURNEY" ? (
         <Card>

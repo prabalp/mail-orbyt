@@ -25,3 +25,9 @@ export {
   type EnrollLeadsResult,
 } from "./enrollment-service";
 export { getJourneyGraph, saveJourneyGraph, InvalidJourneyGraphError } from "./journey-service";
+export {
+  listCampaignExclusions,
+  addCampaignExclusions,
+  removeCampaignExclusion,
+  type CampaignExclusionSummary,
+} from "./exclusion-service";

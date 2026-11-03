@@ -10,8 +10,12 @@ vi.mock("@mail-orbyt/research", () => ({
   getLatestPageText: getLatestPageTextMock,
 }));
 
-const { materializeStepContent, AiNotConfiguredForStepError, MissingImportedEmailError } =
-  await import("./content");
+const {
+  materializeStepContent,
+  AiNotConfiguredForStepError,
+  MissingImportedEmailError,
+  BookingLinkNotConfiguredError,
+} = await import("./content");
 
 const LEAD = { id: "lead-1", firstName: "Jamie", lastName: "Rivera", title: "VP Sales" };
 
@@ -49,6 +53,58 @@ describe("materializeStepContent", () => {
       body: "Hey Jamie,\n\nI noticed the team is expanding.\n\nBest,\nAlex",
     });
     expect(generateEmailMock).not.toHaveBeenCalled();
+  });
+
+  describe("{{CALENDLY_LINK}} in imported emails", () => {
+    const importedParams = (bookingLink?: string) => ({
+      organisationId: "org-1",
+      lead: LEAD,
+      step: {
+        orderIndex: 0,
+        stepType: "INITIAL" as const,
+        useAiGeneration: false,
+        useImportedContent: true,
+        callToActionOverride: null,
+        stepInstructions: null,
+        manualSubject: null,
+        manualBody: null,
+      },
+      senderName: "Alex",
+      senderCompanyName: "Mail Orbyt",
+      aiGenerator: undefined,
+      signatureText: "Best,\n{senderName}",
+      bookingLink,
+    });
+    const prismaWithBody = (body: string) => ({
+      leadImportedEmail: { findUnique: vi.fn().mockResolvedValue({ subject: "Hi", body }) },
+    });
+
+    it("fills the token from the organisation's booking link", async () => {
+      const result = await materializeStepContent(
+        prismaWithBody("Pick a time: {{CALENDLY_LINK}} or {{ calendly_link }}") as never,
+        importedParams("https://calendly.com/acme/intro?x=$&y=1"),
+      );
+      expect(result.body).toBe(
+        "Hey Jamie,\n\nPick a time: https://calendly.com/acme/intro?x=$&y=1 or https://calendly.com/acme/intro?x=$&y=1\n\nBest,\nAlex",
+      );
+    });
+
+    it("throws instead of sending the raw token when no booking link is set", async () => {
+      await expect(
+        materializeStepContent(
+          prismaWithBody("Pick a time: {{CALENDLY_LINK}}") as never,
+          importedParams(undefined),
+        ),
+      ).rejects.toBeInstanceOf(BookingLinkNotConfiguredError);
+    });
+
+    it("does not need a booking link when the body has no token", async () => {
+      const result = await materializeStepContent(
+        prismaWithBody("No link here.") as never,
+        importedParams(undefined),
+      );
+      expect(result.body).toContain("No link here.");
+    });
   });
 
   it("fails when the lead has no imported email for the step", async () => {
@@ -95,6 +151,32 @@ describe("materializeStepContent", () => {
       body: "Hi Jamie Rivera, are you the VP Sales?",
     });
     expect(generateEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("fills {{CALENDLY_LINK}} in a manual step, and refuses to send the raw token without a link", async () => {
+    const params = {
+      organisationId: "org-1",
+      lead: LEAD,
+      step: {
+        stepType: "INITIAL" as const,
+        useAiGeneration: false,
+        callToActionOverride: null,
+        stepInstructions: null,
+        manualSubject: "Hi {{firstName}}",
+        manualBody: "Book here: {{ calendly_link }}",
+      },
+      senderName: "Alex",
+      senderCompanyName: "Mail Orbyt",
+      aiGenerator: undefined,
+    };
+    const result = await materializeStepContent({} as never, {
+      ...params,
+      bookingLink: "https://calendly.com/acme/30min",
+    });
+    expect(result.body).toBe("Book here: https://calendly.com/acme/30min");
+    await expect(materializeStepContent({} as never, params)).rejects.toBeInstanceOf(
+      BookingLinkNotConfiguredError,
+    );
   });
 
   it("falls back to 'there' for a missing firstName merge token", async () => {

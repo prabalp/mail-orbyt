@@ -28,6 +28,24 @@ export class MissingImportedEmailError extends Error {
   }
 }
 
+export class BookingLinkNotConfiguredError extends Error {
+  constructor() {
+    super(
+      "This imported email uses {{CALENDLY_LINK}}, but no Calendly booking link is set. Add one under Settings → Email template.",
+    );
+    this.name = "BookingLinkNotConfiguredError";
+  }
+}
+
+const CALENDLY_TOKEN_SOURCE = String.raw`\{\{\s*CALENDLY_LINK\s*\}\}`;
+
+/** Fills {{CALENDLY_LINK}} with the organisation's booking link; throws rather than let the raw token reach a recipient. */
+export function applyCalendlyLink(text: string, bookingLink: string | undefined): string {
+  if (!new RegExp(CALENDLY_TOKEN_SOURCE, "i").test(text)) return text;
+  if (!bookingLink) throw new BookingLinkNotConfiguredError();
+  return text.replace(new RegExp(CALENDLY_TOKEN_SOURCE, "gi"), () => bookingLink);
+}
+
 /** Exported for reuse by test-send (apps/web/src/lib/campaigns.ts), which materializes a manual step's content for a synthetic sample recipient without a real Lead row to attach a research snapshot to. */
 export function applyMergeTokens(
   template: string,
@@ -78,12 +96,13 @@ function renderImportedEmail(
   email: { subject: string; body: string },
   senderName: string,
   signatureText: string | undefined,
+  bookingLink: string | undefined,
 ): { subject: string; body: string } {
   const name = lead.firstName?.trim() || "there";
   const signature = (signatureText ?? "Best,\n{senderName}").replace(/\{senderName\}/g, senderName);
   return {
-    subject: applyMergeTokens(email.subject, lead),
-    body: `Hey ${name},\n\n${applyMergeTokens(email.body, lead)}\n\n${signature}`,
+    subject: applyCalendlyLink(applyMergeTokens(email.subject, lead), bookingLink),
+    body: `Hey ${name},\n\n${applyCalendlyLink(applyMergeTokens(email.body, lead), bookingLink)}\n\n${signature}`,
   };
 }
 
@@ -133,7 +152,13 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
   const graphNode =
     params.nodeKey && params.journeyGraph ? await journeyGraphNode(prisma, params) : null;
   if (graphNode) {
-    return renderImportedEmail(params.lead, graphNode, params.senderName, params.signatureText);
+    return renderImportedEmail(
+      params.lead,
+      graphNode,
+      params.senderName,
+      params.signatureText,
+      params.bookingLink,
+    );
   }
 
   if (params.step.useImportedContent) {
@@ -146,7 +171,13 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
           where: { leadId_sequence: { leadId: params.lead.id, sequence } },
         });
     if (!imported) throw new MissingImportedEmailError(sequence);
-    return renderImportedEmail(params.lead, imported, params.senderName, params.signatureText);
+    return renderImportedEmail(
+      params.lead,
+      imported,
+      params.senderName,
+      params.signatureText,
+      params.bookingLink,
+    );
   }
 
   if (!params.step.useAiGeneration) {
@@ -156,8 +187,14 @@ export async function materializeStepContent(prisma: Prisma, params: Materialize
       );
     }
     return {
-      subject: applyMergeTokens(params.step.manualSubject, params.lead),
-      body: applyMergeTokens(params.step.manualBody, params.lead),
+      subject: applyCalendlyLink(
+        applyMergeTokens(params.step.manualSubject, params.lead),
+        params.bookingLink,
+      ),
+      body: applyCalendlyLink(
+        applyMergeTokens(params.step.manualBody, params.lead),
+        params.bookingLink,
+      ),
     };
   }
 

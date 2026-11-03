@@ -6,8 +6,13 @@ import { buildPixelImgTag, getVerifiedTrackingDomain } from "@mail-orbyt/trackin
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
 import { journeyStateAfterSend } from "./journey";
 import { markInboxSent, pickNextInbox } from "./inbox-rotation";
-import { materializeStepContent, MissingImportedEmailError } from "./content";
+import {
+  BookingLinkNotConfiguredError,
+  materializeStepContent,
+  MissingImportedEmailError,
+} from "./content";
 import { nextSendableTime } from "./sending-window";
+import { isCampaignExcluded } from "./campaign-exclusion";
 
 type Prisma = Pick<
   PrismaClient,
@@ -16,6 +21,7 @@ type Prisma = Pick<
   | "outboxItem"
   | "campaignInbox"
   | "suppressionEntry"
+  | "campaignExclusion"
   | "auditEvent"
   | "researchFact"
   | "researchSnapshot"
@@ -129,7 +135,14 @@ export async function processOutboxItem(
     return item;
   }
 
-  if (item.lead.email && (await isSuppressed(prisma, item.organisationId, item.lead.email))) {
+  const suppressionReason = item.lead.email
+    ? (await isSuppressed(prisma, item.organisationId, item.lead.email))
+      ? "Suppressed at send time"
+      : (await isCampaignExcluded(prisma, item.campaignId, item.lead.email))
+        ? "On campaign no-contact list"
+        : null
+    : null;
+  if (suppressionReason) {
     const [updatedItem] = await Promise.all([
       prisma.outboxItem.update({ where: { id: item.id }, data: { status: "SKIPPED_SUPPRESSED" } }),
       prisma.campaignEnrollment.update({
@@ -137,7 +150,7 @@ export async function processOutboxItem(
         data: {
           status: "SUPPRESSED",
           exitedAt: deps.now ?? new Date(),
-          exitReason: "Suppressed at send time",
+          exitReason: suppressionReason,
         },
       }),
     ]);
@@ -238,7 +251,10 @@ export async function processOutboxItem(
         reviewSystemPromptOverride,
       });
     } catch (error) {
-      if (error instanceof MissingImportedEmailError) {
+      if (
+        error instanceof MissingImportedEmailError ||
+        error instanceof BookingLinkNotConfiguredError
+      ) {
         return prisma.outboxItem.update({
           where: { id: item.id },
           data: { status: "FAILED", lastError: error.message },

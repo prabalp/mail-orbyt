@@ -11,10 +11,22 @@ function fakePrisma(options: {
   leads?: { id: string; email: string | null }[];
   existingEnrollments?: { leadId: string }[];
   enrollment?: unknown;
+  excludedEmails?: string[];
 }) {
   return {
     campaign: { findUnique: vi.fn().mockResolvedValue(OWNED_CAMPAIGN) },
     campaignStep: { findMany: vi.fn().mockResolvedValue([]) },
+    campaignExclusion: {
+      findUnique: vi
+        .fn()
+        .mockImplementation(({ where }) =>
+          Promise.resolve(
+            (options.excludedEmails ?? []).includes(where.campaignId_email.email)
+              ? { id: "x" }
+              : null,
+          ),
+        ),
+    },
     lead: { findMany: vi.fn().mockResolvedValue(options.leads ?? []) },
     campaignEnrollment: {
       findMany: vi.fn().mockResolvedValue(options.existingEnrollments ?? []),
@@ -28,6 +40,19 @@ function fakePrisma(options: {
 }
 
 describe("enrollLeads", () => {
+  it("enrolls a lead on the campaign's no-contact list as SUPPRESSED", async () => {
+    isSuppressedMock.mockResolvedValue(false);
+    const prisma = fakePrisma({
+      leads: [{ id: "lead-1", email: "Blocked@Acme.example" }],
+      excludedEmails: ["blocked@acme.example"],
+    });
+    const result = await enrollLeads(prisma, "org-1", "campaign-1", ["lead-1"]);
+    expect(result).toEqual({ enrolled: 0, alreadyEnrolled: 0, suppressed: 1 });
+    expect(prisma.campaignEnrollment.create).toHaveBeenCalledWith({
+      data: { campaignId: "campaign-1", leadId: "lead-1", status: "SUPPRESSED" },
+    });
+  });
+
   it("enrolls a non-suppressed lead as PENDING", async () => {
     isSuppressedMock.mockResolvedValue(false);
     const prisma = fakePrisma({ leads: [{ id: "lead-1", email: "a@acme.example" }] });

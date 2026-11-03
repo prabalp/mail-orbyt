@@ -9,6 +9,9 @@ import {
   getCampaign,
   listCampaigns,
   listEnrollments,
+  listCampaignExclusions,
+  addCampaignExclusions,
+  removeCampaignExclusion,
   removeStep,
   reorderSteps,
   setCampaignInboxes,
@@ -28,9 +31,13 @@ import {
   sendFromInbox,
 } from "@mail-orbyt/gmail";
 import {
+  applyCalendlyLink,
   applyMergeTokens,
+  BookingLinkNotConfiguredError,
   dispatchDueOutboxItems,
   enqueueDueOutboxItems,
+  materializeStepContent,
+  MissingImportedEmailError,
   processOutboxItem,
 } from "@mail-orbyt/scheduling";
 import { parseJourneyGraph, renderJourneyTemplate } from "@mail-orbyt/leads";
@@ -224,6 +231,87 @@ const SAMPLE_LEAD_VALUES = {
   email: "jamie@example.com",
 };
 
+/** Fisher-Yates shuffle (copy) so each test send previews a different lead. */
+function shuffled<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j] as T, copy[i] as T];
+  }
+  return copy;
+}
+
+/**
+ * Renders the real email one randomly chosen, still-contactable enrolled lead
+ * would receive for this step, going through the exact production rendering
+ * path (greeting, merge tokens, Calendly link, signature). Used by test sends
+ * for campaigns whose content is imported per lead.
+ */
+async function renderRandomLeadEmail(params: {
+  organisationId: string;
+  campaign: { id: string; journeyGraph: unknown };
+  step: Parameters<typeof materializeStepContent>[1]["step"];
+  inbox: Parameters<typeof resolveInboxSenderName>[0];
+  nodeKey?: string;
+}) {
+  const [{ senderCompanyName, bookingLink }, signatureText, enrollments, excluded] =
+    await Promise.all([
+      getSenderContext(params.organisationId),
+      resolveDefaultSignatureText(prisma, params.organisationId),
+      prisma.campaignEnrollment.findMany({
+        where: {
+          campaignId: params.campaign.id,
+          status: { in: ["PENDING", "ACTIVE", "PAUSED"] },
+          lead: { email: { not: null } },
+        },
+        select: { leadId: true },
+      }),
+      prisma.campaignExclusion.findMany({
+        where: { campaignId: params.campaign.id },
+        select: { email: true },
+      }),
+    ]);
+  const excludedEmails = new Set(excluded.map((entry) => entry.email));
+
+  for (const { leadId } of shuffled(enrollments).slice(0, 25)) {
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      include: { company: true },
+    });
+    if (!lead?.email || excludedEmails.has(lead.email.trim().toLowerCase())) continue;
+    try {
+      const rendered = await materializeStepContent(prisma, {
+        organisationId: params.organisationId,
+        lead,
+        step: params.step,
+        nodeKey: params.nodeKey,
+        journeyGraph: params.campaign.journeyGraph,
+        senderName: resolveInboxSenderName(params.inbox),
+        senderCompanyName,
+        aiGenerator: undefined,
+        bookingLink,
+        signatureText,
+      });
+      return {
+        ...rendered,
+        previewedLead: {
+          name: [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "(no name)",
+          company: lead.company?.name ?? null,
+        },
+      };
+    } catch (error) {
+      if (error instanceof MissingImportedEmailError) continue;
+      if (error instanceof BookingLinkNotConfiguredError) {
+        throw new CampaignActivationError(error.message);
+      }
+      throw error;
+    }
+  }
+  throw new CampaignActivationError(
+    "No enrolled lead has an imported email for this step yet, so there is nothing to test with.",
+  );
+}
+
 /**
  * Sends the campaign's first step to 1-2 user-supplied addresses, exactly as
  * it would go out to a real prospect, so the sender can visually confirm
@@ -253,10 +341,53 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     );
   }
 
+  // A test must never reach a real prospect: refuse any address that belongs
+  // to a lead enrolled in this campaign (the "list" being tested against).
+  const enrolledMatch = await prisma.lead.findFirst({
+    where: {
+      organisationId,
+      email: { in: emails, mode: "insensitive" },
+      campaignEnrollments: { some: { campaignId } },
+    },
+    select: { email: true },
+  });
+  if (enrolledMatch) {
+    throw new CampaignActivationError(
+      `${enrolledMatch.email} is a lead in this campaign. Use an address that is not on the campaign's list for test sends.`,
+    );
+  }
+
   let subject: string;
   let body: string;
+  let previewedLead: { name: string; company: string | null } | undefined;
 
-  if (campaign.routingMode === "JOURNEY") {
+  const journeyStart =
+    campaign.routingMode === "JOURNEY" && campaign.journeyGraph
+      ? parseJourneyGraph(campaign.journeyGraph)
+      : null;
+  const journeyStartNode =
+    journeyStart?.ok === true
+      ? journeyStart.graph.nodes.find((node) => node.key === journeyStart.graph.start)
+      : undefined;
+  const usesImportedContent =
+    campaign.routingMode === "JOURNEY"
+      ? Boolean(journeyStartNode?.importedSequence)
+      : step.useImportedContent;
+
+  if (usesImportedContent) {
+    // Imported emails differ per lead, so a test send picks one random enrolled
+    // lead and sends that lead's real email (fully rendered) to the test address.
+    const rendered = await renderRandomLeadEmail({
+      organisationId,
+      campaign,
+      step,
+      inbox,
+      nodeKey: journeyStartNode?.key,
+    });
+    subject = rendered.subject;
+    body = rendered.body;
+    previewedLead = rendered.previewedLead;
+  } else if (campaign.routingMode === "JOURNEY") {
     // Preview the journey's starting email with a sample lead; the greeting is
     // not added here, matching how manual steps are test-sent.
     const parsed = campaign.journeyGraph ? parseJourneyGraph(campaign.journeyGraph) : null;
@@ -264,23 +395,28 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
       throw new CampaignActivationError("Build and save the journey before sending a test email.");
     }
     const startNode = parsed.graph.nodes.find((node) => node.key === parsed.graph.start);
-    if (!startNode || startNode.importedSequence) {
-      throw new CampaignActivationError(
-        "The starting email uses each lead's uploaded email, so a test send has no single body to preview.",
-      );
+    if (!startNode) {
+      throw new CampaignActivationError("Build and save the journey before sending a test email.");
     }
     subject = renderJourneyTemplate(startNode.subject, parsed.graph.variables, SAMPLE_LEAD_VALUES);
     body = renderJourneyTemplate(startNode.body, parsed.graph.variables, SAMPLE_LEAD_VALUES);
-  } else if (step.useImportedContent) {
-    throw new CampaignActivationError(
-      "This step sends each lead's imported email, so a test send has no single body to preview.",
-    );
   } else if (!step.useAiGeneration) {
     if (!step.manualSubject || !step.manualBody) {
       throw new Error("Manual step is missing subject/body.");
     }
-    subject = applyMergeTokens(step.manualSubject, SAMPLE_RECIPIENT);
-    body = applyMergeTokens(step.manualBody, SAMPLE_RECIPIENT);
+    const { bookingLink } = await getSenderContext(organisationId);
+    try {
+      subject = applyCalendlyLink(
+        applyMergeTokens(step.manualSubject, SAMPLE_RECIPIENT),
+        bookingLink,
+      );
+      body = applyCalendlyLink(applyMergeTokens(step.manualBody, SAMPLE_RECIPIENT), bookingLink);
+    } catch (error) {
+      if (error instanceof BookingLinkNotConfiguredError) {
+        throw new CampaignActivationError(error.message);
+      }
+      throw error;
+    }
   } else {
     const [
       {
@@ -333,5 +469,26 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     }),
   );
 
-  return { subject, body, results };
+  return { subject, body, results, previewedLead };
+}
+
+export async function getCampaignNoContactList(organisationId: string, campaignId: string) {
+  return listCampaignExclusions(prisma, organisationId, campaignId);
+}
+
+export async function addToCampaignNoContactList(
+  organisationId: string,
+  campaignId: string,
+  emails: string[],
+  note?: string,
+) {
+  return addCampaignExclusions(prisma, { organisationId, campaignId, emails, note });
+}
+
+export async function removeFromCampaignNoContactList(
+  organisationId: string,
+  campaignId: string,
+  email: string,
+) {
+  return removeCampaignExclusion(prisma, { organisationId, campaignId, email });
 }

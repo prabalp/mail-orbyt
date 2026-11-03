@@ -1326,6 +1326,7 @@ model Campaign {
   steps        CampaignStep[]
   inboxes      CampaignInbox[]
   enrollments  CampaignEnrollment[]
+  exclusions   CampaignExclusion[]
   outboxItems  OutboxItem[]
 
   createdAt DateTime @default(now())
@@ -1456,6 +1457,24 @@ enum CampaignEnrollmentStatus {
 /// suppressed at enrollment time is enrolled with status SUPPRESSED rather
 /// than silently skipped, so it's visible in the UI why they're not being
 /// contacted.
+/// A campaign's own "do not contact" list: an address here is never emailed by
+/// THIS campaign (checked at enrollment and again at send time), without
+/// blocking the address in other campaigns the way SuppressionEntry does.
+model CampaignExclusion {
+  id             String   @id @default(cuid())
+  campaignId     String
+  organisationId String
+  /// Normalized (trimmed, lower-cased) address.
+  email          String
+  note           String?
+  createdAt      DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, email])
+  @@index([organisationId])
+}
+
 model CampaignEnrollment {
   id               String                   @id @default(cuid())
   campaignId       String
