@@ -59,7 +59,7 @@ describe("sendFromInbox", () => {
     const call = fetchImpl.mock.calls[0]!;
     const body = JSON.parse((call[1] as RequestInit).body as string) as { raw: string };
     const decoded = Buffer.from(body.raw, "base64").toString("utf8");
-    expect(decoded).toContain("From: alex@acme.example");
+    expect(decoded).toContain('From: "Alex" <alex@acme.example>');
     expect(decoded).toContain("To: prospect@example.com");
     expect(decoded).toContain("Subject: Hi");
     expect(decoded).toContain("multipart/alternative");
@@ -214,6 +214,24 @@ describe("textToPlain", () => {
     ).toBe("Hi.\n\nOr book a 30-minute slot (https://calendly.com/acme/30min) today.");
     expect(textToPlain("No links, just [brackets] and (parens).")).toBe(
       "No links, just [brackets] and (parens).",
+    );
+  });
+});
+
+describe("formatFromHeader / subject encoding", () => {
+  it("adds the display name, quoting and escaping it", async () => {
+    const { formatFromHeader } = await import("./send-email");
+    expect(formatFromHeader("Tripty Wig", "t@x.com")).toBe('"Tripty Wig" <t@x.com>');
+    expect(formatFromHeader('A "B" C', "t@x.com")).toBe('"A \\"B\\" C" <t@x.com>');
+    expect(formatFromHeader(undefined, "t@x.com")).toBe("t@x.com");
+  });
+
+  it("RFC 2047-encodes a non-ASCII name and never lets a newline into a header", async () => {
+    const { formatFromHeader } = await import("./send-email");
+    const from = formatFromHeader("José\r\nBcc: evil@x.com", "t@x.com");
+    expect(from).toMatch(/^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?= <t@x\.com>$/);
+    expect(Buffer.from(from.split("?")[3]!, "base64").toString("utf8")).toBe(
+      "José Bcc: evil@x.com",
     );
   });
 });

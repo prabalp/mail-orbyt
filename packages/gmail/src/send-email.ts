@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@mail-orbyt/database";
 import { loadEnv } from "@mail-orbyt/config";
 import { getValidAccessToken } from "./inbox-service";
+import { resolveInboxSenderName } from "./inbox-identity";
 
 const GMAIL_SEND_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
@@ -107,6 +108,32 @@ export function textToHtml(text: string, pixelImgTag?: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a;">\n${paragraphs}${trailer}\n</div>`;
 }
 
+/** Header values must be single-line; CR/LF would otherwise let text inject extra headers. */
+function singleLine(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+/** RFC 2047 encoded-word for header text containing non-ASCII characters; plain ASCII passes through. */
+function encodeHeaderText(value: string): string {
+  const clean = singleLine(value);
+  return /^[\x20-\x7e]*$/.test(clean)
+    ? clean
+    : `=?UTF-8?B?${Buffer.from(clean, "utf8").toString("base64")}?=`;
+}
+
+/**
+ * `Name <address>` so recipients see the sender's name (matching the
+ * signature) instead of a bare address.
+ */
+export function formatFromHeader(displayName: string | undefined, address: string): string {
+  const name = displayName ? singleLine(displayName) : "";
+  if (!name) return address;
+  const quoted = /^[\x20-\x7e]*$/.test(name)
+    ? `"${name.replace(/(["\\])/g, "\\$1")}"`
+    : encodeHeaderText(name);
+  return `${quoted} <${address}>`;
+}
+
 /**
  * Builds a multipart/alternative RFC 2822 message: a plain-text part (the
  * body with markdown links flattened, for clients/filters that prefer it) plus an HTML part
@@ -119,7 +146,7 @@ function buildRfc2822Message(from: string, message: OutboundMessage): string {
   const headers = [
     `From: ${from}`,
     `To: ${message.to}`,
-    `Subject: ${message.subject}`,
+    `Subject: ${encodeHeaderText(message.subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
@@ -183,6 +210,11 @@ export async function sendFromInbox(
     inboxId,
   );
 
-  const raw = encodeBase64Url(buildRfc2822Message(inbox.emailAddress, message));
+  const raw = encodeBase64Url(
+    buildRfc2822Message(
+      formatFromHeader(resolveInboxSenderName(inbox), inbox.emailAddress),
+      message,
+    ),
+  );
   return callGmailSend(accessToken, raw, fetchImpl);
 }
