@@ -205,3 +205,15 @@ describe("textToHtml", () => {
     expect(html).not.toContain("<img");
   });
 });
+
+describe("textToPlain", () => {
+  it("flattens markdown links to 'label (url)' and leaves other text alone", async () => {
+    const { textToPlain } = await import("./send-email");
+    expect(
+      textToPlain("Hi.\n\nOr [book a 30-minute slot](https://calendly.com/acme/30min) today."),
+    ).toBe("Hi.\n\nOr book a 30-minute slot (https://calendly.com/acme/30min) today.");
+    expect(textToPlain("No links, just [brackets] and (parens).")).toBe(
+      "No links, just [brackets] and (parens).",
+    );
+  });
+});

@@ -79,6 +79,15 @@ function linkifyToHtml(text: string): string {
 }
 
 /**
+ * The plain-text alternative part: markdown `[label](url)` links can't be
+ * embedded in plain text, so they become "label (url)" rather than leaking
+ * markdown syntax to clients/filters that read the text part.
+ */
+export function textToPlain(text: string): string {
+  return text.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)");
+}
+
+/**
  * Converts the plain-text body (the single source of truth generated/edited
  * upstream) into an HTML view for the multipart HTML part below. Paragraphs
  * (separated by a blank line) become `<p>` blocks and single line breaks
@@ -100,7 +109,7 @@ export function textToHtml(text: string, pixelImgTag?: string): string {
 
 /**
  * Builds a multipart/alternative RFC 2822 message: a plain-text part (the
- * raw body, unchanged, for clients/filters that prefer it) plus an HTML part
+ * body with markdown links flattened, for clients/filters that prefer it) plus an HTML part
  * whose paragraph/line breaks are explicitly encoded — see textToHtml. This
  * guarantees consistent paragraph rendering regardless of how any given
  * client would otherwise reflow bare plain text.
@@ -120,7 +129,7 @@ function buildRfc2822Message(from: string, message: OutboundMessage): string {
       'Content-Type: text/plain; charset="UTF-8"',
       "Content-Transfer-Encoding: 8bit",
       "",
-      message.body,
+      textToPlain(message.body),
     ].join("\r\n"),
     [
       'Content-Type: text/html; charset="UTF-8"',
