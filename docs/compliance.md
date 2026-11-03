@@ -6,6 +6,22 @@ pause one campaign), a data subject can get everything the product holds
 about them, erasure must be complete, and stale data doesn't accumulate
 forever.
 
+## Unsubscribe link in every email
+
+Every campaign email ends with "No longer interested in these messages?
+[Unsubscribe](link)" and carries `List-Unsubscribe` / `List-Unsubscribe-Post`
+headers (RFC 8058), so Gmail also shows its own Unsubscribe control.
+
+- The link is a stateless, HMAC-signed token (`packages/scheduling/src/unsubscribe.ts`)
+  built from `APP_URL` and `AUTH_SECRET`. It can only unsubscribe the address it
+  was issued for. Rotating `AUTH_SECRET` invalidates links in already-sent emails.
+- `/unsubscribe/[token]` is a public confirmation page (opening it changes
+  nothing, so link scanners can't unsubscribe anyone); its button POSTs to
+  `/api/unsubscribe/[token]`, which adds an organisation-wide `UNSUBSCRIBE`
+  suppression entry. The one-click header POSTs to the same route.
+- Already-scheduled emails to that address are skipped at send time by the
+  existing suppression check. Test sends include the footer too.
+
 ## Unsubscribe requests now auto-suppress
 
 This is the most important fix in this phase. Phase 9 built reply

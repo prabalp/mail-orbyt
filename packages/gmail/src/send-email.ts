@@ -24,6 +24,12 @@ export interface OutboundMessage {
    * verified tracking domain, in which case the email is unchanged.
    */
   pixelImgTag?: string;
+  /**
+   * One-click unsubscribe endpoint (RFC 8058). Sent as List-Unsubscribe /
+   * List-Unsubscribe-Post headers so Gmail shows its own "Unsubscribe"
+   * control; the body carries the visible, embedded link separately.
+   */
+  unsubscribeUrl?: string;
 }
 
 export interface SendResult {
@@ -149,6 +155,12 @@ function buildRfc2822Message(from: string, message: OutboundMessage): string {
     `Subject: ${encodeHeaderText(message.subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ...(message.unsubscribeUrl
+      ? [
+          `List-Unsubscribe: <${singleLine(message.unsubscribeUrl)}>`,
+          "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
+        ]
+      : []),
   ];
 
   const parts = [

@@ -215,6 +215,43 @@ describe("processOutboxItem", () => {
     expect(scheduleNextStepMock).toHaveBeenCalledWith(prisma, "enrollment-1");
   });
 
+  it("appends the embedded unsubscribe line to the stored body and sends the one-click URL", async () => {
+    isSuppressedMock.mockResolvedValueOnce(false);
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
+    materializeStepContentMock.mockResolvedValueOnce({
+      subject: "Hi",
+      body: "Body\n\nBest,\nAlex",
+    });
+    const sendEmail = vi.fn().mockResolvedValueOnce({ messageId: "m", threadId: "t" });
+    const unsubscribeLinks = vi.fn().mockReturnValue({
+      pageUrl: "https://app.test/unsubscribe/tok",
+      oneClickUrl: "https://app.test/api/unsubscribe/tok",
+    });
+
+    const prisma = fakePrisma({ ...BASE_ITEM });
+    await processOutboxItem(prisma, { ...BASE_DEPS, sendEmail, unsubscribeLinks }, "outbox-1");
+
+    expect(unsubscribeLinks).toHaveBeenCalledWith({
+      organisationId: "org-1",
+      campaignId: "campaign-1",
+      email: "prospect@example.com",
+    });
+    expect(sendEmail).toHaveBeenCalledWith(
+      "inbox-1",
+      expect.objectContaining({
+        body: "Body\n\nBest,\nAlex\n\nNo longer interested in these messages? [Unsubscribe](https://app.test/unsubscribe/tok)",
+        unsubscribeUrl: "https://app.test/api/unsubscribe/tok",
+      }),
+    );
+    expect(prisma.outboxItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ body: expect.stringContaining("[Unsubscribe](") }),
+      }),
+    );
+  });
+
   it("uses the campaign's own prompt in place of the organisation's", async () => {
     isSuppressedMock.mockResolvedValueOnce(false);
     pickNextInboxMock.mockResolvedValueOnce({

@@ -13,6 +13,7 @@ import {
 } from "./content";
 import { nextSendableTime } from "./sending-window";
 import { isCampaignExcluded } from "./campaign-exclusion";
+import { appendUnsubscribeFooter, type UnsubscribeLinks } from "./unsubscribe";
 
 type Prisma = Pick<
   PrismaClient,
@@ -77,9 +78,25 @@ export interface ProcessOutboxItemDeps {
    * has a key configured, which callers treat as "AI steps can't run".
    */
   resolveAiGenerator: (organisationId: string) => Promise<AiEmailGenerator | undefined>;
+  /**
+   * Builds this recipient's unsubscribe links. When provided, every email gets
+   * an embedded "Unsubscribe" line and a List-Unsubscribe header; omit it
+   * (tests) to send without.
+   */
+  unsubscribeLinks?: (params: {
+    organisationId: string;
+    campaignId: string;
+    email: string;
+  }) => UnsubscribeLinks;
   sendEmail: (
     inboxId: string,
-    message: { to: string; subject: string; body: string; pixelImgTag?: string },
+    message: {
+      to: string;
+      subject: string;
+      body: string;
+      pixelImgTag?: string;
+      unsubscribeUrl?: string;
+    },
   ) => Promise<{ messageId: string; threadId: string }>;
   /**
    * Resolves organisation-level context for AI-generated copy — deferred to
@@ -182,6 +199,12 @@ export async function processOutboxItem(
     });
   }
 
+  const unsubscribe = deps.unsubscribeLinks?.({
+    organisationId: item.organisationId,
+    campaignId: item.campaignId,
+    email: item.lead.email,
+  });
+
   let subject = item.subject;
   let body = item.body;
   if (!subject || !body) {
@@ -263,7 +286,10 @@ export async function processOutboxItem(
       throw error;
     }
     subject = generated.subject;
-    body = generated.body;
+    // Stored with the footer so a retry sends exactly what was first built.
+    body = unsubscribe
+      ? appendUnsubscribeFooter(generated.body, unsubscribe.pageUrl)
+      : generated.body;
     await prisma.outboxItem.update({ where: { id: item.id }, data: { subject, body } });
   }
 
@@ -280,6 +306,7 @@ export async function processOutboxItem(
       subject,
       body,
       pixelImgTag,
+      unsubscribeUrl: unsubscribe?.oneClickUrl,
     });
     const sentAt = deps.now ?? new Date();
     // Deliberately swallowed: the email is already gone, so letting this

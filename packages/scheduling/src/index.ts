@@ -24,6 +24,15 @@ export {
   type DeciderInput,
   type DeciderResult,
 } from "./journey-decider";
+export {
+  appendUnsubscribeFooter,
+  createUnsubscribeLinker,
+  signUnsubscribeToken,
+  verifyUnsubscribeToken,
+  UNSUBSCRIBE_FOOTER_TEXT,
+  type UnsubscribeLinks,
+  type UnsubscribePayload,
+} from "./unsubscribe";
 export { isCampaignExcluded, normalizeExclusionEmail } from "./campaign-exclusion";
 export {
   materializeStepContent,

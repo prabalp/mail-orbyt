@@ -31,7 +31,9 @@ import {
   sendFromInbox,
 } from "@mail-orbyt/gmail";
 import {
+  appendUnsubscribeFooter,
   applyCalendlyLink,
+  createUnsubscribeLinker,
   applyMergeTokens,
   BookingLinkNotConfiguredError,
   dispatchDueOutboxItems,
@@ -198,6 +200,7 @@ export async function sendCampaignNow(organisationId: string, campaignId: string
         },
         sendEmail: (inboxId, message) => sendFromInbox(prisma, inboxId, message),
         getSenderContext,
+        unsubscribeLinks: createUnsubscribeLinker({ appUrl: env.APP_URL, secret: env.AUTH_SECRET }),
         emergencyStop: env.EMERGENCY_STOP,
       },
       item.id,
@@ -454,10 +457,23 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     body = generated.body;
   }
 
+  // Each test recipient gets the same unsubscribe footer and header a real
+  // prospect would, so the test shows exactly what goes out.
+  const env = loadEnv();
+  const linkFor = createUnsubscribeLinker({ appUrl: env.APP_URL, secret: env.AUTH_SECRET });
+  const unsubscribeFor = (to: string) => linkFor({ organisationId, campaignId, email: to });
+  const shownBody = appendUnsubscribeFooter(body, unsubscribeFor(emails[0] ?? "").pageUrl);
+
   const results = await Promise.all(
     emails.map(async (to) => {
       try {
-        await sendFromInbox(prisma, inbox.id, { to, subject, body });
+        const links = unsubscribeFor(to);
+        await sendFromInbox(prisma, inbox.id, {
+          to,
+          subject,
+          body: appendUnsubscribeFooter(body, links.pageUrl),
+          unsubscribeUrl: links.oneClickUrl,
+        });
         return { email: to, ok: true };
       } catch (error) {
         return {
@@ -469,7 +485,7 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     }),
   );
 
-  return { subject, body, results, previewedLead };
+  return { subject, body: shownBody, results, previewedLead };
 }
 
 export async function getCampaignNoContactList(organisationId: string, campaignId: string) {

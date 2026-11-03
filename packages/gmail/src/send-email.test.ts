@@ -235,3 +235,41 @@ describe("formatFromHeader / subject encoding", () => {
     );
   });
 });
+
+describe("List-Unsubscribe headers", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("adds one-click headers only when an unsubscribe URL is given", async () => {
+    const { encryptToken } = await import("./token-crypto");
+    const { sendFromInbox } = await import("./send-email");
+    const inbox = {
+      id: "inbox-1",
+      emailAddress: "alex@acme.example",
+      displayName: null,
+      status: "CONNECTED",
+      encryptedAccessToken: encryptToken("valid-access-token"),
+      encryptedRefreshToken: encryptToken("refresh-token"),
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    };
+    const prisma = { inbox: { findUniqueOrThrow: vi.fn().mockResolvedValue(inbox) } } as never;
+    const sent = async (extra: object) => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ id: "m", threadId: "t" }));
+      await sendFromInbox(
+        prisma,
+        "inbox-1",
+        { to: "p@example.com", subject: "Hi", body: "Body", ...extra },
+        fetchImpl,
+      );
+      const init = fetchImpl.mock.calls[0]![1] as RequestInit;
+      const raw = (JSON.parse(init.body as string) as { raw: string }).raw;
+      return Buffer.from(raw, "base64").toString("utf8");
+    };
+
+    const withLink = await sent({ unsubscribeUrl: "https://app.test/api/unsubscribe/tok" });
+    expect(withLink).toContain("List-Unsubscribe: <https://app.test/api/unsubscribe/tok>");
+    expect(withLink).toContain("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
+    expect(await sent({})).not.toContain("List-Unsubscribe");
+  });
+});

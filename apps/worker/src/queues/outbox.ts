@@ -4,7 +4,12 @@ import { resolveOrgAiConfig } from "@mail-orbyt/ai-settings";
 import { loadEnv } from "@mail-orbyt/config";
 import { getAiEmailGenerator, isAiConfigured } from "@mail-orbyt/email-generation";
 import { sendFromInbox } from "@mail-orbyt/gmail";
-import { OUTBOX_QUEUE_NAME, processOutboxItem, type OutboxJobData } from "@mail-orbyt/scheduling";
+import {
+  createUnsubscribeLinker,
+  OUTBOX_QUEUE_NAME,
+  processOutboxItem,
+  type OutboxJobData,
+} from "@mail-orbyt/scheduling";
 import { Worker, type ConnectionOptions, type Job } from "bullmq";
 
 async function getSenderContext(prisma: PrismaClient, organisationId: string) {
@@ -49,6 +54,10 @@ export function createOutboxWorker(params: {
           },
           sendEmail: (inboxId, message) => sendFromInbox(params.prisma, inboxId, message),
           getSenderContext: (organisationId) => getSenderContext(params.prisma, organisationId),
+          unsubscribeLinks: createUnsubscribeLinker({
+            appUrl: env.APP_URL,
+            secret: env.AUTH_SECRET,
+          }),
           emergencyStop: env.EMERGENCY_STOP,
         },
         job.data.outboxItemId,
