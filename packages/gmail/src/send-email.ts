@@ -30,6 +30,13 @@ export interface OutboundMessage {
    * control; the body carries the visible, embedded link separately.
    */
   unsubscribeUrl?: string;
+  /**
+   * Send a single text/plain part instead of multipart text+HTML. Used for
+   * first-touch cold outreach: an HTML part with styled links reads as
+   * marketing mail to Gmail's Promotions classifier, plain text reads as
+   * personal.
+   */
+  plainTextOnly?: boolean;
 }
 
 export interface SendResult {
@@ -148,6 +155,24 @@ export function formatFromHeader(displayName: string | undefined, address: strin
  * client would otherwise reflow bare plain text.
  */
 function buildRfc2822Message(from: string, message: OutboundMessage): string {
+  if (message.plainTextOnly) {
+    return [
+      `From: ${from}`,
+      `To: ${message.to}`,
+      `Subject: ${encodeHeaderText(message.subject)}`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: 8bit",
+      ...(message.unsubscribeUrl
+        ? [
+            `List-Unsubscribe: <${singleLine(message.unsubscribeUrl)}>`,
+            "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
+          ]
+        : []),
+      "",
+      textToPlain(message.body),
+    ].join("\r\n");
+  }
   const boundary = `mail-orbyt-${randomUUID()}`;
   const headers = [
     `From: ${from}`,

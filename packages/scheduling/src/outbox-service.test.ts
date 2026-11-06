@@ -67,6 +67,7 @@ const BASE_ITEM = {
     inboxCooldownMinutes: 3,
   },
   campaignStep: { id: "step-1", orderIndex: 0 },
+  sendNo: 0,
   enrollment: { id: "enrollment-1" },
 };
 
@@ -204,6 +205,8 @@ describe("processOutboxItem", () => {
       to: "prospect@example.com",
       subject: "Hi",
       body: "Would you be open to a call?",
+      unsubscribeUrl: undefined,
+      plainTextOnly: true,
     });
     expect(result?.status).toBe("SENT");
     expect(result?.providerMessageId).toBe("gmail-msg-1");
@@ -213,6 +216,28 @@ describe("processOutboxItem", () => {
       }),
     );
     expect(scheduleNextStepMock).toHaveBeenCalledWith(prisma, "enrollment-1");
+  });
+
+  it("sends the first email as plain text with no unsubscribe footer or header", async () => {
+    isSuppressedMock.mockResolvedValueOnce(false);
+    pickNextInboxMock.mockResolvedValueOnce({
+      inbox: { id: "inbox-1", emailAddress: "alex@acme.example" },
+    });
+    materializeStepContentMock.mockResolvedValueOnce({ subject: "Hi", body: "Body" });
+    const sendEmail = vi.fn().mockResolvedValueOnce({ messageId: "m", threadId: "t" });
+    const unsubscribeLinks = vi.fn();
+
+    await processOutboxItem(
+      fakePrisma({ ...BASE_ITEM }),
+      { ...BASE_DEPS, sendEmail, unsubscribeLinks },
+      "outbox-1",
+    );
+
+    expect(unsubscribeLinks).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledWith(
+      "inbox-1",
+      expect.objectContaining({ body: "Body", unsubscribeUrl: undefined, plainTextOnly: true }),
+    );
   });
 
   it("appends the embedded unsubscribe line to the stored body and sends the one-click URL", async () => {
@@ -230,7 +255,10 @@ describe("processOutboxItem", () => {
       oneClickUrl: "https://app.test/api/unsubscribe/tok",
     });
 
-    const prisma = fakePrisma({ ...BASE_ITEM });
+    const prisma = fakePrisma({
+      ...BASE_ITEM,
+      campaignStep: { id: "step-2", orderIndex: 1 },
+    });
     await processOutboxItem(prisma, { ...BASE_DEPS, sendEmail, unsubscribeLinks }, "outbox-1");
 
     expect(unsubscribeLinks).toHaveBeenCalledWith({

@@ -6,7 +6,12 @@ pause one campaign), a data subject can get everything the product holds
 about them, erasure must be complete, and stale data doesn't accumulate
 forever.
 
-## Unsubscribe link in every email
+## Unsubscribe link in follow-up emails
+
+> The first email of a sequence (step 1) is sent as plain text with no unsubscribe
+> footer or `List-Unsubscribe` header, because those are bulk-mail signals that
+> push cold outreach into Gmail's Promotions tab. Follow-ups (step 2+) carry both.
+> Replies asking to stop are still classified and suppressed.
 
 Every campaign email ends with "If you would rather not hear from me,
 [unsubscribe here](link)" and carries `List-Unsubscribe` / `List-Unsubscribe-Post`

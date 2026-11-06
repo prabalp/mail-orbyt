@@ -31,7 +31,6 @@ import {
   sendFromInbox,
 } from "@mail-orbyt/gmail";
 import {
-  appendUnsubscribeFooter,
   applyCalendlyLink,
   createUnsubscribeLinker,
   applyMergeTokens,
@@ -457,23 +456,14 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     body = generated.body;
   }
 
-  // Each test recipient gets the same unsubscribe footer and header a real
-  // prospect would, so the test shows exactly what goes out.
-  const env = loadEnv();
-  const linkFor = createUnsubscribeLinker({ appUrl: env.APP_URL, secret: env.AUTH_SECRET });
-  const unsubscribeFor = (to: string) => linkFor({ organisationId, campaignId, email: to });
-  const shownBody = appendUnsubscribeFooter(body, unsubscribeFor(emails[0] ?? "").pageUrl);
+  // The test previews step 1, which real sends deliver as plain text with no
+  // unsubscribe footer/header (see processOutboxItem), so it does the same.
+  const shownBody = body;
 
   const results = await Promise.all(
     emails.map(async (to) => {
       try {
-        const links = unsubscribeFor(to);
-        await sendFromInbox(prisma, inbox.id, {
-          to,
-          subject,
-          body: appendUnsubscribeFooter(body, links.pageUrl),
-          unsubscribeUrl: links.oneClickUrl,
-        });
+        await sendFromInbox(prisma, inbox.id, { to, subject, body, plainTextOnly: true });
         return { email: to, ok: true };
       } catch (error) {
         return {

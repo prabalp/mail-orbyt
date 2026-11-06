@@ -69,6 +69,44 @@ describe("sendFromInbox", () => {
     expect(decoded).toContain("<p style=");
   });
 
+  it("sends a single text/plain part with no HTML when plainTextOnly is set", async () => {
+    const { encryptToken } = await import("./token-crypto");
+    const { sendFromInbox } = await import("./send-email");
+
+    const inbox = {
+      id: "inbox-1",
+      emailAddress: "alex@acme.example",
+      encryptedAccessToken: encryptToken("valid-access-token"),
+      encryptedRefreshToken: encryptToken("refresh-token"),
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    };
+    const prisma = {
+      inbox: { findUniqueOrThrow: vi.fn().mockResolvedValue(inbox) },
+    } as never;
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ id: "m", threadId: "t" }));
+
+    await sendFromInbox(
+      prisma,
+      "inbox-1",
+      {
+        to: "prospect@example.com",
+        subject: "Hi",
+        body: "Book here: [my calendar](https://cal.example/x)",
+        plainTextOnly: true,
+      },
+      fetchImpl,
+    );
+
+    const call = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const { raw } = JSON.parse(call[1].body as string) as { raw: string };
+    const decoded = Buffer.from(raw, "base64").toString("utf8");
+    expect(decoded).toContain('Content-Type: text/plain; charset="UTF-8"');
+    expect(decoded).not.toContain("multipart/alternative");
+    expect(decoded).not.toContain("text/html");
+    expect(decoded).not.toContain("List-Unsubscribe");
+    expect(decoded).toContain("my calendar (https://cal.example/x)");
+  });
+
   it("appends the pixel img tag to the HTML part only, never the plain-text part", async () => {
     const { encryptToken } = await import("./token-crypto");
     const { sendFromInbox } = await import("./send-email");
