@@ -8,8 +8,8 @@ forever.
 
 ## Unsubscribe link in every email
 
-Every campaign email ends with "No longer interested in these messages?
-[Unsubscribe](link)" and carries `List-Unsubscribe` / `List-Unsubscribe-Post`
+Every campaign email ends with "If you would rather not hear from me,
+[unsubscribe here](link)" and carries `List-Unsubscribe` / `List-Unsubscribe-Post`
 headers (RFC 8058), so Gmail also shows its own Unsubscribe control.
 
 - The link is a stateless, HMAC-signed token (`packages/scheduling/src/unsubscribe.ts`)

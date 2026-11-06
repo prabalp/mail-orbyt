@@ -241,13 +241,13 @@ describe("processOutboxItem", () => {
     expect(sendEmail).toHaveBeenCalledWith(
       "inbox-1",
       expect.objectContaining({
-        body: "Body\n\nBest,\nAlex\n\nNo longer interested in these messages? [Unsubscribe](https://app.test/unsubscribe/tok)",
+        body: "Body\n\nBest,\nAlex\n\nIf you would rather not hear from me, [unsubscribe here](https://app.test/unsubscribe/tok)",
         unsubscribeUrl: "https://app.test/api/unsubscribe/tok",
       }),
     );
     expect(prisma.outboxItem.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ body: expect.stringContaining("[Unsubscribe](") }),
+        data: expect.objectContaining({ body: expect.stringContaining("[unsubscribe here](") }),
       }),
     );
   });

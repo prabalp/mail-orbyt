@@ -11,7 +11,7 @@ export interface UnsubscribePayload {
   campaignId?: string;
 }
 
-export const UNSUBSCRIBE_FOOTER_TEXT = "No longer interested in these messages?";
+export const UNSUBSCRIBE_FOOTER_TEXT = "If you would rather not hear from me,";
 
 function signingKey(secret: string): Buffer {
   // Derived so the raw app secret is never used directly as an HMAC key here.
@@ -78,5 +78,5 @@ export function createUnsubscribeLinker(config: { appUrl: string; secret: string
 /** Adds the embedded unsubscribe line after the signature; idempotent. */
 export function appendUnsubscribeFooter(body: string, pageUrl: string): string {
   if (body.includes(pageUrl)) return body;
-  return `${body.trimEnd()}\n\n${UNSUBSCRIBE_FOOTER_TEXT} [Unsubscribe](${pageUrl})`;
+  return `${body.trimEnd()}\n\n${UNSUBSCRIBE_FOOTER_TEXT} [unsubscribe here](${pageUrl})`;
 }

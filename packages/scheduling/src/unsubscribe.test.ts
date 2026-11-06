@@ -49,7 +49,7 @@ describe("links and footer", () => {
   it("appends an embedded link once", () => {
     const once = appendUnsubscribeFooter("Hello\n\nBest,\nAlex\n", "https://x.test/unsubscribe/t");
     expect(once).toBe(
-      "Hello\n\nBest,\nAlex\n\nNo longer interested in these messages? [Unsubscribe](https://x.test/unsubscribe/t)",
+      "Hello\n\nBest,\nAlex\n\nIf you would rather not hear from me, [unsubscribe here](https://x.test/unsubscribe/t)",
     );
     expect(appendUnsubscribeFooter(once, "https://x.test/unsubscribe/t")).toBe(once);
   });

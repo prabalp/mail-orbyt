@@ -2,7 +2,6 @@ import type { PrismaClient } from "@mail-orbyt/database";
 import { isSuppressed } from "@mail-orbyt/leads";
 import type { AiEmailGenerator } from "@mail-orbyt/email-generation";
 import { resolveDefaultSignatureText, resolveInboxSenderName } from "@mail-orbyt/gmail";
-import { buildPixelImgTag, getVerifiedTrackingDomain } from "@mail-orbyt/tracking";
 import { scheduleNextStepForEnrollment } from "./enrollment-progression";
 import { journeyStateAfterSend } from "./journey";
 import { markInboxSent, pickNextInbox } from "./inbox-rotation";
@@ -299,13 +298,13 @@ export async function processOutboxItem(
   });
 
   try {
-    const trackingDomain = await getVerifiedTrackingDomain(prisma, item.organisationId);
-    const pixelImgTag = trackingDomain ? buildPixelImgTag(trackingDomain, item.id) : undefined;
+    // No open-tracking pixel: a hidden image is a bulk-mail signal that pushes
+    // cold outreach into Gmail's Promotions tab. Plumbing is kept in
+    // @mail-orbyt/tracking; re-enable by passing pixelImgTag below.
     const result = await deps.sendEmail(inbox.id, {
       to: item.lead.email,
       subject,
       body,
-      pixelImgTag,
       unsubscribeUrl: unsubscribe?.oneClickUrl,
     });
     const sentAt = deps.now ?? new Date();
