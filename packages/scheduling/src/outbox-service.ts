@@ -199,7 +199,7 @@ export async function processOutboxItem(
     });
   }
 
-  // The very first email to a lead goes out as personal-looking plain text
+  // The very first email to a lead is formatted like a Gmail-composed message
   // with no unsubscribe footer/header: both are bulk-mail signals that land
   // cold outreach in Gmail's Promotions tab. Follow-ups carry them. Replies
   // that ask to stop are still honoured (reply classifier -> suppression).

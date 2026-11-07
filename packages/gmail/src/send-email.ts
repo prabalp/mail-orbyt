@@ -31,10 +31,11 @@ export interface OutboundMessage {
    */
   unsubscribeUrl?: string;
   /**
-   * First-touch cold outreach: a single quoted-printable text/plain part, no
-   * HTML at all. Any HTML part (even Gmail-composer style) tested worse for
-   * Promotions/spam placement than plain text; links read as "label: url"
-   * and the recipient's client makes the URL clickable.
+   * Format the message the way Gmail's own composer does: a plain-text part
+   * plus a bare HTML part (`<div dir="ltr">`, unstyled `<a>` links, no fonts,
+   * colors or pixel). Used for first-touch cold outreach, where styled
+   * marketing-looking HTML pushes mail into Promotions/spam, while still
+   * letting link labels ("here", "GrowthLoop") be clickable words.
    */
   personalStyle?: boolean;
 }
@@ -76,7 +77,7 @@ const LINK_REGEX = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"')
  * each escaped exactly once, with no risk of the inserted `<a>` markup being
  * re-escaped or a raw `&`/`<` in the text corrupting a link.
  */
-function linkifyToHtml(text: string): string {
+function linkifyToHtml(text: string, linkStyle = ' style="color:#2563eb;"'): string {
   let result = "";
   let lastIndex = 0;
   for (const match of text.matchAll(LINK_REGEX)) {
@@ -85,7 +86,7 @@ function linkifyToHtml(text: string): string {
     result += escapeHtml(text.slice(lastIndex, index));
     const url = mdUrl ?? bareUrl ?? "";
     const label = mdLabel ?? url;
-    result += `<a href="${escapeHtml(url)}" style="color:#2563eb;">${escapeHtml(label)}</a>`;
+    result += `<a href="${escapeHtml(url)}"${linkStyle}>${escapeHtml(label)}</a>`;
     lastIndex = index + full.length;
   }
   result += escapeHtml(text.slice(lastIndex));
@@ -94,14 +95,11 @@ function linkifyToHtml(text: string): string {
 
 /**
  * The plain-text alternative part: markdown `[label](url)` links can't be
- * embedded in plain text, so they become "label: url" (reads naturally, and clients autolink the URL) rather than leaking
+ * embedded in plain text, so they become "label (url)" rather than leaking
  * markdown syntax to clients/filters that read the text part.
  */
 export function textToPlain(text: string): string {
-  return text.replace(
-    /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
-    (_match, label: string, url: string) => (label === url ? url : `${label}: ${url}`),
-  );
+  return text.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)");
 }
 
 /**
@@ -122,6 +120,19 @@ export function textToHtml(text: string, pixelImgTag?: string): string {
     .join("\n");
   const trailer = pixelImgTag ? `\n${pixelImgTag}` : "";
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a;">\n${paragraphs}${trailer}\n</div>`;
+}
+
+/**
+ * HTML shaped like a message typed in Gmail's composer: one `<div dir="ltr">`,
+ * `<br>` line breaks, blank-line paragraph gaps, and unstyled links. No
+ * inline fonts/colors, which are what make HTML read as marketing mail.
+ */
+export function textToPersonalHtml(text: string): string {
+  const html = linkifyToHtml(text, "")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.split("\n").join("<br>"))
+    .join("<br><br>");
+  return `<div dir="ltr">${html}</div>`;
 }
 
 /**
@@ -199,18 +210,6 @@ export function formatFromHeader(displayName: string | undefined, address: strin
  * client would otherwise reflow bare plain text.
  */
 function buildRfc2822Message(from: string, message: OutboundMessage): string {
-  if (message.personalStyle) {
-    return [
-      `From: ${from}`,
-      `To: ${message.to}`,
-      `Subject: ${encodeHeaderText(message.subject)}`,
-      "MIME-Version: 1.0",
-      'Content-Type: text/plain; charset="UTF-8"',
-      "Content-Transfer-Encoding: quoted-printable",
-      "",
-      encodeQuotedPrintable(textToPlain(message.body)),
-    ].join("\r\n");
-  }
   const boundary = `mail-orbyt-${randomUUID()}`;
   const headers = [
     `From: ${from}`,
@@ -237,7 +236,9 @@ function buildRfc2822Message(from: string, message: OutboundMessage): string {
       'Content-Type: text/html; charset="UTF-8"',
       "Content-Transfer-Encoding: 8bit",
       "",
-      textToHtml(message.body, message.pixelImgTag),
+      message.personalStyle
+        ? textToPersonalHtml(message.body)
+        : textToHtml(message.body, message.pixelImgTag),
     ].join("\r\n"),
   ];
 

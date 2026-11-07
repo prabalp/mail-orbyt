@@ -69,7 +69,7 @@ describe("sendFromInbox", () => {
     expect(decoded).toContain("<p style=");
   });
 
-  it("sends personalStyle mail as a single quoted-printable text/plain part", async () => {
+  it("formats personalStyle mail like Gmail's composer: unstyled HTML links, no unsubscribe headers", async () => {
     const { encryptToken } = await import("./token-crypto");
     const { sendFromInbox } = await import("./send-email");
 
@@ -94,7 +94,6 @@ describe("sendFromInbox", () => {
         body: "Hi.\n\nBook [here](https://cal.example/x).\n\nBest,\nAlex",
         personalStyle: true,
         pixelImgTag: '<img src="https://t.example/p.gif">',
-        unsubscribeUrl: "https://app.example/u/1",
       },
       fetchImpl,
     );
@@ -102,13 +101,15 @@ describe("sendFromInbox", () => {
     const call = fetchImpl.mock.calls[0] as [string, RequestInit];
     const { raw } = JSON.parse(call[1].body as string) as { raw: string };
     const decoded = Buffer.from(raw, "base64").toString("utf8");
-    expect(decoded).toContain('Content-Type: text/plain; charset="UTF-8"');
+    expect(decoded).toContain("multipart/alternative");
     expect(decoded).toContain("Content-Transfer-Encoding: quoted-printable");
-    expect(decoded).not.toContain("multipart/alternative");
-    expect(decoded).not.toContain("text/html");
     expect(decoded).not.toContain("List-Unsubscribe");
+    expect(decoded).toContain("Book here (https://cal.example/x).");
+    expect(decoded).toContain(
+      '<div dir="ltr">Hi.<br><br>Book <a href="https://cal.example/x">here</a>.<br><br>Best,<br>Alex</div>',
+    );
+    expect(decoded).not.toContain("style=");
     expect(decoded).not.toContain("t.example/p.gif");
-    expect(decoded).toContain("Book here: https://cal.example/x.");
   });
 
   it("appends the pixel img tag to the HTML part only, never the plain-text part", async () => {
@@ -249,12 +250,11 @@ describe("textToHtml", () => {
 });
 
 describe("textToPlain", () => {
-  it("flattens markdown links to 'label: url' and leaves other text alone", async () => {
+  it("flattens markdown links to 'label (url)' and leaves other text alone", async () => {
     const { textToPlain } = await import("./send-email");
     expect(
       textToPlain("Hi.\n\nOr [book a 30-minute slot](https://calendly.com/acme/30min) today."),
-    ).toBe("Hi.\n\nOr book a 30-minute slot: https://calendly.com/acme/30min today.");
-    expect(textToPlain("[https://a.example](https://a.example)")).toBe("https://a.example");
+    ).toBe("Hi.\n\nOr book a 30-minute slot (https://calendly.com/acme/30min) today.");
     expect(textToPlain("No links, just [brackets] and (parens).")).toBe(
       "No links, just [brackets] and (parens).",
     );

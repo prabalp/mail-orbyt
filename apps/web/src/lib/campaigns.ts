@@ -456,7 +456,7 @@ export async function sendTestEmail(organisationId: string, campaignId: string, 
     body = generated.body;
   }
 
-  // The test previews step 1, which real sends deliver as plain text with no
+  // The test previews step 1, which real sends deliver Gmail-composer style with no
   // unsubscribe footer/header (see processOutboxItem), so it does the same.
   const shownBody = body;
 
