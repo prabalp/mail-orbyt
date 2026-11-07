@@ -206,7 +206,7 @@ describe("processOutboxItem", () => {
       subject: "Hi",
       body: "Would you be open to a call?",
       unsubscribeUrl: undefined,
-      plainTextOnly: true,
+      personalStyle: true,
     });
     expect(result?.status).toBe("SENT");
     expect(result?.providerMessageId).toBe("gmail-msg-1");
@@ -236,7 +236,7 @@ describe("processOutboxItem", () => {
     expect(unsubscribeLinks).not.toHaveBeenCalled();
     expect(sendEmail).toHaveBeenCalledWith(
       "inbox-1",
-      expect.objectContaining({ body: "Body", unsubscribeUrl: undefined, plainTextOnly: true }),
+      expect.objectContaining({ body: "Body", unsubscribeUrl: undefined, personalStyle: true }),
     );
   });
 

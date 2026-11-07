@@ -95,7 +95,7 @@ export interface ProcessOutboxItemDeps {
       body: string;
       pixelImgTag?: string;
       unsubscribeUrl?: string;
-      plainTextOnly?: boolean;
+      personalStyle?: boolean;
     },
   ) => Promise<{ messageId: string; threadId: string }>;
   /**
@@ -199,7 +199,7 @@ export async function processOutboxItem(
     });
   }
 
-  // The very first email to a lead goes out as personal-looking plain text
+  // The very first email to a lead is formatted like a Gmail-composed message
   // with no unsubscribe footer/header: both are bulk-mail signals that land
   // cold outreach in Gmail's Promotions tab. Follow-ups carry them. Replies
   // that ask to stop are still honoured (reply classifier -> suppression).
@@ -314,7 +314,7 @@ export async function processOutboxItem(
       subject,
       body,
       unsubscribeUrl: unsubscribe?.oneClickUrl,
-      plainTextOnly: isFirstTouch,
+      personalStyle: isFirstTouch,
     });
     const sentAt = deps.now ?? new Date();
     // Deliberately swallowed: the email is already gone, so letting this

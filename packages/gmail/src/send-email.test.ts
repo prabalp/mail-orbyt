@@ -69,7 +69,7 @@ describe("sendFromInbox", () => {
     expect(decoded).toContain("<p style=");
   });
 
-  it("sends a single text/plain part with no HTML when plainTextOnly is set", async () => {
+  it("formats personalStyle mail like Gmail's composer: unstyled HTML links, no unsubscribe headers", async () => {
     const { encryptToken } = await import("./token-crypto");
     const { sendFromInbox } = await import("./send-email");
 
@@ -91,8 +91,9 @@ describe("sendFromInbox", () => {
       {
         to: "prospect@example.com",
         subject: "Hi",
-        body: "Book here: [my calendar](https://cal.example/x)",
-        plainTextOnly: true,
+        body: "Hi.\n\nBook [here](https://cal.example/x).\n\nBest,\nAlex",
+        personalStyle: true,
+        pixelImgTag: '<img src="https://t.example/p.gif">',
       },
       fetchImpl,
     );
@@ -100,11 +101,15 @@ describe("sendFromInbox", () => {
     const call = fetchImpl.mock.calls[0] as [string, RequestInit];
     const { raw } = JSON.parse(call[1].body as string) as { raw: string };
     const decoded = Buffer.from(raw, "base64").toString("utf8");
-    expect(decoded).toContain('Content-Type: text/plain; charset="UTF-8"');
-    expect(decoded).not.toContain("multipart/alternative");
-    expect(decoded).not.toContain("text/html");
+    expect(decoded).toContain("multipart/alternative");
+    expect(decoded).toContain("Content-Transfer-Encoding: quoted-printable");
     expect(decoded).not.toContain("List-Unsubscribe");
-    expect(decoded).toContain("my calendar (https://cal.example/x)");
+    expect(decoded).toContain("Book here (https://cal.example/x).");
+    expect(decoded).toContain(
+      '<div dir="ltr">Hi.<br><br>Book <a href="https://cal.example/x">here</a>.<br><br>Best,<br>Alex</div>',
+    );
+    expect(decoded).not.toContain("style=");
+    expect(decoded).not.toContain("t.example/p.gif");
   });
 
   it("appends the pixel img tag to the HTML part only, never the plain-text part", async () => {
@@ -309,5 +314,37 @@ describe("List-Unsubscribe headers", () => {
     expect(withLink).toContain("List-Unsubscribe: <https://app.test/api/unsubscribe/tok>");
     expect(withLink).toContain("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
     expect(await sent({})).not.toContain("List-Unsubscribe");
+  });
+});
+
+describe("encodeQuotedPrintable", () => {
+  function decodeQuotedPrintable(encoded: string): string {
+    const joined = encoded.replace(/=\r\n/g, "");
+    const bytes: number[] = [];
+    for (let i = 0; i < joined.length; i += 1) {
+      if (joined[i] === "=") {
+        bytes.push(parseInt(joined.slice(i + 1, i + 3), 16));
+        i += 2;
+      } else {
+        bytes.push(joined.charCodeAt(i));
+      }
+    }
+    return Buffer.from(bytes).toString("utf8").replace(/\r\n/g, "\n");
+  }
+
+  it("soft-wraps long paragraphs so no line exceeds 76 chars and decodes back unchanged", async () => {
+    const { encodeQuotedPrintable } = await import("./send-email");
+    const text =
+      "Hey Robert,\n\nSpeaking as a practising lawyer gives your talks real authority on legal topics audiences care about — naïve façade = 100%.\n\nBest,\nTripty ";
+    const encoded = encodeQuotedPrintable(text);
+    for (const line of encoded.split("\r\n")) expect(line.length).toBeLessThanOrEqual(76);
+    expect(encoded).toContain("=\r\n");
+    expect(encoded).not.toMatch(/=[0-9A-F]?=\r\n/);
+    expect(decodeQuotedPrintable(encoded)).toBe(text);
+  });
+
+  it("leaves short ASCII lines readable as-is", async () => {
+    const { encodeQuotedPrintable } = await import("./send-email");
+    expect(encodeQuotedPrintable("Hi there,\nBest")).toBe("Hi there,\r\nBest");
   });
 });

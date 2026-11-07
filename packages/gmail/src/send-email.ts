@@ -31,12 +31,13 @@ export interface OutboundMessage {
    */
   unsubscribeUrl?: string;
   /**
-   * Send a single text/plain part instead of multipart text+HTML. Used for
-   * first-touch cold outreach: an HTML part with styled links reads as
-   * marketing mail to Gmail's Promotions classifier, plain text reads as
-   * personal.
+   * Format the message the way Gmail's own composer does: a plain-text part
+   * plus a bare HTML part (`<div dir="ltr">`, unstyled `<a>` links, no fonts,
+   * colors or pixel). Used for first-touch cold outreach, where styled
+   * marketing-looking HTML pushes mail into Promotions/spam, while still
+   * letting link labels ("here", "GrowthLoop") be clickable words.
    */
-  plainTextOnly?: boolean;
+  personalStyle?: boolean;
 }
 
 export interface SendResult {
@@ -76,7 +77,7 @@ const LINK_REGEX = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"')
  * each escaped exactly once, with no risk of the inserted `<a>` markup being
  * re-escaped or a raw `&`/`<` in the text corrupting a link.
  */
-function linkifyToHtml(text: string): string {
+function linkifyToHtml(text: string, linkStyle = ' style="color:#2563eb;"'): string {
   let result = "";
   let lastIndex = 0;
   for (const match of text.matchAll(LINK_REGEX)) {
@@ -85,7 +86,7 @@ function linkifyToHtml(text: string): string {
     result += escapeHtml(text.slice(lastIndex, index));
     const url = mdUrl ?? bareUrl ?? "";
     const label = mdLabel ?? url;
-    result += `<a href="${escapeHtml(url)}" style="color:#2563eb;">${escapeHtml(label)}</a>`;
+    result += `<a href="${escapeHtml(url)}"${linkStyle}>${escapeHtml(label)}</a>`;
     lastIndex = index + full.length;
   }
   result += escapeHtml(text.slice(lastIndex));
@@ -119,6 +120,60 @@ export function textToHtml(text: string, pixelImgTag?: string): string {
     .join("\n");
   const trailer = pixelImgTag ? `\n${pixelImgTag}` : "";
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1a1a1a;">\n${paragraphs}${trailer}\n</div>`;
+}
+
+/**
+ * HTML shaped like a message typed in Gmail's composer: one `<div dir="ltr">`,
+ * `<br>` line breaks, blank-line paragraph gaps, and unstyled links. No
+ * inline fonts/colors, which are what make HTML read as marketing mail.
+ */
+export function textToPersonalHtml(text: string): string {
+  const html = linkifyToHtml(text, "")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.split("\n").join("<br>"))
+    .join("<br><br>");
+  return `<div dir="ltr">${html}</div>`;
+}
+
+/**
+ * Quoted-printable (RFC 2045) body encoding. Each paragraph of our plain text
+ * is a single long line; sent as 8bit, Gmail hard-wraps such lines at ~76
+ * characters, so the recipient sees line breaks in the middle of sentences.
+ * Quoted-printable splits long lines with *soft* breaks (`=` + CRLF) that the
+ * receiving client removes, so paragraphs reflow to the reader's window.
+ */
+export function encodeQuotedPrintable(text: string): string {
+  const MAX = 76;
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => {
+      const bytes = Buffer.from(line, "utf8");
+      const tokens: string[] = [];
+      bytes.forEach((byte, index) => {
+        const isLast = index === bytes.length - 1;
+        const literal =
+          (byte >= 33 && byte <= 126 && byte !== 61) || ((byte === 32 || byte === 9) && !isLast);
+        tokens.push(
+          literal
+            ? String.fromCharCode(byte)
+            : `=${byte.toString(16).toUpperCase().padStart(2, "0")}`,
+        );
+      });
+      const out: string[] = [];
+      let current = "";
+      for (const token of tokens) {
+        // Leave room for the trailing "=" of a soft break; never split an =XX escape.
+        if (current.length + token.length > MAX - 1) {
+          out.push(`${current}=`);
+          current = "";
+        }
+        current += token;
+      }
+      out.push(current);
+      return out.join("\r\n");
+    })
+    .join("\r\n");
 }
 
 /** Header values must be single-line; CR/LF would otherwise let text inject extra headers. */
@@ -155,24 +210,6 @@ export function formatFromHeader(displayName: string | undefined, address: strin
  * client would otherwise reflow bare plain text.
  */
 function buildRfc2822Message(from: string, message: OutboundMessage): string {
-  if (message.plainTextOnly) {
-    return [
-      `From: ${from}`,
-      `To: ${message.to}`,
-      `Subject: ${encodeHeaderText(message.subject)}`,
-      "MIME-Version: 1.0",
-      'Content-Type: text/plain; charset="UTF-8"',
-      "Content-Transfer-Encoding: 8bit",
-      ...(message.unsubscribeUrl
-        ? [
-            `List-Unsubscribe: <${singleLine(message.unsubscribeUrl)}>`,
-            "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
-          ]
-        : []),
-      "",
-      textToPlain(message.body),
-    ].join("\r\n");
-  }
   const boundary = `mail-orbyt-${randomUUID()}`;
   const headers = [
     `From: ${from}`,
@@ -191,15 +228,17 @@ function buildRfc2822Message(from: string, message: OutboundMessage): string {
   const parts = [
     [
       'Content-Type: text/plain; charset="UTF-8"',
-      "Content-Transfer-Encoding: 8bit",
+      "Content-Transfer-Encoding: quoted-printable",
       "",
-      textToPlain(message.body),
+      encodeQuotedPrintable(textToPlain(message.body)),
     ].join("\r\n"),
     [
       'Content-Type: text/html; charset="UTF-8"',
       "Content-Transfer-Encoding: 8bit",
       "",
-      textToHtml(message.body, message.pixelImgTag),
+      message.personalStyle
+        ? textToPersonalHtml(message.body)
+        : textToHtml(message.body, message.pixelImgTag),
     ].join("\r\n"),
   ];
 
